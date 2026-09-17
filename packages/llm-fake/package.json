@@ -15,6 +15,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@spc/core": "workspace:*",
     "@spc/llm": "workspace:*",
     "yaml": "^2.8.0",
     "zod": "^4.1.11"
