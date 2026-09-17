@@ -1,0 +1,41 @@
+{
+  "name": "@spc/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+  },
+  "bin": {
+    "spc": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@spc/core": "workspace:*",
+    "@spc/executor": "workspace:*",
+    "@spc/llm": "workspace:*",
+    "@spc/llm-fake": "workspace:*",
+    "@spc/llm-openai": "workspace:*",
+    "@spc/planner": "workspace:*",
+    "@spc/renderer": "workspace:*",
+    "@spc/repo": "workspace:*",
+    "@spc/runtime": "workspace:*",
+    "@spc/schema": "workspace:*",
+    "@spc/verifier": "workspace:*",
+    "commander": "^14.0.0",
+    "yaml": "^2.8.0",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.10",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
