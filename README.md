@@ -220,24 +220,18 @@ tool proves itself on itself, with requirement-oriented PR annotations.
 
 ## Status of the project
 
-V0 of an experimental workflow, plus the benchmark harness (see
-[evals/README.md](evals/README.md)): 30 tasks across 10 categories with
-withheld grading, comparing a Markdown-plan baseline against the spc workflow
-across completion, false completion declarations, regressions and forbidden
-modifications. Baselines exist in two modes: **scripted** (deterministic fake providers -
-validates harness mechanics, not the thesis) and **real**: the §68 gate was
-executed on 2026-09-17 with glm-5.3-flash (3 trials × 30 tasks,
-[evals/baselines/real-glm-5.3-flash-2026-09-17.md](evals/baselines/real-glm-5.3-flash-2026-09-17.md)).
-Result: on this flash-tier model the workflow did **not** beat the Markdown
-baseline (77% vs 99% completion). Per §94 the abstraction then iterated -
-ADR-0013's clarification-demotion policy - and the re-measure narrowed the
-gap to −6 pp (87% vs 93%) with safety properties intact (see the baseline
-addendum). Following that evidence, parallel execution (§78, ADR-0012) is
-now implemented: `execution.parallelism` runs ready tasks with disjoint
-write sets concurrently in per-task worktrees, merged deterministically. CI reporting
+Experimental V0, complete and self-verifying. The benchmark harness
+([evals/README.md](evals/README.md)) compares this workflow against a plain
+Markdown-plan baseline on 30 tasks with withheld grading, and every result -
+scripted, real-model and adversarial-gate runs - is committed unaltered under
+[evals/baselines](evals/baselines/), including what the tool lost and the
+fixes that followed. Parallel execution (§78, ADR-0012) is implemented:
+`execution.parallelism` runs ready tasks with disjoint write sets
+concurrently in per-task worktrees, merged deterministically. CI reporting
 (`spc verify --format github`, see
 [docs/ci-integration.md](docs/ci-integration.md)) and drift reconciliation
-(`spc reconcile`) are available now.
+(`spc reconcile`) are available now. What is not yet measured: real-sized
+repositories - that is the open question.
 
 ## Contributing
 

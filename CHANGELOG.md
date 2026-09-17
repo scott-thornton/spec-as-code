@@ -4,6 +4,36 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 uses semantic versioning.
 
+## [Unreleased]
+
+### Fixed
+
+- Executor-side clarification demotion (ADR-0013 addendum): a task that
+  blocked with only clarification drafts under
+  `execution.proceedOnClarificationFollowups` used to re-raise the same
+  blocking clarification the planner's draft already had demoted. The
+  executor now receives open clarifications with their recommended
+  defaults, and clarification-only blocks are demoted and auto-retried once
+  with proceed-on-default guidance (`CLARIFICATION_PROCEED`). Strict mode
+  and non-clarification blocks are never demoted. Diagnosed via the
+  api-version-header task blocking 3-for-3 on glm-5.3-flash; now 3-for-3
+  completing.
+- Benchmark corpus: the api-version-header spec omitted the header value
+  its grading expected, so a defensible executor default failed hidden
+  grading while the run honestly reported satisfied against its own
+  criterion. The spec now carries the value.
+
+### Added
+
+- Harness mode in the benchmark runner (`spc-evals --provider harness`):
+  an external coding agent answers every model request through files
+  (zero API spend), including the fast adversarial gate
+  (`evals/tools/harness-gate.sh` and `flash-gate.sh`).
+- Committed fast-adversarial gate results
+  ([evals/baselines/fast-adversarial-2026-09-17.md](evals/baselines/fast-adversarial-2026-09-17.md)):
+  full-tier run completed both arms 12/12 with zero friction; flash subset
+  losses are all blocked runs, never bad edits.
+
 ## [0.1.0] - 2026-09-17
 
 First tagged release: the complete V0 workflow plus the follow-up features
