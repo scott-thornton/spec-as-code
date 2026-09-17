@@ -1,0 +1,26 @@
+version: 1
+
+provider:
+  name: fake
+  script: .spc/fake-script.yaml
+
+execution:
+  requirePlanApproval: false
+  maxModelCalls: 50
+  maxReplans: 3
+  maxTaskRetries: 1
+  commandTimeoutMs: 120000
+  maxOutputBytes: 65536
+
+commands:
+  network: deny
+  packageInstall: approval
+  migration: approval
+  deployment: deny
+  publish: deny
+  gitPush: deny
+  destructive: deny
+  unknown: allow
+
+verification:
+  allowAgentOnlyMustRequirements: false

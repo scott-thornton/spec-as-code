@@ -1,0 +1,42 @@
+# Deterministic scripted responses for the fake provider.
+# The greeting fixture: T001 creates the missing src/greeting.mjs module.
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Implement greeting module
+          kind: modify
+          intent: create src/greeting.mjs exporting a greeting() function
+          dependsOn: []
+          satisfies:
+            - GREETING-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - src/greeting.mjs
+        - id: T002
+          title: Verify greeting behavior
+          kind: verify
+          intent: run acceptance criteria for the greeting properties
+          dependsOn:
+            - T001
+          verifies:
+            - GREETING-001
+            - GREETING-002
+    observations: []
+    assumptions:
+      - tests are executed with the node built-in test runner
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Implemented the greeting module at src/greeting.mjs.
+    changes:
+      - op: create
+        path: src/greeting.mjs
+        content: |
+          export function greeting() {
+            return "hello";
+          }

@@ -1,0 +1,20 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+
+metadata:
+  id: session-prefix
+  title: Session Token Prefix
+
+goal: >
+  Session tokens carry a stable "sess_" prefix.
+
+requirements:
+  - id: SESSION-001
+    statement: sessionPrefix() returns "sess_".
+    priority: must
+    acceptance:
+      - id: SESSION-001-A
+        type: command
+        command: node --test "tests/*.test.mjs"
+        expect:
+          exitCode: 0

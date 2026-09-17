@@ -1,0 +1,75 @@
+# Deterministic scripted responses for the fake provider.
+# The replan fixture: the planner targets the wrong location (src/auth/),
+# the executor discovers the real one and requests a replan, and the
+# replanner replaces the task with the correct target.
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Implement session prefix
+          kind: modify
+          intent: update the session module so sessionPrefix returns sess_
+          dependsOn: []
+          satisfies:
+            - SESSION-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - src/auth/session.mjs
+        - id: T002
+          title: Verify session behavior
+          kind: verify
+          intent: run acceptance criteria for SESSION-001
+          dependsOn:
+            - T001
+          verifies:
+            - SESSION-001
+    observations: []
+    assumptions:
+      - session implementation lives at src/auth/session.mjs
+    followups: []
+executor:
+  T001:
+    status: needs_replan
+    summary: Planned target does not exist; implementation lives elsewhere.
+    replanReason: the session implementation is not at src/auth/session.mjs
+    observations:
+      - type: architecture
+        statement: >-
+          The session implementation lives at packages/security/session.mjs,
+          not at the planned location src/auth/session.mjs.
+        confidence: confirmed
+        invalidates:
+          taskIds:
+            - T001
+  T003:
+    status: completed
+    summary: Implemented sessionPrefix at the correct location.
+    changes:
+      - op: update
+        path: packages/security/session.mjs
+        content: |
+          export function sessionPrefix() {
+            return "sess_";
+          }
+replanner:
+  T001:
+    reason: planned target location was wrong for the session module
+    operations:
+      - op: replaceTask
+        taskId: T001
+        task:
+          id: T003
+          title: Implement session prefix at the actual location
+          kind: modify
+          intent: update packages/security/session.mjs so sessionPrefix returns sess_
+          dependsOn: []
+          satisfies:
+            - SESSION-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - packages/security/session.mjs

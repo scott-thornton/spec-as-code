@@ -1,0 +1,33 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+
+metadata:
+  id: greeting-api
+  title: Greeting API
+
+goal: >
+  Expose a greeting function that returns "hello".
+
+requirements:
+  - id: GREETING-001
+    statement: Calling greeting returns "hello".
+    priority: must
+    acceptance:
+      - id: GREETING-001-A
+        type: command
+        command: node --test "tests/*.test.mjs"
+        expect:
+          exitCode: 0
+
+  - id: GREETING-002
+    statement: The greeting module exists at src/greeting.mjs.
+    priority: should
+    acceptance:
+      - id: GREETING-002-A
+        type: file
+        path: src/greeting.mjs
+        assert:
+          exists: true
+
+outOfScope:
+  - multilingual greetings
