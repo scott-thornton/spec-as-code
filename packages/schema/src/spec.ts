@@ -49,6 +49,22 @@ export const acceptanceCriterionSchema = z.discriminatedUnion("type", [
 
 export const prioritySchema = z.enum(["must", "should", "may"]);
 
+/**
+ * Higher-order requirement categories (§80). Metadata that shapes prompts,
+ * rendering and category-aware lint warnings — never a separate verification
+ * machinery (the four acceptance criterion types remain the only verifiers).
+ */
+export const requirementCategorySchema = z.enum([
+  "behavioral",
+  "security",
+  "performance",
+  "compatibility",
+  "operational",
+  "architectural",
+  "ux",
+  "compliance",
+]);
+
 export const artifactScopeSchema = z.strictObject({
   include: z.array(z.string().min(1)).optional(),
   exclude: z.array(z.string().min(1)).optional(),
@@ -57,6 +73,7 @@ export const artifactScopeSchema = z.strictObject({
 const propertyCommon = {
   id: propertyIdSchema,
   statement: z.string().min(1),
+  category: requirementCategorySchema.optional(),
   dependsOn: z.array(propertyIdSchema).optional(),
   acceptance: z.array(acceptanceCriterionSchema).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
@@ -84,6 +101,15 @@ export const specSchema = z.strictObject({
   goal: z.string().min(1),
   /** Relative paths to other spec files whose properties compose into this one (§79). */
   imports: z.array(z.string().min(1)).optional(),
+  /**
+   * Named secret references (§53): presence-only declarations. Values are
+   * never read into specs, plans, prompts or persisted records.
+   */
+  environment: z
+    .strictObject({
+      requiredSecrets: z.array(z.string().min(1)).optional(),
+    })
+    .optional(),
   requirements: z.array(requirementSchema).min(1),
   constraints: z.array(constraintSchema).optional(),
   outOfScope: z.array(z.string()).optional(),
@@ -93,6 +119,7 @@ export type AcceptanceCriterion = z.infer<typeof acceptanceCriterionSchema>;
 export type CommandExpect = z.infer<typeof commandExpectSchema>;
 export type FileAssert = z.infer<typeof fileAssertSchema>;
 export type Priority = z.infer<typeof prioritySchema>;
+export type RequirementCategory = z.infer<typeof requirementCategorySchema>;
 export type Requirement = z.infer<typeof requirementSchema>;
 export type Constraint = z.infer<typeof constraintSchema>;
 export type Spec = z.infer<typeof specSchema>;
@@ -110,6 +137,7 @@ export interface DesiredProperty {
   id: string;
   statement: string;
   priority: Priority;
+  category?: RequirementCategory;
   dependsOn: string[];
   acceptance: AcceptanceCriterion[];
   scope?: { include?: string[]; exclude?: string[] };
@@ -121,6 +149,9 @@ export interface NormalizedSpec extends Omit<Spec, "requirements" | "constraints
   constraints: DesiredProperty[];
   outOfScope: string[];
 }
+
+/** Categories whose must-properties deserve deterministic verification (SPC1009). */
+export const HIGH_ASSURANCE_CATEGORIES: readonly RequirementCategory[] = ["security", "compliance"];
 
 /** Compiled spec: immutable, digest-stamped, with a flat property index. */
 export interface SpecIR {

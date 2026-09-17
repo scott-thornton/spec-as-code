@@ -1,4 +1,4 @@
-import type { Constraint, Priority, Requirement, Spec } from "@spc/schema";
+import { HIGH_ASSURANCE_CATEGORIES, type Constraint, type Priority, type Requirement, type Spec } from "@spc/schema";
 import { error, warning, type Diagnostic, type SourceLocation } from "../diagnostics.js";
 import { findCycle } from "../graph.js";
 
@@ -113,6 +113,29 @@ export function validateSpecLocal(spec: Spec, locs: Locs): Diagnostic[] {
           ),
         );
       }
+    }
+  }
+
+  // SPC1009 — high-assurance categories (security/compliance) whose
+  // must-properties are verified only by agent/human judgment (§80).
+  const raw = (base: "requirements" | "constraints", index: number) =>
+    base === "requirements" ? spec.requirements[index] : spec.constraints?.[index];
+  for (const p of props) {
+    const entry = raw(p.base, p.index);
+    const category = entry?.category;
+    if (!category || !HIGH_ASSURANCE_CATEGORIES.includes(category)) continue;
+    if (effectivePriority(p) !== "must") continue;
+    const acceptance = entry?.acceptance ?? [];
+    if (acceptance.length === 0) continue; // SPC1004 already covers this
+    const hasDeterministic = acceptance.some((c) => c.type === "command" || c.type === "file");
+    if (!hasDeterministic) {
+      diags.push(
+        warning(
+          "SPC1009",
+          `${p.kind} ${p.id} is categorized "${category}" but has no command/file acceptance criterion; high-assurance properties deserve deterministic verification wherever possible.`,
+          locs.get(`${p.base}.${p.index}.id`),
+        ),
+      );
     }
   }
 

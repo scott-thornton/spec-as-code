@@ -12,7 +12,7 @@ import type {
 import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { makeUsageRecord } from "@spc/llm";
 import { z } from "zod";
-import { classifyCommand, runCommand, type CommandRunResult } from "@spc/executor";
+import { classifyCommand, evaluateCommandPolicy, runCommand, type CommandRunResult } from "@spc/executor";
 
 /**
  * Deterministic criterion execution + agent/human paths. The verifier is
@@ -29,6 +29,8 @@ export interface CriterionContext {
   taskId?: string;
   now?: () => string;
   onUsage?: (record: UsageRecord) => void;
+  /** Commands already human-approved via resolved approval follow-ups (§52). */
+  approvedCommands?: ReadonlySet<string>;
 }
 
 export interface CriterionResult {
@@ -57,11 +59,57 @@ async function verifyCommand(
   ctx: CriterionContext,
 ): Promise<CriterionResult> {
   const timeoutMs = criterion.timeoutMs ?? ctx.config.execution.commandTimeoutMs;
+  const decision = evaluateCommandPolicy(criterion.command, ctx.config.commands);
+  const approved = ctx.approvedCommands?.has(criterion.command) ?? false;
+
+  if (decision.policy === "approval" && !approved) {
+    // §52: approval-class commands never run silently. Verification stays
+    // inconclusive until a human approves via follow-up resolution.
+    return {
+      evidence: makeEvidence(
+        {
+          id: "pending",
+          runId: ctx.runId,
+          ...(ctx.taskId ? { taskId: ctx.taskId } : {}),
+          criterionId: criterion.id,
+          propertyRefs: [property.id],
+          kind: "command",
+          outcome: "inconclusive",
+          producer: { type: "runtime", identity: "awaiting-approval" },
+          timestamp: (ctx.now ?? (() => new Date().toISOString()))(),
+          repositoryRevision: ctx.repositoryRevision,
+          payload: { command: criterion.command, reason: decision.reason },
+        },
+        ctx.now,
+      ),
+      followUp: {
+        criterionId: criterion.id,
+        type: "approval",
+        blocking: false,
+        title: `Approve command for ${property.id}: ${criterion.command}`,
+        description: `The acceptance command is policy-gated ("${decision.category}"). Approving runs it during verification; rejecting keeps this property indeterminate.`,
+        propertyId: property.id,
+        command: criterion.command,
+        ...(ctx.taskId ? { taskId: ctx.taskId } : {}),
+        options: [
+          { id: "approve", description: "Allow this exact command during verification." },
+          { id: "reject", description: "Keep the command blocked; the property stays indeterminate." },
+        ],
+        recommendedDefault: "approve",
+      },
+    };
+  }
+
   const run = await runCommand(criterion.command, {
     cwd: ctx.cwd,
     timeoutMs,
     maxOutputBytes: ctx.config.execution.maxOutputBytes,
-    commandsConfig: ctx.config.commands,
+    commandsConfig: {
+      ...ctx.config.commands,
+      // Approved commands run once for verification regardless of the
+      // approval policy category; deny-class policies still hold.
+      ...(decision.policy === "approval" ? { [decision.category]: "allow" } : {}),
+    } as Config["commands"],
   });
   const category = classifyCommand(criterion.command);
   const expected = criterion.expect?.exitCode ?? 0;

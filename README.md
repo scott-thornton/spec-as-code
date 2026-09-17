@@ -146,6 +146,16 @@ specs/*.yaml               desired state (committed)
   code, never in prompts.
 
 ## Spec composition (imports)
+**Also in the run loop:** requirement `category` tags (§80) with the SPC1009
+high-assurance warning; approval-gated acceptance commands (§52) — approval-class
+commands produce an approval follow-up and only run after
+`spc followup resolve <id> --option approve`; `environment.requiredSecrets`
+(§53) presence-checked at apply preflight (values never read); tiered
+amendment approval (§31, `execution.amendmentApproval: tiered`) where
+high-risk amendments (lockfiles, migrations, deploy config) are gated behind
+a blocking follow-up with the amendment preserved for review; and
+`spc run cancel <id>` for interrupted runs.
+
 
 Shared invariants live once and compose into feature specs (ADR-0014):
 

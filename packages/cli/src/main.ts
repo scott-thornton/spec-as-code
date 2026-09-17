@@ -9,7 +9,7 @@ import { runVerify } from "./commands/verify.js";
 import { runReconcile } from "./commands/reconcile.js";
 import { runDiff, runStatus } from "./commands/status.js";
 import { runFollowupResolve, runFollowups } from "./commands/followups.js";
-import { runPr, runShow } from "./commands/run.js";
+import { runCancel, runPr, runShow } from "./commands/run.js";
 
 const program = new Command();
 
@@ -160,6 +160,13 @@ run
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action((runId: string, opts: { cwd: string }) => {
     process.exitCode = runShow(runId, opts.cwd);
+  });
+run
+  .command("cancel <runId>")
+  .description("mark an interrupted (running) run as cancelled")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action((runId: string, opts: { cwd: string }) => {
+    process.exitCode = runCancel(runId, opts.cwd);
   });
 run
   .command("pr <runId>")

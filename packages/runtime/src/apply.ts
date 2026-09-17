@@ -12,7 +12,7 @@ import {
 import type { FollowUp, Observation, Plan, RequirementState, RunState, RunStatus, SpecIR, Task, TaskState } from "@spc/schema";
 import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { executeTask, enforceWriteScope, runScheduler, type ExecutionOutcome } from "@spc/executor";
-import { generateAmendment } from "@spc/planner";
+import { classifyAmendmentRisk, generateAmendment } from "@spc/planner";
 import { commitAll, compileSpecFile, currentRevision, diffStat, git, statusDelta, statusPorcelain } from "@spc/repo";
 import { createWorktree, removeWorktree } from "@spc/repo";
 import { observeRepository } from "@spc/repo";
@@ -227,6 +227,27 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
     log: deps.log ?? (() => {}),
   };
 
+  // §53: presence-check named secret references before any model call.
+  const requiredSecrets = specIr.spec.environment?.requiredSecrets ?? [];
+  const missingSecrets = requiredSecrets.filter((name) => (process.env[name] ?? "").trim() === "");
+  for (const name of missingSecrets) {
+    const f = ctx.followups.create(
+      {
+        type: "missing_secret",
+        blocking: true,
+        title: `Missing secret: ${name}`,
+        description: `The spec declares requiredSecrets including ${name}, which is not set in the environment. Values are never read by spc; export the variable and re-run.`,
+      },
+      runId,
+      now,
+    );
+    events.append("FOLLOWUP_CREATED", { followupId: f.id, blocking: true, type: f.type, secret: name });
+  }
+  if (missingSecrets.length > 0) {
+    ctx.log(`Blocked: missing secrets ${missingSecrets.join(", ")}`);
+    return finalize(ctx, "blocked", []);
+  }
+
   // Materialize planner follow-up drafts as first-class run follow-ups.
   // Benchmark-driven iteration (§31 medium-risk tier): with
   // execution.proceedOnClarificationFollowups, spec_clarification drafts are
@@ -332,6 +353,41 @@ export async function resumeRun(options: ApplyOptions & { resumeRunId: string },
   return ctx.config.execution.parallelism > 1 ? driveRunParallel(ctx) : driveRun(ctx);
 }
 
+/**
+ * §31 tiered amendment approval: high-risk amendments (per the computed risk
+ * classification) are NOT applied; a blocking approval follow-up is raised
+ * describing the amendment, and the run finishes blocked. "auto" keeps the
+ * previous behaviour (validate and continue). Returns null when gated.
+ */
+function maybeGateAmendment(
+  ctx: RunContext,
+  currentPlan: Plan,
+  reason: string,
+  operations: import("@spc/schema").AmendmentOperation[],
+  assessment: { risk: string; reasons: string[] },
+): { gated: true; followupId: string } | { gated: false } {
+  if (ctx.config.execution.amendmentApproval !== "tiered" || assessment.risk !== "high") {
+    return { gated: false };
+  }
+  const f = ctx.followups.create(
+    {
+      type: "approval",
+      blocking: true,
+      title: `Approve high-risk plan amendment (${reason})`,
+      description: [
+        `Risk: ${assessment.risk}. Reasons: ${assessment.reasons.join("; ")}.`,
+        "Operations: " + operations.map((o) => o.op).join(", ") + ".",
+        "Resolve with --option approve, then edit .spc/config.yaml or use --force to proceed if needed.",
+      ].join(" "),
+    },
+    ctx.meta.runId,
+    ctx.now,
+  );
+  ctx.events.append("FOLLOWUP_CREATED", { followupId: f.id, blocking: true, type: f.type, amendmentRisk: assessment.risk });
+  ctx.log(`High-risk amendment gated behind follow-up ${f.id}; run will finish blocked.`);
+  return { gated: true, followupId: f.id };
+}
+
 /** The scheduler loop plus verification, commit and completion semantics. */
 async function driveRun(ctx: RunContext): Promise<ApplyReport> {
   const worktree = ctx.worktreePath!;
@@ -414,6 +470,19 @@ async function driveRun(ctx: RunContext): Promise<ApplyReport> {
     });
     if (!result.amendment || !result.amendedPlan) {
       return failReplan(`amendment generation failed: ${formatDiagnostics(result.diagnostics)}`);
+    }
+    const riskAssessment = classifyAmendmentRisk(result.amendment, currentPlan.tasks, ctx.config);
+    const gate = maybeGateAmendment(ctx, currentPlan, result.amendment.reason, result.amendment.operations, riskAssessment);
+    if (gate.gated) {
+      // Do not apply: the triggering task stays needs_replan; the run ends
+      // blocked (open blocking follow-up) and the amendment is preserved for
+      // review alongside the run.
+      writeFileSync(
+        path.join(ctx.paths.amendmentsDir(ctx.meta.runId), `${result.amendment.id}.gated.json`),
+        JSON.stringify(result.amendment, null, 2),
+        "utf8",
+      );
+      return "failed";
     }
     // Record the transition: previous plan versions are preserved in the run dir.
     const runDir = ctx.paths.runDir(ctx.meta.runId);
@@ -786,6 +855,16 @@ async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
       onUsage: usageSink,
     });
     if (!result.amendment || !result.amendedPlan) return "failed";
+    const riskAssessment = classifyAmendmentRisk(result.amendment, currentPlan.tasks, ctx.config);
+    const gate = maybeGateAmendment(ctx, currentPlan, result.amendment.reason, result.amendment.operations, riskAssessment);
+    if (gate.gated) {
+      writeFileSync(
+        path.join(ctx.paths.amendmentsDir(ctx.meta.runId), `${result.amendment.id}.gated.json`),
+        JSON.stringify(result.amendment, null, 2),
+        "utf8",
+      );
+      return "failed";
+    }
     const amended = result.amendedPlan;
     const runDir = ctx.paths.runDir(ctx.meta.runId);
     const priorVersions = existsSync(runDir)

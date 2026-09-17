@@ -33,6 +33,8 @@ const followUpCommon = {
   options: z.array(followUpOptionSchema).optional(),
   recommendedDefault: z.string().optional(),
   criterionId: z.string().optional(),
+  /** The approval-class command this follow-up gates (§52). */
+  command: z.string().optional(),
 } as const;
 
 export const followUpDraftSchema = z.strictObject({ ...followUpCommon });

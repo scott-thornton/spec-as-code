@@ -3,7 +3,7 @@ import path from "node:path";
 import { SpcError } from "@spc/core";
 import { compileSpecFile, diffStat } from "@spc/repo";
 import { renderPrDraft } from "@spc/renderer";
-import { loadRunView } from "@spc/runtime";
+import { cancelRun, loadRunView } from "@spc/runtime";
 import { resolveRepoRoot } from "../context.js";
 
 /** `spc run show <runId>` — reconstruct what happened, without chat logs. */
@@ -65,4 +65,14 @@ function findSpecFileForRun(repoRoot: string, specId: string): string | null {
     if (r.ok && r.ir?.spec.metadata.id === specId) return file;
   }
   return null;
+}
+
+/** `spc run cancel <runId>` — make an interrupted run's terminal state truthful. */
+export function runCancel(runId: string, cwd?: string): number {
+  const repoRoot = resolveRepoRoot(cwd);
+  const state = cancelRun(repoRoot, runId);
+  console.log(`Run ${runId} cancelled (was running; task states preserved).`);
+  console.log(`Run directory: ${path.join(repoRoot, ".spc", "runs", runId)}`);
+  void state;
+  return 0;
 }

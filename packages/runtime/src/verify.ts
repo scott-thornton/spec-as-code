@@ -34,6 +34,14 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
   const now = input.now ?? (() => new Date().toISOString());
   const createdFollowups: FollowUp[] = [];
 
+  // §52: commands human-approved via resolved approval follow-ups may run.
+  const approvedCommands = new Set<string>();
+  for (const f of input.followups.all()) {
+    if (f.status === "resolved" && f.type === "approval" && f.command && f.resolution?.optionId === "approve") {
+      approvedCommands.add(f.command);
+    }
+  }
+
   for (const property of input.properties) {
     for (const criterion of property.acceptance) {
       // Human follow-ups are created once per criterion, not on every sweep.
@@ -48,6 +56,7 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
         provider: input.provider,
         ...(input.taskId ? { taskId: input.taskId } : {}),
         ...(input.onUsage ? { onUsage: input.onUsage } : {}),
+        ...(approvedCommands.size > 0 ? { approvedCommands } : {}),
         now,
       });
       const evidence = input.evidence.add({

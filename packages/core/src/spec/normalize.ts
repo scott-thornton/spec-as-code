@@ -28,6 +28,7 @@ function toProperty(
     id: source.id,
     statement: source.statement,
     priority: source.priority ?? "must",
+    ...(source.category ? { category: source.category } : {}),
     dependsOn: sortUnique(source.dependsOn ?? []),
     acceptance: (source.acceptance ?? []).map(normalizeCriterion),
     ...(scope ? { scope } : {}),

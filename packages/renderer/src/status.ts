@@ -46,7 +46,7 @@ export function renderStatus(input: StatusInput): string {
     lines.push(priority.toUpperCase(), "");
     for (const p of props) {
       const state = runState?.requirements[p.id] ?? defaultState(p.id);
-      lines.push(`  ${SYMBOLS[state.status]} ${p.id} ${p.statement}`);
+      lines.push(`  ${SYMBOLS[state.status]} ${p.id}${p.category ? ` [${p.category}]` : ""} ${p.statement}`);
       if (state.reason) lines.push(`      ${state.reason}`);
       const evs = state.evidenceIds
         .map((id) => evidenceById.get(id))

@@ -25,6 +25,14 @@ export const executionConfigSchema = z.strictObject({
    * follow-up is still recorded and visible after the run.
    */
   proceedOnClarificationFollowups: z.boolean().default(false),
+  /**
+   * Amendment approval (§31): "auto" validates and continues every
+   * amendment; "tiered" computes risk from the amendment's operations and
+   * requires human approval (blocking follow-up) for high-risk ones.
+   */
+  amendmentApproval: z.enum(["auto", "tiered"]).default("auto"),
+  /** Extra high-risk write patterns for tiered amendment approval. */
+  highRiskWritePatterns: z.array(z.string().min(1)).default([]),
 });
 
 export const commandsConfigSchema = z.strictObject({
