@@ -9,7 +9,7 @@
 
 **The thesis is not validated on this model and task size.** Across 72 scored
 task-pairs the spc workflow completed materially FEWER ground-truth
-requirements than the Markdown-plan baseline (77.3% ± 2.1% vs 98.7% ± 2.3%),
+requirements than the Markdown-plan baseline (spc 77.3% ± 2.1%, baseline 98.7% ± 2.3%),
 did not reduce false completion declarations (0.67 vs 0.33 - both near zero),
 and used ~3× the tokens. Neither arm introduced forbidden modifications;
 regressions were 0 (baseline) vs 0.33 (spc). Per §68's own gates this result
@@ -97,7 +97,7 @@ baseline is expected to be sloppier.
 
 ## Proposed §68 acceptance thresholds (derived from observed variance)
 
-- Observed completion delta (spc − control): **-21.4 pp** (pooled sd 2.2 pp).
+- Observed completion delta: spc finished 21.4 points behind the baseline (pooled sd 2.2 pp).
 - With n=3 trials this is a descriptive result, not a significance test; treat thresholds below as reviewable engineering gates, and re-derive them as n grows.
 
 Continue investing in the workflow only while ALL hold:
@@ -119,13 +119,13 @@ dominant loss. We implemented the indicated fix -
 run-gating) - and re-ran the full benchmark under identical conditions
 (glm-5.3-flash, 30 tasks, withheld grading; 1 trial).
 
-| Metric | Baseline (spc) | With demotion policy |
+| Metric | Baseline run (no demotion policy) | Re-measure (demotion policy on) |
 | --- | --- | --- |
-| Completion vs control | 77.3% vs 98.7% (−21.4 pp) | **87% vs 93% (−6 pp)** |
-| Blocked runs | 8 / 27 scored | 5 / 30 |
-| False completions | 0.67 avg | 2 vs 2 (parity with control) |
-| Regressions / forbidden | 0.33 / 0 | 0 / 0 |
-| Token overhead | ~2.5–3× | 2.95× |
+| Requirement completion | spc 77.3%, Markdown baseline 98.7% - spc 21.4 points behind | spc 87%, Markdown baseline 93% - spc 6 points behind |
+| spc blocked runs | 8 / 27 scored | 5 / 30 |
+| False completion declarations | spc 0.67 avg (baseline 0.33) | spc 2, baseline 2 (parity) |
+| Regressions / forbidden changes (both arms) | spc 0.33 / 0 | 0 / 0 |
+| spc token overhead vs baseline | ~2.5x to 3x | 2.95x |
 
 Interpretation: one targeted abstraction change recovered roughly two-thirds
 of the completion gap without giving up the safety properties (zero
