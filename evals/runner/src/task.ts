@@ -118,7 +118,12 @@ export function listTasks(tasksRoot: string, filterCategory?: string): LoadedTas
     for (const entry of readdirSync(categoryDir).sort()) {
       const dir = path.join(categoryDir, entry);
       if (!existsSync(path.join(dir, "task.yaml"))) continue;
-      out.push(loadTask(dir));
+      try {
+        out.push(loadTask(dir));
+      } catch (e) {
+        // A malformed task must not sink the whole benchmark run.
+        console.error(`skipping invalid task ${category}/${entry}: ${(e as Error).message}`);
+      }
     }
   }
   return out;

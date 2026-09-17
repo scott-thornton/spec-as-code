@@ -111,7 +111,9 @@ function writeSmokeTask(root: string, id: string): void {
       "      - op: update",
       "        path: lib/x.mjs",
       "        content: |",
-      "          export const x = () => 2;",
+      "          export function x() {",
+      "            return 2;",
+      "          }",
       "",
     ].join("\n"),
   );
@@ -126,7 +128,7 @@ describe("task loading", () => {
   });
 
   it("rejects invalid task definitions", () => {
-    const dir = path.join(tmpRoot, "smoke", "smoke-bad");
+    const dir = path.join(tmpRoot, "invalid", "smoke-bad");
     mkdirSync(path.join(dir, "repo"), { recursive: true });
     writeFileSync(path.join(dir, "task.yaml"), "id: bad\ncategory: smoke\ntitle: t\ndescription: d\nspec: not: valid: yaml:\n");
     expect(() => loadTask(dir)).toThrow(/invalid|not valid/);
