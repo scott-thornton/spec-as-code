@@ -1,0 +1,29 @@
+version: 1
+
+provider:
+  name: anthropic
+  model: glm-5.3
+  baseURL: https://api.z.ai/api/anthropic
+  apiKeyEnv: GLM_API_KEY
+
+execution:
+  # Two independent tasks (tags in index.mjs, CSV in export.mjs) may run
+  # concurrently — see ADR-0012.
+  parallelism: 2
+  # Continue past over-cautious clarification follow-ups (ADR-0013); they are
+  # still recorded and visible after the run.
+  proceedOnClarificationFollowups: true
+  maxModelCalls: 40
+  commandTimeoutMs: 120000
+
+commands:
+  network: deny
+  packageInstall: approval
+  deployment: deny
+  publish: deny
+  gitPush: deny
+  destructive: deny
+  unknown: allow
+
+verification:
+  allowAgentOnlyMustRequirements: false

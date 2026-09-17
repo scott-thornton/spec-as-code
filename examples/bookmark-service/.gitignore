@@ -1,0 +1,5 @@
+node_modules/
+.spc/runs/
+.spc/worktrees/
+.spc/plans/
+.spc/cache/

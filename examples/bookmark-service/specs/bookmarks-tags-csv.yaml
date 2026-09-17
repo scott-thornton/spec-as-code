@@ -1,0 +1,46 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+
+metadata:
+  id: bookmarks-tags-csv
+  title: Bookmark tags and CSV export
+
+goal: >
+  Bookmarks can be organized with tags and exported as CSV, without breaking
+  the existing JSON export API that downstream consumers depend on.
+
+requirements:
+  - id: BOOK-001
+    statement: Bookmarks can carry tags and be listed filtered by tag.
+    priority: must
+    acceptance:
+      - id: BOOK-001-A
+        type: command
+        command: node --test "tests/*.test.mjs"
+
+  - id: BOOK-002
+    statement: exportCsv() returns RFC-4180 CSV with columns url,title,tags (tags semicolon-separated).
+    priority: must
+    acceptance:
+      - id: BOOK-002-A
+        type: command
+        command: node --test "tests/*.test.mjs"
+      - id: BOOK-002-B
+        type: file
+        path: src/export.mjs
+        assert:
+          contains: exportCsv
+
+constraints:
+  - id: BOOK-C01
+    statement: The public exportJson() signature and behaviour are unchanged; existing tests keep passing unmodified in intent.
+    priority: must
+    acceptance:
+      - id: BOOK-C01-A
+        type: command
+        command: node --test "tests/export.test.mjs"
+
+outOfScope:
+  - persistence to disk
+  - authentication
+  - a UI

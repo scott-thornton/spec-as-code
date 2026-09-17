@@ -119,10 +119,15 @@ function checkPreflight(options: ApplyOptions, paths: SpcPaths, plan: Plan, spec
     throw new SpcError("PLAN_INVALID", `plan ${plan.metadata.id} failed validation:\n${formatDiagnostics(diagnostics)}`);
   }
   const status = statusPorcelain(paths.repoRoot);
-  if (status.dirty && !options.allowDirty) {
+  // Untracked tool-owned state (.spc/plans written by `spc plan`, etc.) must
+  // not gate execution; tracked human edits under .spc/ (config) still do.
+  const humanChanges = [...status.entries].filter(
+    ([p, xy]) => !(p.startsWith(".spc/") && xy.includes("?")),
+  );
+  if (humanChanges.length > 0 && !options.allowDirty) {
     throw new SpcError(
       "DIRTY_REPOSITORY",
-      `working tree is dirty (${status.entries.size} changed paths); commit or stash first, or pass --allow-dirty`,
+      `working tree is dirty (${humanChanges.length} changed paths); commit or stash first, or pass --allow-dirty`,
     );
   }
   if (config.execution.requirePlanApproval && !isPlanApproved(paths, plan.metadata.id)) {
