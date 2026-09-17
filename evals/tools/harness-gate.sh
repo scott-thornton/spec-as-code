@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Fast adversarial gate, harness mode: the model is YOU (the coding agent),
-# answering requests under HARNESS/.spc/harness. Zero API cost.
+# answering requests under HARNESS/.spc/harness. Tokens billed to the answering agent's session.
 # Run this in the background, then answer requests until it completes.
 set -u
 cd "$(dirname "$0")/../.."

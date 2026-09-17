@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Full 30-task benchmark in harness mode: a coding agent in this repository
-# answers every model request through files. Zero API cost. Sequential.
+# answers every model request through files; tokens billed to the answering agent's session.
 set -u
 cd "$(dirname "$0")/../.."
 RUNNER=evals/runner/dist/main.js

@@ -87,7 +87,7 @@ baseline document.
 
 `evals/results/harness-gate.sh` runs the 12 adversarial tasks with the
 harness provider (a coding agent in this repository answers every model
-request; zero API cost). Combined with the flash-API subset extraction in
+request; tokens billed to the answering agent's session, not a separate key). Combined with the flash-API subset extraction in
 [baselines/fast-adversarial-2026-09-17.md](baselines/fast-adversarial-2026-09-17.md),
 it separates machinery friction (zero at full tier) from model-tier caution
 (flash blocks more).
