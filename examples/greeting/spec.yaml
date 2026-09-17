@@ -1,0 +1,23 @@
+# Example spec (mirrors fixtures/simple-node-service).
+# Copy into a repository under specs/ and run:
+#   spc spec validate specs/<file>.yaml && spc plan specs/<file>.yaml
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+
+metadata:
+  id: greeting-api
+  title: Greeting API
+
+goal: >
+  Expose a greeting function that returns "hello".
+
+requirements:
+  - id: GREETING-001
+    statement: Calling greeting returns "hello".
+    priority: must
+    acceptance:
+      - id: GREETING-001-A
+        type: command
+        command: node --test "tests/*.test.mjs"
+        expect:
+          exitCode: 0
