@@ -28,6 +28,7 @@ is not yet measured. A complete worked example lives in
 
 ## Documentation
 
+- [Why spc](docs/why-spc.md) - what it gives you, what it does not, and when to skip it
 - [Getting started](docs/usage/getting-started.md) - from zero to a verified run
 - [Spec authoring reference](docs/usage/spec-authoring.md) - every field, criterion type and identifier rule
 - [CLI reference](docs/usage/cli-reference.md) - every command, flag and exit code
