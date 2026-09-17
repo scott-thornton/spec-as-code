@@ -42,7 +42,8 @@ function emit(t) {
     writeFileSync(full, content);
   }
   for (const [p, content] of Object.entries(t.gradingFiles ?? {})) {
-    const full = path.join(dir, "grading", p);
+    // gradingFiles keys are task-dir-relative and already start with grading/
+    const full = path.join(dir, p);
     mkdirSync(path.dirname(full), { recursive: true });
     writeFileSync(full, content);
   }

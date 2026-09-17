@@ -92,11 +92,11 @@ export interface GradeArmInput {
 }
 
 export function gradeArm(input: GradeArmInput): ArmMetrics {
-  // Withheld grading tests land in the result tree; diff-based metrics
+  // Withheld grading tests land under <repo>/grading; diff-based metrics
   // exclude them (and the control arm's PLAN.md) so patches compare work,
   // not grading scaffolding.
   if (input.gradingDir) {
-    cpSync(input.gradingDir, input.outcome.repoDir, { recursive: true });
+    cpSync(input.gradingDir, path.join(input.outcome.repoDir, "grading"), { recursive: true });
   }
 
   const grades: RequirementGrade[] = input.requirements.map((r) => {
