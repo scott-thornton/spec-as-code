@@ -141,7 +141,9 @@ async function runOneTrial(task: LoadedTask, trial: number, workRoot: string, pr
   const treatmentRun = await runTreatmentArm({
     task,
     repoDir: treatmentRepo,
-    provider: providers.treatment,
+    // Only real mode injects the provider; scripted mode must keep the
+    // fake-provider config branch (no demotion policy, fake script).
+    ...(providerFactory ? { provider: providers.treatment } : {}),
     ...(repoFiles ? { repoFiles } : {}),
   });
   const report = treatmentRun.report;
