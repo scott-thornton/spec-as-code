@@ -69,10 +69,10 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
       })),
     }));
 
-  const readPatterns = task.targets?.read ?? [];
-  const readFiles = listMatchingFiles(worktreeRoot, readPatterns, 6).map((p) => ({
+  const readPatterns = [...new Set([...(task.targets?.read ?? []), ...(task.targets?.write ?? [])])];
+  const readFiles = listMatchingFiles(worktreeRoot, readPatterns, 8).map((p) => ({
     path: p,
-    content: readExcerpt(worktreeRoot, p, 4096) ?? "",
+    content: readExcerpt(worktreeRoot, p, 6144) ?? "",
   }));
 
   const ctx: ExecutorTaskContext = {

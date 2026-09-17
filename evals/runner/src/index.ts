@@ -4,3 +4,5 @@ export * from "./treatment.js";
 export * from "./metrics.js";
 export * from "./benchmark.js";
 export * from "./compare.js";
+export * from "./context.js";
+export * from "./retry.js";

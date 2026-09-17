@@ -25,6 +25,8 @@ export interface ArmTotals {
   blocked: number;
   replans: number;
   followupsRaised: number;
+  tokensIn: number;
+  tokensOut: number;
 }
 
 export function armTotals(results: TaskResult[], arm: "control" | "treatment"): ArmTotals {
@@ -42,6 +44,8 @@ export function armTotals(results: TaskResult[], arm: "control" | "treatment"): 
     blocked: sum((r) => (arm === "treatment" && r.treatment.status === "blocked" ? 1 : 0)),
     replans: sum((r) => (arm === "treatment" ? r.treatment.replans : 0)),
     followupsRaised: sum((r) => (arm === "treatment" ? r.treatment.followupsRaised : 0)),
+    tokensIn: sum((r) => pick(r).tokensIn ?? 0),
+    tokensOut: sum((r) => pick(r).tokensOut ?? 0),
   };
 }
 
@@ -93,6 +97,9 @@ export function renderSummary(result: BenchmarkResult): string {
   lines.push(`| Forbidden modifications | ${control.forbiddenChanges} | ${treatment.forbiddenChanges} |`);
   lines.push(`| Total patch size | ${control.patchSize} | ${treatment.patchSize} |`);
   lines.push(`| Model calls | ${control.modelCalls} | ${treatment.modelCalls} |`);
+  if (control.tokensIn + control.tokensOut + treatment.tokensIn + treatment.tokensOut > 0) {
+    lines.push(`| Tokens (in / out) | ${control.tokensIn.toLocaleString()} / ${control.tokensOut.toLocaleString()} | ${treatment.tokensIn.toLocaleString()} / ${treatment.tokensOut.toLocaleString()} |`);
+  }
   lines.push(`| Replans | n/a | ${treatment.replans} |`);
   lines.push(`| Human follow-ups raised | n/a | ${treatment.followupsRaised} |`);
   lines.push(`| Runs blocked pending human input | n/a | ${treatment.blocked} |`);

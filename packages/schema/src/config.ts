@@ -3,7 +3,7 @@ import { z } from "zod";
 export const policyValueSchema = z.enum(["allow", "approval", "deny"]);
 
 export const providerConfigSchema = z.strictObject({
-  name: z.enum(["fake", "openai", "none"]).default("none"),
+  name: z.enum(["fake", "openai", "anthropic", "none"]).default("none"),
   model: z.string().optional(),
   baseURL: z.string().optional(),
   apiKeyEnv: z.string().optional(),

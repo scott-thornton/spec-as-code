@@ -1,5 +1,5 @@
 import type { LLMProvider, StructuredRequest, StructuredResponse, Usage } from "@spc/llm";
-import { parseStructured } from "@spc/llm";
+import { parseStructured, schemaHint } from "@spc/llm";
 import { LLMError, LLM_CONTEXT_EXHAUSTED, LLM_PROVIDER_FAILURE, LLM_RATE_LIMITED, LLM_TIMEOUT } from "@spc/llm";
 
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
@@ -46,7 +46,7 @@ export class OpenAICompatProvider implements LLMProvider {
       temperature: 0,
       messages: [
         { role: "system", content: request.system },
-        { role: "user", content: request.prompt },
+        { role: "user", content: `${request.prompt}\n\n${schemaHint(request.schema as never, request.schemaName)}` },
       ],
       response_format: { type: "json_object" },
       ...(request.maxTokens ? { max_tokens: request.maxTokens } : {}),

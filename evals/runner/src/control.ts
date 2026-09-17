@@ -38,6 +38,8 @@ export interface ControlResult {
   resultRevision: string | null;
   claimedDone: boolean;
   modelCalls: number;
+  tokensIn: number;
+  tokensOut: number;
 }
 
 export async function runControlArm(options: {
@@ -45,21 +47,27 @@ export async function runControlArm(options: {
   repoDir: string;
   provider: LLMProvider;
   baselineInstructions: string;
+  repoFiles?: { path: string; content: string }[];
 }): Promise<ControlResult> {
   const { provider, repoDir } = options;
   const baseRevision = currentRevision(repoDir);
   const system = options.baselineInstructions;
   const taskPayload = { title: options.task.task.title, description: options.task.task.description };
+  const repoDump = options.repoFiles ?? [];
+  let tokensIn = 0;
+  let tokensOut = 0;
 
   const plan = await provider.generateStructured({
     role: "planner",
     key: "plan",
     requestId: crypto.randomUUID(),
     system,
-    prompt: JSON.stringify({ task: taskPayload }, null, 2),
+    prompt: JSON.stringify({ task: taskPayload, repository: repoDump }, null, 2),
     schema: baselinePlanSchema,
     schemaName: "BaselinePlan",
   });
+  tokensIn += plan.usage.inputTokens ?? 0;
+  tokensOut += plan.usage.outputTokens ?? 0;
   // PLAN.md is the control arm's plan artifact.
   writeFileSync(path.join(repoDir, "PLAN.md"), plan.value.planMarkdown, "utf8");
 
@@ -68,10 +76,12 @@ export async function runControlArm(options: {
     key: "implement",
     requestId: crypto.randomUUID(),
     system,
-    prompt: JSON.stringify({ task: taskPayload, plan: plan.value.planMarkdown }, null, 2),
+    prompt: JSON.stringify({ task: taskPayload, plan: plan.value.planMarkdown, repository: repoDump }, null, 2),
     schema: baselineImplementSchema,
     schemaName: "BaselineImplement",
   });
+  tokensIn += implement.usage.inputTokens ?? 0;
+  tokensOut += implement.usage.outputTokens ?? 0;
 
   for (const change of implement.value.changes) {
     const full = path.join(repoDir, change.path);
@@ -88,5 +98,7 @@ export async function runControlArm(options: {
     resultRevision,
     claimedDone: implement.value.claimedDone,
     modelCalls: 2,
+    tokensIn,
+    tokensOut,
   };
 }

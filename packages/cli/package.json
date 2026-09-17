@@ -6,7 +6,10 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
   "bin": {
     "spc": "./dist/main.js"
@@ -31,7 +34,8 @@
     "@spc/verifier": "workspace:*",
     "commander": "^14.0.0",
     "yaml": "^2.8.0",
-    "zod": "^4.1.11"
+    "zod": "^4.1.11",
+    "@spc/llm-anthropic": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.10",

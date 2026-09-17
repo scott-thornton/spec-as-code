@@ -41,6 +41,8 @@ describe("openai-compatible provider", () => {
     expect(seen.url).toContain("/chat/completions");
     expect(seen.auth).toBe("Bearer k");
     expect((seen.body as { temperature: number }).temperature).toBe(0);
+    const userMessage = (seen.body as { messages: { role: string; content: string }[] }).messages[1]!.content;
+    expect(userMessage).toContain("JSON Schema");
   });
 
   it("parses fenced JSON output", async () => {

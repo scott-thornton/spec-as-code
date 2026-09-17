@@ -1,5 +1,19 @@
-import type { ZodType } from "zod";
+import { z, type ZodType } from "zod";
 import { LLMError, LLM_INVALID_STRUCTURED_OUTPUT } from "./errors.js";
+
+/**
+ * JSON-Schema rendering of a structured-output schema, embedded in prompts so
+ * real models know the exact shape to produce. Falls back to the schema name
+ * if the schema cannot be rendered.
+ */
+export function schemaHint(schema: ZodType<unknown>, schemaName: string): string {
+  try {
+    const json = z.toJSONSchema(schema as z.ZodType<unknown>, { io: "output" });
+    return `Respond with a single JSON object matching this JSON Schema for "${schemaName}":\n${JSON.stringify(json)}`;
+  } catch {
+    return `Respond with a single JSON object matching the "${schemaName}" schema.`;
+  }
+}
 
 export type StructuredValidation<T> =
   | { ok: true; value: T }

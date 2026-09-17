@@ -5,6 +5,7 @@ import type { Config, SpecIR } from "@spc/schema";
 import type { LLMProvider } from "@spc/llm";
 import { FakeProvider, parseFakeScript } from "@spc/llm-fake";
 import { OpenAICompatProvider } from "@spc/llm-openai";
+import { AnthropicCompatProvider } from "@spc/llm-anthropic";
 import { findRepoRoot } from "@spc/repo";
 import { loadConfig } from "@spc/runtime";
 
@@ -87,6 +88,22 @@ export async function createProvider(config: Config, repoRoot: string): Promise<
         throw new SpcError("PROVIDER_CONFIG", `environment variable ${envName} is not set; required by the openai provider`);
       }
       return new OpenAICompatProvider({
+        model,
+        apiKey,
+        ...(config.provider.baseURL ? { baseURL: config.provider.baseURL } : {}),
+      });
+    }
+    case "anthropic": {
+      const model = config.provider.model;
+      if (!model) {
+        throw new SpcError("PROVIDER_CONFIG", `provider "anthropic" requires provider.model in .spc/config.yaml`);
+      }
+      const envName = config.provider.apiKeyEnv ?? "ANTHROPIC_API_KEY";
+      const apiKey = process.env[envName];
+      if (!apiKey) {
+        throw new SpcError("PROVIDER_CONFIG", `environment variable ${envName} is not set; required by the anthropic provider`);
+      }
+      return new AnthropicCompatProvider({
         model,
         apiKey,
         ...(config.provider.baseURL ? { baseURL: config.provider.baseURL } : {}),

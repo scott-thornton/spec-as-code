@@ -10,6 +10,7 @@ import { runControlArm } from "./control.js";
 import { runTreatmentArm } from "./treatment.js";
 import { gradeArm, runCommandIn, type ArmMetrics } from "./metrics.js";
 import { renderSummary } from "./compare.js";
+import { boundedRepoDump } from "./context.js";
 
 /**
  * Benchmark runner (§65–§67). For every task:
@@ -22,6 +23,8 @@ import { renderSummary } from "./compare.js";
 
 export interface TaskArmResult extends ArmMetrics {
   modelCalls: number;
+  tokensIn?: number;
+  tokensOut?: number;
 }
 
 export interface ControlArmResult extends TaskArmResult {
@@ -56,6 +59,7 @@ export interface BenchmarkOptions {
   tasksRoot: string;
   outDir: string;
   category?: string;
+  taskFilter?: string;
   trials?: number;
   keepWork?: boolean;
   providerFactory?: (task: LoadedTask) => Promise<{ control: LLMProvider; treatment: LLMProvider }>;
@@ -81,6 +85,9 @@ async function runOneTrial(task: LoadedTask, trial: number, workRoot: string, pr
         control: new FakeProvider(parseFakeScript(readFileSync(task.controlScriptPath, "utf8"))),
         treatment: new FakeProvider(parseFakeScript(readFileSync(task.treatmentScriptPath, "utf8"))),
       };
+  // Real models have no tool access: both arms receive the same bounded view
+  // of the task repository.
+  const repoFiles = providerFactory ? boundedRepoDump(task.repoDir) : undefined;
 
   // Harness sanity: the regression command must behave as declared pre-task.
   const sanityRepo = prepareRepoCopy(task, path.join(workRoot, `${task.task.id}-t${trial}-sanity`));
@@ -105,6 +112,7 @@ async function runOneTrial(task: LoadedTask, trial: number, workRoot: string, pr
     repoDir: controlRepo,
     provider: providers.control,
     baselineInstructions: task.task.baselineInstructions ?? DEFAULT_BASELINE_INSTRUCTIONS,
+    ...(repoFiles ? { repoFiles } : {}),
   });
   const controlMetrics = gradeArm({
     gradingDir: task.gradingDir,
@@ -124,11 +132,18 @@ async function runOneTrial(task: LoadedTask, trial: number, workRoot: string, pr
     ...controlMetrics,
     modelCalls: controlRun.modelCalls,
     claimedDone: controlRun.claimedDone,
+    tokensIn: controlRun.tokensIn,
+    tokensOut: controlRun.tokensOut,
   };
 
   // Treatment arm.
   const treatmentRepo = prepareRepoCopy(task, path.join(workRoot, `${task.task.id}-t${trial}-treatment`));
-  const treatmentRun = await runTreatmentArm({ task, repoDir: treatmentRepo });
+  const treatmentRun = await runTreatmentArm({
+    task,
+    repoDir: treatmentRepo,
+    provider: providers.treatment,
+    ...(repoFiles ? { repoFiles } : {}),
+  });
   const report = treatmentRun.report;
   const treatmentMetrics = gradeArm({
     gradingDir: task.gradingDir,
@@ -151,6 +166,8 @@ async function runOneTrial(task: LoadedTask, trial: number, workRoot: string, pr
     replans: report.replans,
     followupsRaised: report.followups.filter((f) => f.status === "open").length,
     replanReasons: treatmentRun.replanReasons,
+    tokensIn: treatmentRun.tokensIn,
+    tokensOut: treatmentRun.tokensOut,
   };
 
   return {
@@ -165,7 +182,8 @@ async function runOneTrial(task: LoadedTask, trial: number, workRoot: string, pr
 
 export async function runBenchmark(options: BenchmarkOptions): Promise<BenchmarkResult> {
   const trials = options.trials ?? 1;
-  const tasks = listTasks(options.tasksRoot, options.category);
+  let tasks = listTasks(options.tasksRoot, options.category);
+  if (options.taskFilter) tasks = tasks.filter((t) => t.task.id === options.taskFilter);
   if (tasks.length === 0) throw new SpcError("EVAL_NO_TASKS", `no benchmark tasks found under ${options.tasksRoot}`);
   const workRoot = mkdtempSync(path.join(tmpdir(), "spc-evals-"));
   const results: TaskResult[] = [];

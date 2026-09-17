@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { compileSpecSource, SpcError } from "@spc/core";
+import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { FakeProvider, parseFakeScript } from "@spc/llm-fake";
 import { generatePlan } from "@spc/planner";
 import { applyPlan, newPlanId, spcPaths, type ApplyReport } from "@spc/runtime";
@@ -18,12 +19,21 @@ export interface TreatmentResult {
   /** Repository state to grade: the run worktree, or the untouched copy when blocked. */
   gradeRepoDir: string;
   replanReasons: string[];
+  tokensIn: number;
+  tokensOut: number;
 }
 
 const RUNTIME_STATE_GITIGNORE = ".spc/runs/\n.spc/worktrees/\n.spc/plans/\n";
 
-export async function runTreatmentArm(options: { task: LoadedTask; repoDir: string }): Promise<TreatmentResult> {
+export async function runTreatmentArm(options: {
+  task: LoadedTask;
+  repoDir: string;
+  /** Injected real provider; when absent the scripted fake is used. */
+  provider?: LLMProvider;
+  repoFiles?: { path: string; content: string }[];
+}): Promise<TreatmentResult> {
   const { task, repoDir } = options;
+  const real = options.provider ?? null;
 
   const compile = compileSpecSource(task.task.spec, "specs/spec.yaml");
   if (!compile.ok || !compile.ir) {
@@ -35,10 +45,14 @@ export async function runTreatmentArm(options: { task: LoadedTask; repoDir: stri
   mkdirSync(path.join(repoDir, "specs"), { recursive: true });
   writeFileSync(path.join(repoDir, "specs", "spec.yaml"), task.task.spec, "utf8");
   mkdirSync(path.join(repoDir, ".spc"), { recursive: true });
-  writeFileSync(path.join(repoDir, ".spc", "fake-script.yaml"), readFileSync(task.treatmentScriptPath, "utf8"), "utf8");
+  if (!real) {
+    writeFileSync(path.join(repoDir, ".spc", "fake-script.yaml"), readFileSync(task.treatmentScriptPath, "utf8"), "utf8");
+  }
   writeFileSync(
     path.join(repoDir, ".spc", "config.yaml"),
-    ["version: 1", "provider:", "  name: fake", "  script: .spc/fake-script.yaml"].join("\n"),
+    real
+      ? ["version: 1", "provider:", `  name: ${real.name}`, `  model: ${real.model}`].join("\n")
+      : ["version: 1", "provider:", "  name: fake", "  script: .spc/fake-script.yaml"].join("\n"),
     "utf8",
   );
   appendGitignore(repoDir);
@@ -46,17 +60,25 @@ export async function runTreatmentArm(options: { task: LoadedTask; repoDir: stri
   // refuses dirty repositories by design.
   commitAll(repoDir, `benchmark setup: ${task.task.id}`);
 
-  const provider = new FakeProvider(parseFakeScript(readFileSync(task.treatmentScriptPath, "utf8")));
+  const provider = real ?? new FakeProvider(parseFakeScript(readFileSync(task.treatmentScriptPath, "utf8")));
 
   const snapshot = observeRepository(repoDir, specIr);
   const planId = newPlanId(paths.plansDir);
   mkdirSync(paths.plansDir, { recursive: true });
+  const excerpts =
+    options.repoFiles ?? snapshot.relevantArtifacts.slice(0, 6).map((a) => ({ path: a.path, content: "" }));
+  let tokensIn = 0;
+  let tokensOut = 0;
   const generated = await generatePlan({
     specIr,
     snapshot,
-    excerpts: snapshot.relevantArtifacts.slice(0, 6).map((a) => ({ path: a.path, content: "" })),
+    excerpts,
     provider,
     planId,
+    onUsage: (record) => {
+      tokensIn += record.inputTokens ?? 0;
+      tokensOut += record.outputTokens ?? 0;
+    },
   });
   if (!generated.plan) {
     throw new SpcError(
@@ -70,6 +92,17 @@ export async function runTreatmentArm(options: { task: LoadedTask; repoDir: stri
     providerFactory: async () => provider,
     log: () => {},
   });
+  // Runtime usage records cover executor/verifier/replanner calls.
+  try {
+    const usageText = readFileSync(paths.usageFile(report.runId), "utf8");
+    for (const line of usageText.trim().split("\n").filter((l) => l !== "")) {
+      const record = JSON.parse(line) as { inputTokens?: number; outputTokens?: number };
+      tokensIn += record.inputTokens ?? 0;
+      tokensOut += record.outputTokens ?? 0;
+    }
+  } catch {
+    // no usage file (blocked before execution)
+  }
 
   const replanReasons: string[] = [];
   try {
@@ -88,6 +121,8 @@ export async function runTreatmentArm(options: { task: LoadedTask; repoDir: stri
     report,
     gradeRepoDir: report.worktree ?? repoDir,
     replanReasons,
+    tokensIn,
+    tokensOut,
   };
 }
 
