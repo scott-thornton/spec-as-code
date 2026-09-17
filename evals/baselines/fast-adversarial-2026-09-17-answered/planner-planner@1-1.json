@@ -1,0 +1,106 @@
+{
+  "id": "planner-planner@1-1",
+  "value": {
+    "plan": {
+      "tasks": [
+        {
+          "id": "T001",
+          "title": "Inspect current logger API and callers",
+          "kind": "inspect",
+          "intent": "Confirm the exact exports of lib/logger.mjs (currently log(message) writing to console.error) and find every caller/import of it in the repository, so the level machinery can be added without breaking existing usage.",
+          "dependsOn": [],
+          "targets": {
+            "read": ["lib/logger.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T002",
+          "title": "Implement leveled logging in lib/logger.mjs",
+          "kind": "modify",
+          "intent": "Introduce an ordered level set and a module-level active level (default per the FEAT-001 clarification, recommended: info), export one emit function per level that no-ops below the active level, add setLevel/getLevel, and keep the existing log(message) export working as before. Emit functions continue writing to console.error.",
+          "dependsOn": ["T001"],
+          "satisfies": ["FEAT-001"],
+          "targets": {
+            "read": ["lib/logger.mjs"],
+            "write": ["lib/logger.mjs"]
+          },
+          "risk": "medium"
+        },
+        {
+          "id": "T003",
+          "title": "Add tests for level filtering and legacy log()",
+          "kind": "test",
+          "intent": "Create test/logger.test.mjs covering: each level emits at or above the active level, messages below the active level are suppressed, the default level matches the clarified spec value, setLevel changes filtering and rejects unknown levels, and the pre-existing log() export still emits.",
+          "dependsOn": ["T002"],
+          "verifies": ["FEAT-001"],
+          "targets": {
+            "read": ["lib/logger.mjs"],
+            "write": ["test/logger.test.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T004",
+          "title": "Run suite and confirm FEAT-001 acceptance",
+          "kind": "verify",
+          "intent": "Run the full test suite (node --test) and confirm the FEAT-001-A file acceptance (lib/logger.mjs exists) so the requirement has an executed verification path.",
+          "dependsOn": ["T003"],
+          "verifies": ["FEAT-001"],
+          "targets": {
+            "read": ["lib/logger.mjs", "test/logger.test.mjs"]
+          },
+          "risk": "low"
+        }
+      ]
+    },
+    "observations": [
+      {
+        "type": "repository",
+        "statement": "lib/logger.mjs currently exports a single log(message) function that writes to console.error; no level machinery or other modules exist in the repository.",
+        "confidence": "confirmed"
+      },
+      {
+        "type": "constraint",
+        "statement": "The repository reports no existing tests, manifests, or commands, so FEAT-001 verification must come from newly added tests plus the spec's file-existence acceptance rather than a pre-existing suite.",
+        "confidence": "confirmed"
+      },
+      {
+        "type": "constraint",
+        "statement": "Spec FEAT-001 requires messages to be loggable at levels but names neither the level set nor the default level; the planner contract forbids inventing spec decisions, so this needs clarification before T002's parameters are final.",
+        "confidence": "confirmed"
+      }
+    ],
+    "assumptions": [
+      "The existing log(message) export should continue to work after the change even though no acceptance criterion explicitly pins it, since gratuitously breaking the public export would violate the task goal.",
+      "Levels are an ordered severity set with a single active threshold; only the names and default await clarification."
+    ],
+    "followups": [
+      {
+        "type": "spec_clarification",
+        "blocking": true,
+        "title": "FEAT-001 does not name the levels or the default level",
+        "description": "Implementing T002 requires a concrete level set and default. The spec says only \"Log messages can be emitted at levels.\" Please confirm which option (or custom set) applies so T002 and T003 can use exact level names.",
+        "propertyId": "FEAT-001",
+        "taskId": "T002",
+        "options": [
+          {
+            "id": "opt-conventional",
+            "description": "debug/info/warn/error with default info — the conventional JS logging set; keeps log() equivalent to info."
+          },
+          {
+            "id": "opt-minimal",
+            "description": "info/error only with default info — smallest set satisfying \"levels\"."
+          },
+          {
+            "id": "opt-verbose",
+            "description": "trace/debug/info/warn/error/fatal with default info — syslog-style six levels."
+          }
+        ],
+        "recommendedDefault": "opt-conventional"
+      }
+    ]
+  },
+  "answeredAt": "2026-09-17T19:40:45Z",
+  "answeredBy": "zcode-agent"
+}

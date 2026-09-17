@@ -1,0 +1,22 @@
+{
+  "id": "executor-implement-9",
+  "value": {
+    "summary": "Added displayName to summary() in lib/summary.mjs: summary(user) now returns { name: user.name, displayName: user.name.toUpperCase() }. The name field is kept with its original value for compatibility. Updated tests/summary.test.mjs: the deepEqual expectation now includes displayName: \"ADA\" (required because the test asserts the exact object shape, which the new field intentionally changes), and added an explicit assertion that the name field is still present with its old value. Ran the suite with node --test; all tests pass. Satisfied: displayName added upper-cased, name field preserved, tests updated and green.",
+    "changes": [
+      {
+        "op": "update",
+        "path": "lib/summary.mjs",
+        "content": "export function summary(user) {\n  return { name: user.name, displayName: user.name.toUpperCase() };\n}\n"
+      },
+      {
+        "op": "update",
+        "path": "tests/summary.test.mjs",
+        "content": "import test from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { summary } from \"../lib/summary.mjs\";\n\ntest(\"summary has name and displayName\", () => {\n  assert.deepEqual(summary({ name: \"ada\" }), { name: \"ada\", displayName: \"ADA\" });\n});\n\ntest(\"name field kept for compatibility\", () => {\n  assert.equal(summary({ name: \"ada\" }).name, \"ada\");\n});\n"
+      }
+    ],
+    "claimedDone": true,
+    "ranTests": true
+  },
+  "answeredAt": "2026-09-17T20:00:10Z",
+  "answeredBy": "zcode-agent"
+}

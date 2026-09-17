@@ -1,0 +1,58 @@
+{
+  "id": "planner-planner@1-9",
+  "value": {
+    "plan": {
+      "tasks": [
+        {
+          "id": "T001",
+          "title": "Add displayName to summary()",
+          "kind": "modify",
+          "intent": "Change lib/summary.mjs to return { name: user.name, displayName: user.name.toUpperCase() }, keeping the name field and its value intact for compatibility.",
+          "dependsOn": [],
+          "satisfies": ["API-001"],
+          "targets": {
+            "read": ["lib/summary.mjs"],
+            "write": ["lib/summary.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T002",
+          "title": "Update summary test for the new field",
+          "kind": "test",
+          "intent": "Update tests/summary.test.mjs: the existing deepEqual asserts the exact object shape { name: \"ada\" }, which the intentionally-added displayName field changes, so the expectation becomes { name: \"ada\", displayName: \"ADA\" }. Add a separate assertion that the name field is still present with its original value, pinning the compatibility half of API-001. Without this task the API-001-A suite run cannot be green.",
+          "dependsOn": ["T001"],
+          "verifies": ["API-001"],
+          "targets": {
+            "read": ["lib/summary.mjs", "tests/summary.test.mjs"],
+            "write": ["tests/summary.test.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T003",
+          "title": "Run suite for API-001-A acceptance",
+          "kind": "verify",
+          "intent": "Run node --test \"tests/*.test.mjs\" and require exit code 0, executing the updated tests that pin both the displayName addition and the preserved name field.",
+          "dependsOn": ["T002"],
+          "verifies": ["API-001"],
+          "targets": {
+            "read": ["lib/summary.mjs", "tests/summary.test.mjs"]
+          },
+          "risk": "low"
+        }
+      ]
+    },
+    "observations": [
+      {
+        "type": "constraint",
+        "statement": "tests/summary.test.mjs uses assert.deepEqual on the exact returned shape, so the new field necessarily invalidates the old expectation; the spec's \"name remains\" requirement is preserved by keeping the field and value, and by the new dedicated name assertion.",
+        "confidence": "confirmed"
+      }
+    ],
+    "assumptions": [],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T20:00:45Z",
+  "answeredBy": "zcode-agent"
+}

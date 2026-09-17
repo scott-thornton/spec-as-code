@@ -1,0 +1,8 @@
+{
+  "id": "planner-plan-8",
+  "value": {
+    "planMarkdown": "# Plan: App greeting uses strings.exclaim\n\n## Goal\n`packages/app`'s `greeting(s)` returns `exclaim(s)` (i.e. `s + \"!\"`) by delegating to `packages/strings`, and the existing app test is updated to the new behavior. `packages/strings` itself is not modified.\n\n## Design\n- `packages/app/index.mjs` imports `exclaim` from `../strings/index.mjs` and returns `exclaim(s)` from `greeting`. The app package gains a dependency on strings (fine within this workspace's relative-import style, no package.json present).\n- `tests/app.test.mjs`: this is an intentional behavior change, so the existing assertion is updated: `greeting(\"hi\")` now equals `\"hi!\"`. I'll also add a case showing idempotent input passthrough shape (`greeting(\"\")` → `\"!\"`) to pin the delegation.\n\n## Changes\n1. `packages/app/index.mjs` — import exclaim, return it from greeting.\n2. `tests/app.test.mjs` — update the expectation to `\"hi!\"` (and add the empty-string case).\n\n## Order of work\n1. Update `packages/app/index.mjs`.\n2. Update `tests/app.test.mjs`.\n3. Run `node --test`; suite must pass.\n\n## Done when\n- `greeting(\"hi\")` === `\"hi!\"` via `strings.exclaim`.\n- `packages/strings/index.mjs` unchanged.\n- Tests updated to the new behavior and passing."
+  },
+  "answeredAt": "2026-09-17T19:54:35Z",
+  "answeredBy": "zcode-agent"
+}

@@ -1,0 +1,75 @@
+{
+  "id": "planner-planner@1-6",
+  "value": {
+    "plan": {
+      "tasks": [
+        {
+          "id": "T001",
+          "title": "Create packages/shared/version.mjs",
+          "kind": "modify",
+          "intent": "Create packages/shared/version.mjs containing the single definition `export const VERSION = \"1\";` so every consumer derives the value from one place.",
+          "dependsOn": [],
+          "satisfies": ["MONO-001"],
+          "targets": {
+            "write": ["packages/shared/version.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T002",
+          "title": "Point packages/a at the shared constant",
+          "kind": "modify",
+          "intent": "Replace the local `export const VERSION = \"1\";` in packages/a/index.mjs with `import { VERSION } from \"../shared/version.mjs\"; export { VERSION };` (import-plus-re-export so the local template literal in aInfo keeps a binding), leaving aInfo() behavior unchanged. Do not touch the test file.",
+          "dependsOn": ["T001"],
+          "satisfies": ["MONO-002"],
+          "targets": {
+            "read": ["packages/a/index.mjs", "packages/shared/version.mjs"],
+            "write": ["packages/a/index.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T003",
+          "title": "Point packages/b at the shared constant",
+          "kind": "modify",
+          "intent": "Same change in packages/b/index.mjs: import VERSION from ../shared/version.mjs, re-export it, keep bInfo() unchanged. T002 and T003 write disjoint files and can run in either order after T001.",
+          "dependsOn": ["T001"],
+          "satisfies": ["MONO-002"],
+          "targets": {
+            "read": ["packages/b/index.mjs", "packages/shared/version.mjs"],
+            "write": ["packages/b/index.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T004",
+          "title": "Run suite and file acceptance",
+          "kind": "verify",
+          "intent": "Confirm MONO-001-A (packages/shared/version.mjs exists) and execute MONO-002-A: node --test \"tests/*.test.mjs\" with exit 0. The pre-existing tests/version.test.mjs pins VERSION equality across packages and both info() outputs, so a green run proves the re-exports preserve behavior.",
+          "dependsOn": ["T002", "T003"],
+          "verifies": ["MONO-001", "MONO-002"],
+          "targets": {
+            "read": ["packages/shared/version.mjs", "packages/a/index.mjs", "packages/b/index.mjs", "tests/version.test.mjs"]
+          },
+          "risk": "low"
+        }
+      ]
+    },
+    "observations": [
+      {
+        "type": "repository",
+        "statement": "packages/a/index.mjs and packages/b/index.mjs each define VERSION = \"1\" locally; tests/version.test.mjs imports VERSION from both packages and asserts equality plus aInfo()/bInfo() outputs, making it the existing-behavior coverage for the transition.",
+        "confidence": "confirmed"
+      },
+      {
+        "type": "constraint",
+        "statement": "A re-export written as `export { VERSION } from ...` does not create a local binding, so the package files must use import-plus-re-export to keep their template literals working; the plan spells this out to prevent a runtime ReferenceError.",
+        "confidence": "confirmed"
+      }
+    ],
+    "assumptions": [],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T19:52:55Z",
+  "answeredBy": "zcode-agent"
+}

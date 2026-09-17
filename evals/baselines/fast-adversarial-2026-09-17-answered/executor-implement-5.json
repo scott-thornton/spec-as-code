@@ -1,0 +1,17 @@
+{
+  "id": "executor-implement-5",
+  "value": {
+    "summary": "Added edge-case tests to tests/slug.test.mjs: slug(\"\") === \"\" (pipeline is a no-op and hyphen trim leaves empty), slug(\"Café\") === \"cafe\" (NFKD + diacritic stripping), and slug(\"日本語\") === \"\" (non-ASCII collapses to a hyphen that the final trim removes). The existing simple test is untouched and lib/ is unchanged. Ran the suite with node --test; all tests pass. Satisfied: empty-string and unicode coverage added, lib untouched.",
+    "changes": [
+      {
+        "op": "update",
+        "path": "tests/slug.test.mjs",
+        "content": "import test from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { slug } from \"../lib/slug.mjs\";\n\ntest(\"simple\", () => {\n  assert.equal(slug(\"Hello World\"), \"hello-world\");\n});\n\ntest(\"empty string\", () => {\n  assert.equal(slug(\"\"), \"\");\n});\n\ntest(\"unicode input: accented latin is decomposed and stripped\", () => {\n  assert.equal(slug(\"Café\"), \"cafe\");\n});\n\ntest(\"unicode input: non-latin collapses to empty\", () => {\n  assert.equal(slug(\"日本語\"), \"\");\n});\n"
+      }
+    ],
+    "claimedDone": true,
+    "ranTests": true
+  },
+  "answeredAt": "2026-09-17T19:50:25Z",
+  "answeredBy": "zcode-agent"
+}

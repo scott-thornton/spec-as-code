@@ -1,0 +1,8 @@
+{
+  "id": "planner-plan-2",
+  "value": {
+    "planMarkdown": "# Plan: Rename internal helpers, keeping aliases\n\n## Goal\nIn `lib/util.mjs`, rename `doubleInternal` → `double` and `halveInternal` → `halve`, keep the old names working as aliases, and change no behavior.\n\n## Notes\n- The two renames are independent, but both live in the same tiny file, so they land as one edit rather than two ordered steps.\n- `tests/util.test.mjs` imports the old names (`doubleInternal`, `halveInternal`), so the aliases are load-bearing: the existing test must keep passing untouched in its current form.\n\n## Changes\n1. `lib/util.mjs`\n   - Rename the two exported functions to `double(n)` and `halve(n)` with identical bodies (`n * 2`, `n / 2`).\n   - Add alias exports: `export const doubleInternal = double;` and `export const halveInternal = halve;` so existing importers are unaffected.\n2. `tests/util.test.mjs`\n   - Extend (not replace) the existing test: keep the current assertions on the old names, and add assertions that `double(4) === 8` and `halve(4) === 2` via the new names.\n\n## Order of work\n1. Apply the rename + aliases in `lib/util.mjs`.\n2. Extend `tests/util.test.mjs` with new-name assertions.\n3. Run `node --test`; all tests (old-name and new-name) must pass before declaring done.\n\n## Done when\n- New names `double`/`halve` are exported and correct.\n- Old names `doubleInternal`/`halveInternal` still resolve and behave identically.\n- No behavior change anywhere; full test suite passes."
+  },
+  "answeredAt": "2026-09-17T19:43:39Z",
+  "answeredBy": "zcode-agent"
+}

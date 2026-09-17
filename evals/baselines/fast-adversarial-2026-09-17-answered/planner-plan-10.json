@@ -1,0 +1,8 @@
+{
+  "id": "planner-plan-10",
+  "value": {
+    "planMarkdown": "# Plan: Add displayName alongside name\n\n## Goal\n`summary(user)` returns `{ name, displayName }` where `displayName` is the upper-cased name; the `name` field stays for compatibility.\n\n## Design\n- `lib/summary.mjs`: `return { name: user.name, displayName: user.name.toUpperCase() };` — field order irrelevant, but `name` remains the same value as before.\n- Test impact: `tests/summary.test.mjs` uses `assert.deepEqual` on the exact object shape, so it will fail once the new field exists. The test must be updated to expect both fields (`{ name: \"ada\", displayName: \"ADA\" }`). This is a required consequence of the change, not a violation of compatibility — compatibility is about the `name` field continuing to exist with its old value, which I'll also pin explicitly with `assert.equal(summary(...).name, \"ada\")` so the compat requirement is directly tested.\n\n## Changes\n1. `lib/summary.mjs` — add the `displayName` field.\n2. `tests/summary.test.mjs` — update the deepEqual expectation to include `displayName: \"ADA\"`; add an explicit name-compatibility assertion.\n\n## Order of work\n1. Modify `lib/summary.mjs`.\n2. Update the test.\n3. Run `node --test`; suite must pass.\n\n## Done when\n- `summary({ name: \"ada\" })` → `{ name: \"ada\", displayName: \"ADA\" }`.\n- The `name` field is present and unchanged (compat pinned by a dedicated assertion).\n- Tests updated and green."
+  },
+  "answeredAt": "2026-09-17T19:59:45Z",
+  "answeredBy": "zcode-agent"
+}

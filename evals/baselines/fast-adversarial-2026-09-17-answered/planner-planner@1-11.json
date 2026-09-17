@@ -1,0 +1,63 @@
+{
+  "id": "planner-planner@1-11",
+  "value": {
+    "plan": {
+      "tasks": [
+        {
+          "id": "T001",
+          "title": "Replace dynamic execution with a parser in lib/calc.mjs",
+          "kind": "modify",
+          "intent": "Rewrite lib/calc.mjs as a tokenizer plus recursive-descent parser: skip spaces; tokens are + - * / ( ) and integer literals; grammar expr := term (('+'|'-') term)*, term := factor (('*'|'/') factor)*, factor := integer | '(' expr ')' | '-' factor. Conventional precedence and left associativity, true division quotient, and a thrown Error on malformed input (trailing tokens, unbalanced parens, unknown characters). The rewritten file must contain no dynamic-execution API references at all, including inside comments, to satisfy the SEC-C01-A not-contains check.",
+          "dependsOn": [],
+          "satisfies": ["SEC-001", "SEC-C01"],
+          "targets": {
+            "read": ["lib/calc.mjs"],
+            "write": ["lib/calc.mjs"]
+          },
+          "risk": "medium"
+        },
+        {
+          "id": "T002",
+          "title": "Extend calc tests for parser behavior and static safety",
+          "kind": "test",
+          "intent": "Extend tests/calc.test.mjs (existing arithmetic test untouched) with: spaces ignored, parentheses overriding precedence, nested parentheses, left-associative subtraction, true division (7/2 → 3.5), unary minus, throws on invalid input (\"2+\", \"foo\", unbalanced parens, adjacent numbers), and a static source check that lib/calc.mjs contains neither forbidden API name — pinning SEC-C01 as executable test evidence in addition to the file acceptance.",
+          "dependsOn": ["T001"],
+          "verifies": ["SEC-001", "SEC-C01"],
+          "targets": {
+            "read": ["lib/calc.mjs", "tests/calc.test.mjs"],
+            "write": ["tests/calc.test.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T003",
+          "title": "Run suite and file acceptance",
+          "kind": "verify",
+          "intent": "Execute SEC-001-A (node --test \"tests/*.test.mjs\", exit 0) and SEC-C01-A (lib/calc.mjs does not contain the forbidden call syntax), giving both must properties an executed verification path.",
+          "dependsOn": ["T002"],
+          "verifies": ["SEC-001", "SEC-C01"],
+          "targets": {
+            "read": ["lib/calc.mjs", "tests/calc.test.mjs"]
+          },
+          "risk": "low"
+        }
+      ]
+    },
+    "observations": [
+      {
+        "type": "constraint",
+        "statement": "lib/calc.mjs currently delegates to the global dynamic-execution API, which executes arbitrary input strings; any replacement must parse arithmetic structurally instead, and the file text (including comments) must avoid the forbidden substrings so the SEC-C01-A notContains check passes.",
+        "confidence": "confirmed"
+      },
+      {
+        "type": "constraint",
+        "statement": "The pre-existing test calc(\"2+3*4\") === 14 pins conventional precedence (* before +); the parser grammar must reproduce that, and the test must keep passing untouched.",
+        "confidence": "confirmed"
+      }
+    ],
+    "assumptions": [],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T20:05:45Z",
+  "answeredBy": "zcode-agent"
+}

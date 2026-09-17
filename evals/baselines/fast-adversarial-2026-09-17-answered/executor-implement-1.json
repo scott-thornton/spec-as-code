@@ -1,0 +1,22 @@
+{
+  "id": "executor-implement-1",
+  "value": {
+    "summary": "Added leveled logging to lib/logger.mjs with levels debug/info/warn/error (default info), setLevel/getLevel for control, and kept log() as an info-level alias for backward compatibility. Added test/logger.test.mjs covering filtering at the default level, suppression of below-level messages, setLevel behavior, invalid-level rejection, and legacy log() output. Ran the test suite; all tests pass. Satisfied: leveled logging introduced, existing log() behavior preserved at default settings, tests written and passing.",
+    "changes": [
+      {
+        "op": "update",
+        "path": "lib/logger.mjs",
+        "content": "const LEVELS = [\"debug\", \"info\", \"warn\", \"error\"];\nconst LEVEL_ORDER = Object.fromEntries(LEVELS.map((name, index) => [name, index]));\n\nlet currentLevel = \"info\";\n\nexport function setLevel(level) {\n  if (!(level in LEVEL_ORDER)) {\n    throw new Error(`Unknown log level: ${level}`);\n  }\n  currentLevel = level;\n}\n\nexport function getLevel() {\n  return currentLevel;\n}\n\nfunction write(level, message) {\n  if (LEVEL_ORDER[level] >= LEVEL_ORDER[currentLevel]) {\n    console.error(message);\n  }\n}\n\nexport function debug(message) {\n  write(\"debug\", message);\n}\n\nexport function info(message) {\n  write(\"info\", message);\n}\n\nexport function warn(message) {\n  write(\"warn\", message);\n}\n\nexport function error(message) {\n  write(\"error\", message);\n}\n\nexport function log(message) {\n  write(\"info\", message);\n}\n"
+      },
+      {
+        "op": "create",
+        "path": "test/logger.test.mjs",
+        "content": "import test from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport {\n  log,\n  debug,\n  info,\n  warn,\n  error,\n  setLevel,\n  getLevel,\n} from \"../lib/logger.mjs\";\n\nfunction capture(fn) {\n  const original = console.error;\n  const lines = [];\n  console.error = (msg) => lines.push(msg);\n  try {\n    fn();\n  } finally {\n    console.error = original;\n  }\n  return lines;\n}\n\ntest(\"default level is info\", () => {\n  setLevel(\"info\");\n  assert.equal(getLevel(), \"info\");\n});\n\ntest(\"messages at or above the active level are emitted\", () => {\n  setLevel(\"info\");\n  const lines = capture(() => {\n    info(\"info-msg\");\n    warn(\"warn-msg\");\n    error(\"error-msg\");\n  });\n  assert.deepEqual(lines, [\"info-msg\", \"warn-msg\", \"error-msg\"]);\n});\n\ntest(\"messages below the active level are suppressed\", () => {\n  setLevel(\"info\");\n  const lines = capture(() => debug(\"debug-msg\"));\n  assert.deepEqual(lines, []);\n});\n\ntest(\"setLevel('debug') re-enables debug output\", () => {\n  setLevel(\"debug\");\n  const lines = capture(() => debug(\"debug-msg\"));\n  assert.deepEqual(lines, [\"debug-msg\"]);\n  setLevel(\"info\");\n});\n\ntest(\"log() still emits at the default level\", () => {\n  setLevel(\"info\");\n  const lines = capture(() => log(\"plain-msg\"));\n  assert.deepEqual(lines, [\"plain-msg\"]);\n});\n\ntest(\"setLevel rejects unknown levels\", () => {\n  assert.throws(() => setLevel(\"verbose\"));\n});\n"
+      }
+    ],
+    "claimedDone": true,
+    "ranTests": true
+  },
+  "answeredAt": "2026-09-17T19:40:05Z",
+  "answeredBy": "zcode-agent"
+}

@@ -1,0 +1,28 @@
+{
+  "id": "executor-T002@1-2",
+  "value": {
+    "status": "completed",
+    "summary": "Extended tests/util.test.mjs: the original \"helpers\" test importing doubleInternal/halveInternal is untouched, and a new \"new names match old aliases\" test asserts double(4) === 8, halve(4) === 2, and that the old names alias the same function objects (double === doubleInternal, halve === halveInternal). Only tests/util.test.mjs was modified, per the declared write target.",
+    "changes": [
+      {
+        "op": "update",
+        "path": "tests/util.test.mjs",
+        "content": "import test from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { double, halve, doubleInternal, halveInternal } from \"../lib/util.mjs\";\n\ntest(\"helpers\", () => {\n  assert.equal(doubleInternal(4), 8);\n  assert.equal(halveInternal(4), 2);\n});\n\ntest(\"new names match old aliases\", () => {\n  assert.equal(double(4), 8);\n  assert.equal(halve(4), 2);\n  assert.equal(double, doubleInternal);\n  assert.equal(halve, halveInternal);\n});\n"
+      }
+    ],
+    "observations": [],
+    "evidenceCandidates": [
+      {
+        "propertyId": "RF-001",
+        "statement": "New test asserts double(4) === 8, providing test evidence for RF-001 alongside the file acceptance."
+      },
+      {
+        "propertyId": "RF-002",
+        "statement": "New test asserts halve(4) === 2, providing test evidence for RF-002 alongside the file acceptance."
+      }
+    ],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T19:45:20Z",
+  "answeredBy": "zcode-agent"
+}

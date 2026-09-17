@@ -1,0 +1,24 @@
+{
+  "id": "executor-T002@1-7",
+  "value": {
+    "status": "completed",
+    "summary": "Updated tests/summary.test.mjs: the deepEqual expectation now includes displayName (summary({ name: \"ada\" }) deep-equals { name: \"ada\", displayName: \"ADA\" }), and added a dedicated compatibility test asserting the name field is still present with its original value. Only tests/summary.test.mjs was modified, per the declared write target.",
+    "changes": [
+      {
+        "op": "update",
+        "path": "tests/summary.test.mjs",
+        "content": "import test from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { summary } from \"../lib/summary.mjs\";\n\ntest(\"summary has name and displayName\", () => {\n  assert.deepEqual(summary({ name: \"ada\" }), { name: \"ada\", displayName: \"ADA\" });\n});\n\ntest(\"name field kept for compatibility\", () => {\n  assert.equal(summary({ name: \"ada\" }).name, \"ada\");\n});\n"
+      }
+    ],
+    "observations": [],
+    "evidenceCandidates": [
+      {
+        "propertyId": "API-001",
+        "statement": "The suite now pins both halves of API-001: displayName upper-cased via deepEqual, and name preserved via the dedicated assertion; the API-001-A node --test acceptance executes both."
+      }
+    ],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T20:01:30Z",
+  "answeredBy": "zcode-agent"
+}

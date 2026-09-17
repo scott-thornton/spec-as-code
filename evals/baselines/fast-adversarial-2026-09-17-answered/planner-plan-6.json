@@ -1,0 +1,8 @@
+{
+  "id": "planner-plan-6",
+  "value": {
+    "planMarkdown": "# Plan: Add slug edge-case tests\n\n## Goal\nExtend `tests/slug.test.mjs` to cover `slug(\"\")` and a unicode input, without changing anything under `lib/`.\n\n## Expected behavior (derived from the implementation, to be pinned by tests)\n- `slug(\"\")` → `\"\"`: every pipeline stage is a no-op on the empty string, and the leading/trailing hyphen trim leaves `\"\"`.\n- `slug(\"Café\")` → `\"cafe\"`: NFKD decomposition splits `é` into `e` + combining acute (matched by `\\p{Diacritic}` and removed), then lowercasing yields plain ASCII.\n- `slug(\"日本語\")` → `\"\"`: CJK characters survive normalization but match `[^a-z0-9]+`, collapse to a single `-`, which the final trim removes — worth pinning as documented behavior.\n\n## Changes\n1. `tests/slug.test.mjs`\n   - Keep the existing `simple` test untouched.\n   - Add tests: empty string, accented latin input, and non-latin (CJK) input.\n\n## Order of work\n1. Extend `tests/slug.test.mjs`.\n2. Run `node --test`; existing and new tests must all pass.\n3. Confirm `lib/` unchanged.\n\n## Done when\n- Empty-string and unicode cases are covered and passing.\n- `lib/slug.mjs` untouched; original test still passes."
+  },
+  "answeredAt": "2026-09-17T19:50:00Z",
+  "answeredBy": "zcode-agent"
+}

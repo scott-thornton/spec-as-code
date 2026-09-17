@@ -1,0 +1,58 @@
+{
+  "id": "planner-planner@1-10",
+  "value": {
+    "plan": {
+      "tasks": [
+        {
+          "id": "T001",
+          "title": "Add X-API-Version header to respond()",
+          "kind": "modify",
+          "intent": "Change lib/respond.mjs so respond(body) returns { status: 200, body, headers: { \"X-API-Version\": \"1\" } }, leaving the status and body values untouched.",
+          "dependsOn": [],
+          "satisfies": ["API-001"],
+          "targets": {
+            "read": ["lib/respond.mjs"],
+            "write": ["lib/respond.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T002",
+          "title": "Update respond test for the header field",
+          "kind": "test",
+          "intent": "Update tests/respond.test.mjs: the existing deepEqual asserts the exact two-field shape, which the intentionally-added headers field changes, so the expectation becomes the three-field shape including headers: { \"X-API-Version\": \"1\" }. Add explicit assertions that status stays 200 and body passes through, pinning the preserved halves. Without this task the API-001-A suite run cannot be green.",
+          "dependsOn": ["T001"],
+          "verifies": ["API-001"],
+          "targets": {
+            "read": ["lib/respond.mjs", "tests/respond.test.mjs"],
+            "write": ["tests/respond.test.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T003",
+          "title": "Run suite for API-001-A acceptance",
+          "kind": "verify",
+          "intent": "Run node --test \"tests/*.test.mjs\" and require exit code 0, executing the updated tests that pin the header's presence and the preserved status/body fields.",
+          "dependsOn": ["T002"],
+          "verifies": ["API-001"],
+          "targets": {
+            "read": ["lib/respond.mjs", "tests/respond.test.mjs"]
+          },
+          "risk": "low"
+        }
+      ]
+    },
+    "observations": [
+      {
+        "type": "constraint",
+        "statement": "tests/respond.test.mjs deep-equals the exact response shape, so the added headers field necessarily invalidates the old expectation; updating it is part of the specified change, while status and body remain pinned by new explicit assertions.",
+        "confidence": "confirmed"
+      }
+    ],
+    "assumptions": [],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T20:03:05Z",
+  "answeredBy": "zcode-agent"
+}

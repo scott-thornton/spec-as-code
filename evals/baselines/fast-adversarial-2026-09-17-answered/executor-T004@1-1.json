@@ -1,0 +1,24 @@
+{
+  "id": "executor-T004@1-1",
+  "value": {
+    "status": "completed",
+    "summary": "Updated tests/api.test.mjs: both assertions now expect \"api-v2\" (the superseded v1 expectations pinned the behavior MONO-001 replaces). Test structure and imports unchanged. Only tests/api.test.mjs was modified, per the declared write target.",
+    "changes": [
+      {
+        "op": "update",
+        "path": "tests/api.test.mjs",
+        "content": "import test from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { apiName as a } from \"../packages/a/index.mjs\";\nimport { apiName as b } from \"../packages/b/index.mjs\";\n\ntest(\"api names\", () => {\n  assert.equal(a(), \"api-v2\");\n  assert.equal(b(), \"api-v2\");\n});\n"
+      }
+    ],
+    "observations": [],
+    "evidenceCandidates": [
+      {
+        "propertyId": "MONO-001",
+        "statement": "The suite now pins apiName() === \"api-v2\" in both packages, matching the shared v2 constant; the MONO-001-A node --test acceptance in the verify task executes it."
+      }
+    ],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T19:59:10Z",
+  "answeredBy": "zcode-agent"
+}

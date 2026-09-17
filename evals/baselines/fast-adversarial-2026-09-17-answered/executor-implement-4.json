@@ -1,0 +1,17 @@
+{
+  "id": "executor-implement-4",
+  "value": {
+    "summary": "Fixed the wrong expectation in tests/format.test.mjs: the assertion now expects \"2026-12-31\", the ISO YYYY-MM-DD output formatDate intentionally produces (date-only strings parse as UTC midnight, so toISOString().slice(0, 10) is deterministic across timezones). Only the expected string changed; nothing under lib/ was touched. Ran the suite with node --test; the format test passes. Satisfied: test matches the service's intentional ISO behavior, lib/ unchanged.",
+    "changes": [
+      {
+        "op": "update",
+        "path": "tests/format.test.mjs",
+        "content": "import test from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { formatDate } from \"../lib/format.mjs\";\n\ntest(\"date format\", () => {\n  assert.equal(formatDate(new Date(\"2026-12-31\")), \"2026-12-31\");\n});\n"
+      }
+    ],
+    "claimedDone": true,
+    "ranTests": true
+  },
+  "answeredAt": "2026-09-17T19:48:50Z",
+  "answeredBy": "zcode-agent"
+}

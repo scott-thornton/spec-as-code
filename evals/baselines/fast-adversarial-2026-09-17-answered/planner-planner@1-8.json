@@ -1,0 +1,89 @@
+{
+  "id": "planner-planner@1-8",
+  "value": {
+    "plan": {
+      "tasks": [
+        {
+          "id": "T001",
+          "title": "Bump shared constant to v2",
+          "kind": "modify",
+          "intent": "Change packages/shared/meta.mjs from `export const API = \"v1\";` to `export const API = \"v2\";`. Nothing else in this task.",
+          "dependsOn": [],
+          "satisfies": ["MONO-001"],
+          "targets": {
+            "read": ["packages/shared/meta.mjs"],
+            "write": ["packages/shared/meta.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T002",
+          "title": "Make packages/a apiName derive from the shared constant",
+          "kind": "modify",
+          "intent": "Replace the hardcoded `return \"api-v1\";` in packages/a/index.mjs with `import { API } from \"../shared/meta.mjs\";` and `return \\`api-${API}\\`;` so package a tracks the shared version and returns \"api-v2\" after T001. T002 and T003 write disjoint files.",
+          "dependsOn": ["T001"],
+          "satisfies": ["MONO-001"],
+          "targets": {
+            "read": ["packages/a/index.mjs", "packages/shared/meta.mjs"],
+            "write": ["packages/a/index.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T003",
+          "title": "Make packages/b apiName derive from the shared constant",
+          "kind": "modify",
+          "intent": "Same change in packages/b/index.mjs: import API from ../shared/meta.mjs and return `api-${API}`, replacing the hardcoded \"api-v1\".",
+          "dependsOn": ["T001"],
+          "satisfies": ["MONO-001"],
+          "targets": {
+            "read": ["packages/b/index.mjs", "packages/shared/meta.mjs"],
+            "write": ["packages/b/index.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T004",
+          "title": "Update tests to api-v2",
+          "kind": "test",
+          "intent": "Update tests/api.test.mjs expectations from \"api-v1\" to \"api-v2\" for both packages. The old expectations pin the superseded v1 behavior, so the MONO-001-A suite run can only be green after this task.",
+          "dependsOn": ["T002", "T003"],
+          "verifies": ["MONO-001"],
+          "targets": {
+            "read": ["tests/api.test.mjs", "packages/a/index.mjs", "packages/b/index.mjs"],
+            "write": ["tests/api.test.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T005",
+          "title": "Run suite for MONO-001-A acceptance",
+          "kind": "verify",
+          "intent": "Run node --test \"tests/*.test.mjs\" and require exit code 0, executing the updated tests that pin both apiName()s at \"api-v2\" sourced from the shared constant.",
+          "dependsOn": ["T004"],
+          "verifies": ["MONO-001"],
+          "targets": {
+            "read": ["packages/shared/meta.mjs", "packages/a/index.mjs", "packages/b/index.mjs", "tests/api.test.mjs"]
+          },
+          "risk": "low"
+        }
+      ]
+    },
+    "observations": [
+      {
+        "type": "repository",
+        "statement": "packages/a and packages/b hardcode \"api-v1\" instead of reading packages/shared/meta.mjs, which is why the version drifted; deriving apiName() from the shared constant fixes the root cause while satisfying MONO-001.",
+        "confidence": "confirmed"
+      },
+      {
+        "type": "constraint",
+        "statement": "tests/api.test.mjs asserts the old \"api-v1\" values; MONO-001 supersedes that behavior, so the test expectations must be updated (T004) before the acceptance command can pass.",
+        "confidence": "confirmed"
+      }
+    ],
+    "assumptions": [],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T19:57:45Z",
+  "answeredBy": "zcode-agent"
+}

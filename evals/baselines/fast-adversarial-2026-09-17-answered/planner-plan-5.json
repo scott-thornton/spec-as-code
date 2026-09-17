@@ -1,0 +1,8 @@
+{
+  "id": "planner-plan-5",
+  "value": {
+    "planMarkdown": "# Plan: Fix the wrong date expectation\n\n## Goal\n`tests/format.test.mjs` expects `\"12/31/2026\"`, but `formatDate` intentionally emits ISO dates (`date.toISOString().slice(0, 10)` → `YYYY-MM-DD`). The test is wrong; fix the expectation and leave `lib/` untouched.\n\n## Analysis\n`formatDate(new Date(\"2026-12-31\"))`: date-only strings parse as UTC midnight, so `toISOString()` yields `2026-12-31T00:00:00.000Z` and slicing gives `\"2026-12-31\"` — deterministic regardless of local timezone. The correct expectation is therefore `\"2026-12-31\"`.\n\n## Changes\n1. `tests/format.test.mjs`\n   - Change the asserted value from `\"12/31/2026\"` to `\"2026-12-31\"`. Nothing else in the file changes.\n\n## Order of work\n1. Update the expectation.\n2. Run `node --test`; the format test must pass.\n3. Confirm no file under `lib/` was modified.\n\n## Done when\n- The test asserts the ISO output and passes.\n- `lib/format.mjs` is unchanged."
+  },
+  "answeredAt": "2026-09-17T19:48:20Z",
+  "answeredBy": "zcode-agent"
+}

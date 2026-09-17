@@ -1,0 +1,39 @@
+{
+  "id": "executor-T001@1-11",
+  "value": {
+    "status": "completed",
+    "summary": "Rewrote lib/calc.mjs as a tokenizer plus recursive-descent parser. Supported: + - * / with conventional precedence and left associativity, integer literals, parentheses (including nested), optional unary minus, and whitespace (skipped). Division returns the true quotient (7/2 → 3.5); malformed input (unknown characters, trailing tokens, unbalanced parentheses, empty operand) throws an Error instead of executing anything. The file contains no dynamic-execution API reference anywhere, including comments — verified by scanning the final text for both forbidden names. Only lib/calc.mjs was modified, per the declared write target.",
+    "changes": [
+      {
+        "op": "update",
+        "path": "lib/calc.mjs",
+        "content": "function tokenize(expr) {\n  const tokens = [];\n  let i = 0;\n  while (i < expr.length) {\n    const ch = expr[i];\n    if (ch === \" \") {\n      i += 1;\n      continue;\n    }\n    if (ch === \"+\" || ch === \"-\" || ch === \"*\" || ch === \"/\" || ch === \"(\" || ch === \")\") {\n      tokens.push(ch);\n      i += 1;\n      continue;\n    }\n    if (ch >= \"0\" && ch <= \"9\") {\n      let digits = \"\";\n      while (i < expr.length && expr[i] >= \"0\" && expr[i] <= \"9\") {\n        digits += expr[i];\n        i += 1;\n      }\n      tokens.push(Number(digits));\n      continue;\n    }\n    throw new Error(`Unexpected character in expression: ${JSON.stringify(ch)}`);\n  }\n  return tokens;\n}\n\nexport function calc(expr) {\n  const tokens = tokenize(expr);\n  let pos = 0;\n\n  const peek = () => tokens[pos];\n  const advance = () => tokens[pos++];\n\n  function parseExpr() {\n    let value = parseTerm();\n    while (peek() === \"+\" || peek() === \"-\") {\n      const op = advance();\n      const rhs = parseTerm();\n      value = op === \"+\" ? value + rhs : value - rhs;\n    }\n    return value;\n  }\n\n  function parseTerm() {\n    let value = parseFactor();\n    while (peek() === \"*\" || peek() === \"/\") {\n      const op = advance();\n      const rhs = parseFactor();\n      value = op === \"*\" ? value * rhs : value / rhs;\n    }\n    return value;\n  }\n\n  function parseFactor() {\n    const token = peek();\n    if (token === undefined) {\n      throw new Error(\"Unexpected end of expression\");\n    }\n    if (token === \"-\") {\n      advance();\n      return -parseFactor();\n    }\n    if (token === \"(\") {\n      advance();\n      const value = parseExpr();\n      if (advance() !== \")\") {\n        throw new Error(\"Missing closing parenthesis\");\n      }\n      return value;\n    }\n    if (typeof token === \"number\") {\n      return advance();\n    }\n    throw new Error(`Unexpected token: ${JSON.stringify(token)}`);\n  }\n\n  const result = parseExpr();\n  if (pos !== tokens.length) {\n    throw new Error(\"Unexpected trailing input\");\n  }\n  return result;\n}\n"
+      }
+    ],
+    "observations": [
+      {
+        "type": "constraint",
+        "statement": "The rewritten lib/calc.mjs parses arithmetic structurally; the file text contains neither forbidden API name in any form, satisfying the SEC-C01-A notContains acceptance.",
+        "confidence": "confirmed"
+      },
+      {
+        "type": "constraint",
+        "statement": "Precedence and associativity reproduce the pinned existing behavior: calc(\"2+3*4\") === 14.",
+        "confidence": "confirmed"
+      }
+    ],
+    "evidenceCandidates": [
+      {
+        "propertyId": "SEC-001",
+        "statement": "calc() now evaluates + - * / and parentheses via the parser; test-level evidence lands with T002 and the acceptance command."
+      },
+      {
+        "propertyId": "SEC-C01",
+        "statement": "No dynamic-execution API remains in lib/calc.mjs; the notContains file acceptance and the static source test in T002 both check it."
+      }
+    ],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T20:06:10Z",
+  "answeredBy": "zcode-agent"
+}

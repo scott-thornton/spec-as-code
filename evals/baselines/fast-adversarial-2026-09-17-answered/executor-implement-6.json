@@ -1,0 +1,27 @@
+{
+  "id": "executor-implement-6",
+  "value": {
+    "summary": "Created packages/shared/version.mjs as the single source of VERSION = \"1\". Updated packages/a/index.mjs and packages/b/index.mjs to import VERSION from the shared module and re-export it, keeping their info functions unchanged. One correction to the plan: a bare `export { VERSION } from ...` does not create a local binding, so the functions now use `import { VERSION } ...` plus `export { VERSION }`, which both binds locally for the template literals and preserves the public export. Behavior is unchanged: VERSION defined once, aInfo() → \"a:1\", bInfo() → \"b:1\". tests/version.test.mjs was left untouched and passes with node --test. Satisfied: single source constant, both packages re-export, no behavior change, tests green.",
+    "changes": [
+      {
+        "op": "create",
+        "path": "packages/shared/version.mjs",
+        "content": "export const VERSION = \"1\";\n"
+      },
+      {
+        "op": "update",
+        "path": "packages/a/index.mjs",
+        "content": "import { VERSION } from \"../shared/version.mjs\";\n\nexport { VERSION };\n\nexport function aInfo() {\n  return `a:${VERSION}`;\n}\n"
+      },
+      {
+        "op": "update",
+        "path": "packages/b/index.mjs",
+        "content": "import { VERSION } from \"../shared/version.mjs\";\n\nexport { VERSION };\n\nexport function bInfo() {\n  return `b:${VERSION}`;\n}\n"
+      }
+    ],
+    "claimedDone": true,
+    "ranTests": true
+  },
+  "answeredAt": "2026-09-17T19:52:20Z",
+  "answeredBy": "zcode-agent"
+}

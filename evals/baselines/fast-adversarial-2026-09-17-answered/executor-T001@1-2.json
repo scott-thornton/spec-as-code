@@ -1,0 +1,38 @@
+{
+  "id": "executor-T001@1-2",
+  "value": {
+    "status": "completed",
+    "summary": "Renamed the two helpers in lib/util.mjs: doubleInternal(n) is now double(n) and halveInternal(n) is now halve(n), bodies unchanged (n * 2, n / 2). Added alias exports doubleInternal = double and halveInternal = halve at the bottom of the file so old imports keep resolving to the same functions. Only lib/util.mjs was modified, per the declared write target; the existing tests were not touched.",
+    "changes": [
+      {
+        "op": "update",
+        "path": "lib/util.mjs",
+        "content": "export function double(n) {\n  return n * 2;\n}\n\nexport function halve(n) {\n  return n / 2;\n}\n\nexport const doubleInternal = double;\nexport const halveInternal = halve;\n"
+      }
+    ],
+    "observations": [
+      {
+        "type": "repository",
+        "statement": "lib/util.mjs now exports double and halve (satisfying the RF-001-A/RF-002-A file-content checks) plus the doubleInternal/halveInternal aliases expected by the existing tests.",
+        "confidence": "confirmed"
+      }
+    ],
+    "evidenceCandidates": [
+      {
+        "propertyId": "RF-001",
+        "statement": "lib/util.mjs contains \"export function double\" with body n * 2, matching RF-001-A."
+      },
+      {
+        "propertyId": "RF-002",
+        "statement": "lib/util.mjs contains \"export function halve\" with body n / 2, matching RF-002-A."
+      },
+      {
+        "propertyId": "RF-C01",
+        "statement": "doubleInternal and halveInternal are re-exported as aliases of the renamed functions, which should keep tests/util.test.mjs passing; final verification belongs to the RF-C01-A command in the verify task."
+      }
+    ],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T19:44:55Z",
+  "answeredBy": "zcode-agent"
+}

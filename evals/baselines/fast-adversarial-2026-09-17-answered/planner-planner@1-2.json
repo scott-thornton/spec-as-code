@@ -1,0 +1,63 @@
+{
+  "id": "planner-planner@1-2",
+  "value": {
+    "plan": {
+      "tasks": [
+        {
+          "id": "T001",
+          "title": "Rename helpers to double/halve with alias exports",
+          "kind": "modify",
+          "intent": "In lib/util.mjs, rename doubleInternal(n) to double(n) and halveInternal(n) to halve(n) leaving the bodies unchanged (n * 2, n / 2), and add alias exports doubleInternal = double and halveInternal = halve so old importers keep working. Both renames land in this single task because they write to the same file and are trivially small.",
+          "dependsOn": [],
+          "satisfies": ["RF-001", "RF-002", "RF-C01"],
+          "targets": {
+            "read": ["lib/util.mjs"],
+            "write": ["lib/util.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T002",
+          "title": "Extend tests with new-name assertions",
+          "kind": "test",
+          "intent": "Extend tests/util.test.mjs by adding assertions that double(4) === 8 and halve(4) === 2 and that the old names alias the new functions, while keeping the existing old-name assertions and test untouched so the pre-existing coverage of RF-C01 keeps running.",
+          "dependsOn": ["T001"],
+          "verifies": ["RF-001", "RF-002"],
+          "targets": {
+            "read": ["lib/util.mjs", "tests/util.test.mjs"],
+            "write": ["tests/util.test.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T003",
+          "title": "Run existing suite for alias constraint",
+          "kind": "verify",
+          "intent": "Run the RF-C01-A acceptance command node --test \"tests/*.test.mjs\" and require exit code 0. This executes the repository's pre-existing tests/util.test.mjs (which imports doubleInternal/halveInternal) plus the extended assertions, verifying the aliases remain exported and behavior is unchanged.",
+          "dependsOn": ["T002"],
+          "verifies": ["RF-C01", "RF-001", "RF-002"],
+          "targets": {
+            "read": ["lib/util.mjs", "tests/util.test.mjs"]
+          },
+          "risk": "low"
+        }
+      ]
+    },
+    "observations": [
+      {
+        "type": "repository",
+        "statement": "lib/util.mjs exports doubleInternal and halveInternal only; tests/util.test.mjs is the repository's sole test file and imports both old names, so it is the existing-behavior coverage for RF-C01.",
+        "confidence": "confirmed"
+      },
+      {
+        "type": "constraint",
+        "statement": "RF-001-A and RF-002-A are file-content acceptance on lib/util.mjs, and RF-C01-A is the command node --test on tests/*.test.mjs with expected exit 0; all three are runtime-executable, so no additional acceptance is needed.",
+        "confidence": "confirmed"
+      }
+    ],
+    "assumptions": [],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T19:44:35Z",
+  "answeredBy": "zcode-agent"
+}

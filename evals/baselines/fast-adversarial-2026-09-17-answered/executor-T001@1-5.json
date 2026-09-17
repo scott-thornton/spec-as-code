@@ -1,0 +1,30 @@
+{
+  "id": "executor-T001@1-5",
+  "value": {
+    "status": "completed",
+    "summary": "Extended tests/slug.test.mjs with three new tests: slug(\"\") === \"\" (literal double-quoted empty-string call, satisfying the grep acceptance), slug(\"Café\") === \"cafe\" (NFKD decomposition + diacritic stripping), and slug(\"日本語\") === \"\" (non-latin characters collapse to a trimmed hyphen). The existing \"simple\" test is untouched, and lib/slug.mjs was not modified (not in this task's write targets).",
+    "changes": [
+      {
+        "op": "update",
+        "path": "tests/slug.test.mjs",
+        "content": "import test from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { slug } from \"../lib/slug.mjs\";\n\ntest(\"simple\", () => {\n  assert.equal(slug(\"Hello World\"), \"hello-world\");\n});\n\ntest(\"empty string\", () => {\n  assert.equal(slug(\"\"), \"\");\n});\n\ntest(\"unicode input: accented latin is decomposed and stripped\", () => {\n  assert.equal(slug(\"Café\"), \"cafe\");\n});\n\ntest(\"unicode input: non-latin collapses to empty\", () => {\n  assert.equal(slug(\"日本語\"), \"\");\n});\n"
+      }
+    ],
+    "observations": [
+      {
+        "type": "constraint",
+        "statement": "lib/slug.mjs remains byte-identical to the repository excerpt; the only change is the added tests in tests/slug.test.mjs.",
+        "confidence": "confirmed"
+      }
+    ],
+    "evidenceCandidates": [
+      {
+        "propertyId": "TST-001",
+        "statement": "tests now contain the literal slug(\"\") call plus two unicode-input cases; the grep and node --test acceptance commands in the verify task execute them."
+      }
+    ],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T19:51:25Z",
+  "answeredBy": "zcode-agent"
+}

@@ -1,0 +1,24 @@
+{
+  "id": "executor-T002@1-8",
+  "value": {
+    "status": "completed",
+    "summary": "Updated tests/respond.test.mjs: the deepEqual expectation now includes headers: { \"X-API-Version\": \"1\" } (the test asserts the exact response shape, which the specified change extends), and added explicit assertions that status stays 200 and body passes through unchanged. Only tests/respond.test.mjs was modified, per the declared write target.",
+    "changes": [
+      {
+        "op": "update",
+        "path": "tests/respond.test.mjs",
+        "content": "import test from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { respond } from \"../lib/respond.mjs\";\n\ntest(\"respond shape\", () => {\n  assert.deepEqual(respond(\"x\"), {\n    status: 200,\n    body: \"x\",\n    headers: { \"X-API-Version\": \"1\" },\n  });\n});\n\ntest(\"status and body unchanged\", () => {\n  const r = respond(\"y\");\n  assert.equal(r.status, 200);\n  assert.equal(r.body, \"y\");\n});\n"
+      }
+    ],
+    "observations": [],
+    "evidenceCandidates": [
+      {
+        "propertyId": "API-001",
+        "statement": "The suite now pins headers[\"X-API-Version\"] === \"1\" via deepEqual plus preserved status/body assertions; the API-001-A node --test acceptance executes them."
+      }
+    ],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T20:03:55Z",
+  "answeredBy": "zcode-agent"
+}

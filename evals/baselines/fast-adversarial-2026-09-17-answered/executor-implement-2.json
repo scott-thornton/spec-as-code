@@ -1,0 +1,22 @@
+{
+  "id": "executor-implement-2",
+  "value": {
+    "summary": "Renamed the helpers in lib/util.mjs to double(n) and halve(n) with unchanged bodies, and kept the old names as alias exports (doubleInternal = double, halveInternal = halve) so existing imports keep working. Extended tests/util.test.mjs with assertions on the new names while keeping the original old-name assertions untouched. Ran the test suite with node --test; all tests pass, behavior is unchanged. Satisfied: new names exported and correct, old names still resolve with identical behavior, no functional change.",
+    "changes": [
+      {
+        "op": "update",
+        "path": "lib/util.mjs",
+        "content": "export function double(n) {\n  return n * 2;\n}\n\nexport function halve(n) {\n  return n / 2;\n}\n\nexport const doubleInternal = double;\nexport const halveInternal = halve;\n"
+      },
+      {
+        "op": "update",
+        "path": "tests/util.test.mjs",
+        "content": "import test from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { double, halve, doubleInternal, halveInternal } from \"../lib/util.mjs\";\n\ntest(\"helpers\", () => {\n  assert.equal(doubleInternal(4), 8);\n  assert.equal(halveInternal(4), 2);\n});\n\ntest(\"new names match old aliases\", () => {\n  assert.equal(double(4), 8);\n  assert.equal(halve(4), 2);\n  assert.equal(double, doubleInternal);\n  assert.equal(halve, halveInternal);\n});\n"
+      }
+    ],
+    "claimedDone": true,
+    "ranTests": true
+  },
+  "answeredAt": "2026-09-17T19:44:05Z",
+  "answeredBy": "zcode-agent"
+}

@@ -83,6 +83,15 @@ Acceptance thresholds are deliberately **not** hardcoded in the harness: per
 §68 they are derived from observed cross-trial variance and recorded in the
 baseline document.
 
+## Fast adversarial gate
+
+`evals/results/harness-gate.sh` runs the 12 adversarial tasks with the
+harness provider (a coding agent in this repository answers every model
+request; zero API cost). Combined with the flash-API subset extraction in
+[baselines/fast-adversarial-2026-09-17.md](baselines/fast-adversarial-2026-09-17.md),
+it separates machinery friction (zero at full tier) from model-tier caution
+(flash blocks more).
+
 ## Harness tests
 
 `pnpm --filter @spc/evals test` covers task validation, a self-contained

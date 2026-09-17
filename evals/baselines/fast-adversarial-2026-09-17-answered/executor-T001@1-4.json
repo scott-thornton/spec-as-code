@@ -1,0 +1,30 @@
+{
+  "id": "executor-T001@1-4",
+  "value": {
+    "status": "completed",
+    "summary": "Corrected the expectation in tests/format.test.mjs from \"12/31/2026\" to \"2026-12-31\". Verified against the implementation: formatDate(new Date(\"2026-12-31\")) calls toISOString() on a UTC-midnight date, whose first 10 characters are \"2026-12-31\" in any timezone. Only the expected string changed; lib/format.mjs was neither read-modified nor written (it is not in this task's write targets).",
+    "changes": [
+      {
+        "op": "update",
+        "path": "tests/format.test.mjs",
+        "content": "import test from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { formatDate } from \"../lib/format.mjs\";\n\ntest(\"date format\", () => {\n  assert.equal(formatDate(new Date(\"2026-12-31\")), \"2026-12-31\");\n});\n"
+      }
+    ],
+    "observations": [
+      {
+        "type": "constraint",
+        "statement": "lib/format.mjs remains byte-identical to the repository excerpt; the only change in this task is the single expected string in tests/format.test.mjs.",
+        "confidence": "confirmed"
+      }
+    ],
+    "evidenceCandidates": [
+      {
+        "propertyId": "TST-001",
+        "statement": "The test now asserts the ISO output formatDate actually produces; the acceptance command in the verify task executes it."
+      }
+    ],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T19:49:45Z",
+  "answeredBy": "zcode-agent"
+}

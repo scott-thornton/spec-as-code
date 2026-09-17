@@ -1,0 +1,50 @@
+{
+  "id": "planner-planner@1-4",
+  "value": {
+    "plan": {
+      "tasks": [
+        {
+          "id": "T001",
+          "title": "Correct the expectation in tests/format.test.mjs",
+          "kind": "modify",
+          "intent": "Change the asserted value in tests/format.test.mjs from \"12/31/2026\" to \"2026-12-31\", the ISO YYYY-MM-DD string formatDate intentionally emits. lib/format.mjs is deliberately not a write target so TST-C01 cannot be violated by this plan.",
+          "dependsOn": [],
+          "satisfies": ["TST-001", "TST-C01"],
+          "targets": {
+            "read": ["lib/format.mjs", "tests/format.test.mjs"],
+            "write": ["tests/format.test.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T002",
+          "title": "Run suite for TST-001-A and TST-C01-A acceptance",
+          "kind": "verify",
+          "intent": "Run node --test \"tests/*.test.mjs\" and require exit code 0, executing the corrected expectation against the untouched ISO implementation and confirming both must properties' command acceptance.",
+          "dependsOn": ["T001"],
+          "verifies": ["TST-001", "TST-C01"],
+          "targets": {
+            "read": ["lib/format.mjs", "tests/format.test.mjs"]
+          },
+          "risk": "low"
+        }
+      ]
+    },
+    "observations": [
+      {
+        "type": "repository",
+        "statement": "lib/format.mjs returns date.toISOString().slice(0, 10); new Date(\"2026-12-31\") parses as UTC midnight, so the correct deterministic expectation is \"2026-12-31\" in any local timezone.",
+        "confidence": "confirmed"
+      },
+      {
+        "type": "constraint",
+        "statement": "TST-C01 requires lib/format.mjs to remain unmodified; the only write target in the plan is tests/format.test.mjs, which structurally enforces the constraint.",
+        "confidence": "confirmed"
+      }
+    ],
+    "assumptions": [],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T19:49:25Z",
+  "answeredBy": "zcode-agent"
+}

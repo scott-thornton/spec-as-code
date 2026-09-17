@@ -1,0 +1,8 @@
+{
+  "id": "planner-plan-11",
+  "value": {
+    "planMarkdown": "# Plan: Include an API version header\n\n## Goal\n`respond(body)` returns `{ status: 200, body, headers: { \"X-API-Version\": \"1\" } }`. `status` and `body` keep their values.\n\n## Design\n- `lib/respond.mjs`: add the `headers` field with the literal `\"1\"` (string, per the task text) under key `X-API-Version`.\n- Test impact: the existing test deep-equals the exact shape `{ status: 200, body: \"x\" }`, so it must be updated to include the new `headers` field; I'll keep a direct assertion that `status === 200` and `body === \"x\"` still hold, pinning the \"keep status and body\" requirement explicitly.\n\n## Changes\n1. `lib/respond.mjs` — add the headers field.\n2. `tests/respond.test.mjs` — update the deepEqual expectation to the three-field shape; add explicit status/body assertions.\n\n## Order of work\n1. Modify `lib/respond.mjs`.\n2. Update the test.\n3. Run `node --test`; suite must pass.\n\n## Done when\n- `respond(\"x\")` → `{ status: 200, body: \"x\", headers: { \"X-API-Version\": \"1\" } }`.\n- status and body values unchanged and pinned by assertions.\n- Tests updated and green."
+  },
+  "answeredAt": "2026-09-17T20:02:05Z",
+  "answeredBy": "zcode-agent"
+}

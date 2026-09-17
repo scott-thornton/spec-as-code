@@ -1,0 +1,63 @@
+{
+  "id": "planner-planner@1-7",
+  "value": {
+    "plan": {
+      "tasks": [
+        {
+          "id": "T001",
+          "title": "Compose strings.exclaim in app greeting",
+          "kind": "modify",
+          "intent": "Change packages/app/index.mjs to import exclaim from ../strings/index.mjs and return exclaim(s) from greeting(s), so greeting(\"hi\") becomes \"hi!\". packages/strings/index.mjs is not a write target and stays unchanged.",
+          "dependsOn": [],
+          "satisfies": ["MONO-001"],
+          "targets": {
+            "read": ["packages/app/index.mjs", "packages/strings/index.mjs"],
+            "write": ["packages/app/index.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T002",
+          "title": "Update app test to the new behavior",
+          "kind": "test",
+          "intent": "Update tests/app.test.mjs: the existing assertion greeting(\"hi\") === \"hi\" pins the OLD behavior and would fail after T001, so change it to \"hi!\" and add greeting(\"\") === \"!\" as a second case. Without this task the MONO-001-A suite run cannot be green, because the pre-existing expectation contradicts the required new behavior.",
+          "dependsOn": ["T001"],
+          "verifies": ["MONO-001"],
+          "targets": {
+            "read": ["packages/app/index.mjs", "tests/app.test.mjs"],
+            "write": ["tests/app.test.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T003",
+          "title": "Run suite for MONO-001-A acceptance",
+          "kind": "verify",
+          "intent": "Run node --test \"tests/*.test.mjs\" and require exit code 0, executing the updated tests that now pin greeting(s) === exclaim(s).",
+          "dependsOn": ["T002"],
+          "verifies": ["MONO-001"],
+          "targets": {
+            "read": ["packages/app/index.mjs", "tests/app.test.mjs"]
+          },
+          "risk": "low"
+        }
+      ]
+    },
+    "observations": [
+      {
+        "type": "constraint",
+        "statement": "tests/app.test.mjs currently asserts greeting(\"hi\") === \"hi\", the old behavior; MONO-001 deliberately changes this behavior, so the test must be updated rather than preserved — unlike a backwards-compatibility constraint, this property authorizes the expectation change.",
+        "confidence": "confirmed"
+      },
+      {
+        "type": "dependency",
+        "statement": "packages/app will import from packages/strings via relative path ../strings/index.mjs; the workspace has no package.json manifests, so no dependency-declaration updates are possible or needed.",
+        "confidence": "confirmed"
+      }
+    ],
+    "assumptions": [],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T19:55:25Z",
+  "answeredBy": "zcode-agent"
+}

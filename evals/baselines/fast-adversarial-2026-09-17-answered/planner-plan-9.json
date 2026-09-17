@@ -1,0 +1,8 @@
+{
+  "id": "planner-plan-9",
+  "value": {
+    "planMarkdown": "# Plan: Bump the shared API version to v2\n\n## Goal\n`packages/shared/meta.mjs` exports `API = \"v2\"`; `packages/a` and `packages/b` both return `\"api-v2\"` from `apiName()`; tests updated accordingly.\n\n## Design\n- `packages/shared/meta.mjs`: `API` becomes `\"v2\"`.\n- `packages/a/index.mjs` and `packages/b/index.mjs` currently hardcode `\"api-v1\"` instead of using the shared constant — that's how they drifted before. Fix the root cause while bumping: import `API` from `../shared/meta.mjs` and return `` `api-${API}` ``, so the next bump propagates from one place.\n- `tests/api.test.mjs`: both expectations become `\"api-v2\"`.\n\n## Changes\n1. `packages/shared/meta.mjs` — constant → `\"v2\"`.\n2. `packages/a/index.mjs` — derive `apiName()` from shared `API`.\n3. `packages/b/index.mjs` — same.\n4. `tests/api.test.mjs` — expect `\"api-v2\"` for both.\n\n## Order of work\n1. Bump the shared constant (consumers derive from it, so order after this is safe either way).\n2. Update package a, then package b.\n3. Update the tests.\n4. Run `node --test`; suite must pass.\n\n## Done when\n- `apiName()` in both packages returns `\"api-v2\"`, sourced from the shared constant.\n- Tests updated and passing; no hardcoded version strings left in a/ or b/."
+  },
+  "answeredAt": "2026-09-17T19:56:45Z",
+  "answeredBy": "zcode-agent"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "planner-plan-3",
+  "value": {
+    "planMarkdown": "# Plan: Add an optional formal mode to render()\n\n## Goal\n`render(user, { formal: true })` returns `\"Dear <name>\"`. The one-argument call keeps returning `\"Hi <name>\"` exactly as before, and the existing test must keep passing unchanged.\n\n## Design\n- Signature becomes `render(user, options = {})`.\n- Greeting is `\"Dear\"` when `options.formal === true`, else `\"Hi\"` (anything else — omitted, `{}`, `{ formal: false }` — behaves exactly like today).\n- Interpolation and all other behavior stay identical; no output changes for existing callers.\n\n## Changes\n1. `lib/render.mjs`\n   - Accept a second options argument defaulting to `{}` and select the greeting word from `options.formal`.\n2. `tests/render.test.mjs`\n   - Keep the existing \"informal greeting\" test exactly as is.\n   - Add tests: `render({name}, { formal: true })` → `\"Dear ada\"`; `render({name})` (no second arg) → `\"Hi ada\"`; `render({name}, { formal: false })` → `\"Hi ada\"`; `render({name}, {})` → `\"Hi ada\"`.\n\n## Order of work\n1. Modify `lib/render.mjs`.\n2. Extend `tests/render.test.mjs`.\n3. Run `node --test`; the pre-existing test plus new tests must all pass before declaring done.\n\n## Done when\n- Formal mode works via the options argument.\n- One-argument behavior is byte-for-byte unchanged and the original test passes untouched.\n- Full suite green."
+  },
+  "answeredAt": "2026-09-17T19:45:19Z",
+  "answeredBy": "zcode-agent"
+}

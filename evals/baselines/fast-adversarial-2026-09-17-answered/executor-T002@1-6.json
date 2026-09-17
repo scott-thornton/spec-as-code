@@ -1,0 +1,24 @@
+{
+  "id": "executor-T002@1-6",
+  "value": {
+    "status": "completed",
+    "summary": "Updated packages/a/index.mjs: apiName() now imports API from ../shared/meta.mjs (currently \"v2\" after T001) and returns `api-${API}`, replacing the hardcoded \"api-v1\". Only packages/a/index.mjs was modified, per the declared write target.",
+    "changes": [
+      {
+        "op": "update",
+        "path": "packages/a/index.mjs",
+        "content": "import { API } from \"../shared/meta.mjs\";\n\nexport function apiName() {\n  return `api-${API}`;\n}\n"
+      }
+    ],
+    "observations": [],
+    "evidenceCandidates": [
+      {
+        "propertyId": "MONO-001",
+        "statement": "packages/a apiName() now returns \"api-v2\" derived from the shared constant; test expectations are updated in T004."
+      }
+    ],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T19:58:30Z",
+  "answeredBy": "zcode-agent"
+}

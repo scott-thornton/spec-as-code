@@ -1,0 +1,30 @@
+{
+  "id": "executor-T001@1-9",
+  "value": {
+    "status": "completed",
+    "summary": "Changed lib/summary.mjs so summary(user) returns { name: user.name, displayName: user.name.toUpperCase() }. The name field and its value are untouched; only the new field was added. Only lib/summary.mjs was modified, per the declared write target. The existing deepEqual test is expected to fail until T002 updates its expected shape.",
+    "changes": [
+      {
+        "op": "update",
+        "path": "lib/summary.mjs",
+        "content": "export function summary(user) {\n  return { name: user.name, displayName: user.name.toUpperCase() };\n}\n"
+      }
+    ],
+    "observations": [
+      {
+        "type": "constraint",
+        "statement": "displayName is computed as user.name.toUpperCase(), satisfying the upper-case requirement; name keeps its original value for compatibility.",
+        "confidence": "confirmed"
+      }
+    ],
+    "evidenceCandidates": [
+      {
+        "propertyId": "API-001",
+        "statement": "summary({ name: \"ada\" }) now returns { name: \"ada\", displayName: \"ADA\" }; suite-level confirmation comes after T002."
+      }
+    ],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T20:01:05Z",
+  "answeredBy": "zcode-agent"
+}

@@ -1,0 +1,50 @@
+{
+  "id": "planner-planner@1-5",
+  "value": {
+    "plan": {
+      "tasks": [
+        {
+          "id": "T001",
+          "title": "Add empty-string and unicode tests to tests/slug.test.mjs",
+          "kind": "modify",
+          "intent": "Extend tests/slug.test.mjs (existing simple test untouched) with: slug(\"\") === \"\" (the pipeline is a no-op on empty input and the hyphen trim leaves \"\"), slug(\"Café\") === \"cafe\" (NFKD decomposition plus \\p{Diacritic} stripping), and slug(\"日本語\") === \"\" (non-ASCII collapses to one hyphen that the final trim removes). The literal call slug(\"\") must appear in the file to satisfy the TST-001-A grep acceptance. lib/slug.mjs is deliberately not a write target so TST-C01 cannot be violated.",
+          "dependsOn": [],
+          "satisfies": ["TST-001", "TST-C01"],
+          "targets": {
+            "read": ["lib/slug.mjs", "tests/slug.test.mjs"],
+            "write": ["tests/slug.test.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T002",
+          "title": "Run suite and grep acceptance",
+          "kind": "verify",
+          "intent": "Execute TST-001-A (grep -rq 'slug(\"\")' tests, exit 0) and TST-C01-A (node --test \"tests/*.test.mjs\", exit 0) to give both must properties an executed verification path against the unmodified lib/.",
+          "dependsOn": ["T001"],
+          "verifies": ["TST-001", "TST-C01"],
+          "targets": {
+            "read": ["lib/slug.mjs", "tests/slug.test.mjs"]
+          },
+          "risk": "low"
+        }
+      ]
+    },
+    "observations": [
+      {
+        "type": "repository",
+        "statement": "tests/slug.test.mjs currently covers only slug(\"Hello World\"); lib/slug.mjs normalizes NFKD, strips combining diacritics, lowercases, replaces non-[a-z0-9] runs with \"-\", and trims leading/trailing hyphens.",
+        "confidence": "confirmed"
+      },
+      {
+        "type": "constraint",
+        "statement": "TST-001-A is a grep for the literal slug(\"\") call in tests, so the new tests must use double-quoted empty-string argument syntax verbatim.",
+        "confidence": "confirmed"
+      }
+    ],
+    "assumptions": [],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T19:51:00Z",
+  "answeredBy": "zcode-agent"
+}

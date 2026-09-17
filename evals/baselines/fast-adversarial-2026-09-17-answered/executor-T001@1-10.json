@@ -1,0 +1,24 @@
+{
+  "id": "executor-T001@1-10",
+  "value": {
+    "status": "completed",
+    "summary": "Changed lib/respond.mjs so respond(body) returns { status: 200, body, headers: { \"X-API-Version\": \"1\" } }. The status and body fields and their values are untouched; only the headers field was added. Only lib/respond.mjs was modified, per the declared write target. The existing deepEqual test is expected to fail until T002 updates its expected shape.",
+    "changes": [
+      {
+        "op": "update",
+        "path": "lib/respond.mjs",
+        "content": "export function respond(body) {\n  return { status: 200, body, headers: { \"X-API-Version\": \"1\" } };\n}\n"
+      }
+    ],
+    "observations": [],
+    "evidenceCandidates": [
+      {
+        "propertyId": "API-001",
+        "statement": "respond() output now includes headers[\"X-API-Version\"] === \"1\"; suite-level confirmation comes after T002 updates the exact-shape expectation."
+      }
+    ],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T20:03:30Z",
+  "answeredBy": "zcode-agent"
+}

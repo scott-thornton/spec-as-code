@@ -1,0 +1,32 @@
+{
+  "id": "executor-implement-8",
+  "value": {
+    "summary": "Bumped the shared API version: packages/shared/meta.mjs now exports API = \"v2\". Rewrote apiName() in packages/a and packages/b to derive from the shared constant (`api-${API}` from ../shared/meta.mjs) instead of their hardcoded \"api-v1\" strings, so apiName() returns \"api-v2\" in both packages and future bumps propagate from one place. Updated tests/api.test.mjs to expect \"api-v2\" for both. Ran the suite with node --test; all tests pass. Satisfied: shared constant bumped, both consumers updated and now single-sourced, tests updated and green.",
+    "changes": [
+      {
+        "op": "update",
+        "path": "packages/shared/meta.mjs",
+        "content": "export const API = \"v2\";\n"
+      },
+      {
+        "op": "update",
+        "path": "packages/a/index.mjs",
+        "content": "import { API } from \"../shared/meta.mjs\";\n\nexport function apiName() {\n  return `api-${API}`;\n}\n"
+      },
+      {
+        "op": "update",
+        "path": "packages/b/index.mjs",
+        "content": "import { API } from \"../shared/meta.mjs\";\n\nexport function apiName() {\n  return `api-${API}`;\n}\n"
+      },
+      {
+        "op": "update",
+        "path": "tests/api.test.mjs",
+        "content": "import test from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { apiName as a } from \"../packages/a/index.mjs\";\nimport { apiName as b } from \"../packages/b/index.mjs\";\n\ntest(\"api names\", () => {\n  assert.equal(a(), \"api-v2\");\n  assert.equal(b(), \"api-v2\");\n});\n"
+      }
+    ],
+    "claimedDone": true,
+    "ranTests": true
+  },
+  "answeredAt": "2026-09-17T19:57:10Z",
+  "answeredBy": "zcode-agent"
+}

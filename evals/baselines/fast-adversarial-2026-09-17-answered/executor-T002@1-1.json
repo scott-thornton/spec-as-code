@@ -1,0 +1,30 @@
+{
+  "id": "executor-T002@1-1",
+  "value": {
+    "status": "completed",
+    "summary": "Rewrote lib/logger.mjs with leveled logging. Added an ordered level set debug < info < warn < error, a module-level active level defaulting to info, getLevel()/setLevel(level) (setLevel throws on unknown levels), per-level emit functions debug/info/warn/error that no-op below the active level and write to console.error otherwise, and kept the existing log(message) export as an info-level emit so current behavior at the default level is unchanged. Only lib/logger.mjs was modified, per the declared write target.",
+    "changes": [
+      {
+        "op": "update",
+        "path": "lib/logger.mjs",
+        "content": "const LEVELS = [\"debug\", \"info\", \"warn\", \"error\"];\nconst LEVEL_ORDER = Object.fromEntries(LEVELS.map((name, index) => [name, index]));\n\nlet currentLevel = \"info\";\n\nexport function setLevel(level) {\n  if (!(level in LEVEL_ORDER)) {\n    throw new Error(`Unknown log level: ${level}`);\n  }\n  currentLevel = level;\n}\n\nexport function getLevel() {\n  return currentLevel;\n}\n\nfunction write(level, message) {\n  if (LEVEL_ORDER[level] >= LEVEL_ORDER[currentLevel]) {\n    console.error(message);\n  }\n}\n\nexport function debug(message) {\n  write(\"debug\", message);\n}\n\nexport function info(message) {\n  write(\"info\", message);\n}\n\nexport function warn(message) {\n  write(\"warn\", message);\n}\n\nexport function error(message) {\n  write(\"error\", message);\n}\n\nexport function log(message) {\n  write(\"info\", message);\n}\n"
+      }
+    ],
+    "observations": [
+      {
+        "type": "repository",
+        "statement": "lib/logger.mjs now exports log, debug, info, warn, error, setLevel, getLevel; level ordering is debug < info < warn < error with info active by default, matching the clarification's recommended default.",
+        "confidence": "confirmed"
+      }
+    ],
+    "evidenceCandidates": [
+      {
+        "propertyId": "FEAT-001",
+        "statement": "lib/logger.mjs now provides emit functions at the four ordered levels (debug/info/warn/error), satisfying \"Log messages can be emitted at levels\" pending verification by T003/T004."
+      }
+    ],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T19:42:10Z",
+  "answeredBy": "zcode-agent"
+}

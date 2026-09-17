@@ -1,0 +1,28 @@
+{
+  "id": "executor-T002@1-9",
+  "value": {
+    "status": "completed",
+    "summary": "Extended tests/calc.test.mjs (existing \"arithmetic\" test untouched) with: spaces ignored (\" 2 + 3 * 4 \" → 14), parentheses overriding precedence (\"(2+3)*4\" → 20) and nesting (\"2*(3+(4-1))\" → 12), left-associative subtraction (\"10-4-3\" → 3), true division (\"7/2\" → 3.5), unary minus (\"-(2+3)*4\" → -20), throws on invalid input (\"2+\", \"foo\", \"(2+3\", \"2 3\"), and a static source check reading lib/calc.mjs and asserting it contains neither forbidden API name — executable evidence for the security constraint. Only tests/calc.test.mjs was modified, per the declared write target.",
+    "changes": [
+      {
+        "op": "update",
+        "path": "tests/calc.test.mjs",
+        "content": "import test from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { readFileSync } from \"node:fs\";\nimport { fileURLToPath } from \"node:url\";\nimport path from \"node:path\";\nimport { calc } from \"../lib/calc.mjs\";\n\ntest(\"arithmetic\", () => {\n  assert.equal(calc(\"2+3*4\"), 14);\n});\n\ntest(\"spaces are ignored\", () => {\n  assert.equal(calc(\" 2 + 3 * 4 \"), 14);\n});\n\ntest(\"parentheses override precedence\", () => {\n  assert.equal(calc(\"(2+3)*4\"), 20);\n  assert.equal(calc(\"2*(3+(4-1))\"), 12);\n});\n\ntest(\"subtraction is left-associative\", () => {\n  assert.equal(calc(\"10-4-3\"), 3);\n});\n\ntest(\"division returns the true quotient\", () => {\n  assert.equal(calc(\"7/2\"), 3.5);\n});\n\ntest(\"unary minus is supported\", () => {\n  assert.equal(calc(\"-(2+3)*4\"), -20);\n});\n\ntest(\"invalid input throws\", () => {\n  assert.throws(() => calc(\"2+\"));\n  assert.throws(() => calc(\"foo\"));\n  assert.throws(() => calc(\"(2+3\"));\n  assert.throws(() => calc(\"2 3\"));\n});\n\ntest(\"implementation contains no dynamic code execution APIs\", () => {\n  const calcPath = path.join(\n    path.dirname(fileURLToPath(import.meta.url)),\n    \"../lib/calc.mjs\"\n  );\n  const source = readFileSync(calcPath, \"utf8\");\n  assert.ok(!source.includes(\"eval\"));\n  assert.ok(!source.includes(\"Function\"));\n});\n"
+      }
+    ],
+    "observations": [],
+    "evidenceCandidates": [
+      {
+        "propertyId": "SEC-001",
+        "statement": "Tests now cover all four operators, precedence, parentheses, spaces, and error handling for the parser."
+      },
+      {
+        "propertyId": "SEC-C01",
+        "statement": "The static source check asserts lib/calc.mjs contains neither forbidden API name, complementing the SEC-C01-A notContains file acceptance."
+      }
+    ],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T20:06:35Z",
+  "answeredBy": "zcode-agent"
+}

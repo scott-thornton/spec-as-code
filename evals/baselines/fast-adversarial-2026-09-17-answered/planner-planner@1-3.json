@@ -1,0 +1,63 @@
+{
+  "id": "planner-planner@1-3",
+  "value": {
+    "plan": {
+      "tasks": [
+        {
+          "id": "T001",
+          "title": "Add optional options argument to render()",
+          "kind": "modify",
+          "intent": "Change lib/render.mjs to render(user, options = {}): return `Dear ${user.name}` when options.formal === true, otherwise `Hi ${user.name}` exactly as today, so the one-argument call path is byte-for-byte unchanged.",
+          "dependsOn": [],
+          "satisfies": ["API-001", "API-C01"],
+          "targets": {
+            "read": ["lib/render.mjs"],
+            "write": ["lib/render.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T002",
+          "title": "Add formal-mode tests alongside existing coverage",
+          "kind": "test",
+          "intent": "Append new tests to tests/render.test.mjs asserting render({name}, { formal: true }) === \"Dear ada\" and that omitted/empty/formal:false options still yield \"Hi ada\". The existing \"informal greeting\" test must remain untouched because it is the pre-existing coverage for API-C01.",
+          "dependsOn": ["T001"],
+          "verifies": ["API-001", "API-C01"],
+          "targets": {
+            "read": ["lib/render.mjs", "tests/render.test.mjs"],
+            "write": ["tests/render.test.mjs"]
+          },
+          "risk": "low"
+        },
+        {
+          "id": "T003",
+          "title": "Run suite for API-001-A and API-C01-A acceptance",
+          "kind": "verify",
+          "intent": "Run node --test \"tests/*.test.mjs\" and require exit code 0. This executes both the pre-existing informal test (existing behavior, API-C01-A) and the newly added formal-mode tests (API-001-A), giving both must properties an executed command acceptance.",
+          "dependsOn": ["T002"],
+          "verifies": ["API-001", "API-C01"],
+          "targets": {
+            "read": ["lib/render.mjs", "tests/render.test.mjs"]
+          },
+          "risk": "low"
+        }
+      ]
+    },
+    "observations": [
+      {
+        "type": "repository",
+        "statement": "lib/render.mjs exports render(user) returning `Hi ${user.name}`; tests/render.test.mjs is the sole existing test and pins the one-argument behavior that API-C01 constrains.",
+        "confidence": "confirmed"
+      },
+      {
+        "type": "constraint",
+        "statement": "Both API-001-A and API-C01-A use the same acceptance command (node --test on tests/*.test.mjs, exit 0), but the current suite never exercises the formal mode, so API-001 cannot pass acceptance without the new tests from T002.",
+        "confidence": "confirmed"
+      }
+    ],
+    "assumptions": [],
+    "followups": []
+  },
+  "answeredAt": "2026-09-17T19:46:15Z",
+  "answeredBy": "zcode-agent"
+}
