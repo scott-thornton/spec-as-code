@@ -17,6 +17,14 @@ export const executionConfigSchema = z.strictObject({
   maxTaskRetries: z.number().int().nonnegative().default(1),
   commandTimeoutMs: z.number().int().positive().default(120_000),
   maxOutputBytes: z.number().int().positive().default(65_536),
+  /** Max concurrently executing tasks (§78). 1 keeps sequential semantics. */
+  parallelism: z.number().int().positive().default(1),
+  /**
+   * Demote blocking spec_clarification follow-ups to non-blocking and
+   * proceed (§31 medium-risk tier; benchmark-driven iteration). The
+   * follow-up is still recorded and visible after the run.
+   */
+  proceedOnClarificationFollowups: z.boolean().default(false),
 });
 
 export const commandsConfigSchema = z.strictObject({

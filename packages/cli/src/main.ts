@@ -9,7 +9,7 @@ import { runVerify } from "./commands/verify.js";
 import { runReconcile } from "./commands/reconcile.js";
 import { runDiff, runStatus } from "./commands/status.js";
 import { runFollowupResolve, runFollowups } from "./commands/followups.js";
-import { runShow } from "./commands/run.js";
+import { runPr, runShow } from "./commands/run.js";
 
 const program = new Command();
 
@@ -160,6 +160,14 @@ run
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action((runId: string, opts: { cwd: string }) => {
     process.exitCode = runShow(runId, opts.cwd);
+  });
+run
+  .command("pr <runId>")
+  .description("generate a PR title/body from run records (nothing is posted)")
+  .option("--out <file>", "write the draft to a file instead of stdout")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action((runId: string, opts: { cwd: string; out?: string }) => {
+    process.exitCode = runPr(runId, opts);
   });
 
 export function main(argv: string[]): void {

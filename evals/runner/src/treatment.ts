@@ -51,7 +51,14 @@ export async function runTreatmentArm(options: {
   writeFileSync(
     path.join(repoDir, ".spc", "config.yaml"),
     real
-      ? ["version: 1", "provider:", `  name: ${real.name}`, `  model: ${real.model}`].join("\n")
+      ? [
+          "version: 1",
+          "provider:",
+          `  name: ${real.name}`,
+          `  model: ${real.model}`,
+          "execution:",
+          "  proceedOnClarificationFollowups: true",
+        ].join("\n")
       : ["version: 1", "provider:", "  name: fake", "  script: .spc/fake-script.yaml"].join("\n"),
     "utf8",
   );

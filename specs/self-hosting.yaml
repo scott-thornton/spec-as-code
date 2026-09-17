@@ -1,0 +1,82 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+
+metadata:
+  id: self-hosting
+  title: spc self-hosting
+
+goal: >
+  The spc tool satisfies its own specification: specs parse, invalid input
+  produces diagnostics, plans validate, execution stays bounded, evidence
+  persists, satisfaction derives from evidence, and interrupted runs resume.
+
+requirements:
+  - id: SELF-001
+    statement: Valid specs parse and validate with a digest.
+    priority: must
+    acceptance:
+      - id: SELF-001-A
+        type: command
+        command: node packages/cli/dist/main.js spec validate specs/self-hosting.yaml
+        expect:
+          exitCode: 0
+
+  - id: SELF-002
+    statement: Invalid specs return compiler diagnostics, not silence.
+    priority: must
+    acceptance:
+      - id: SELF-002-A
+        type: command
+        command: pnpm --filter @spc/core exec vitest run src/spec-compile.test.ts
+
+  - id: SELF-003
+    statement: Valid specs can generate validated plans.
+    priority: must
+    acceptance:
+      - id: SELF-003-A
+        type: command
+        command: pnpm --filter @spc/planner exec vitest run src/planner.test.ts
+
+  - id: SELF-004
+    statement: Plans have acyclic tasks and full must-coverage.
+    priority: must
+    acceptance:
+      - id: SELF-004-A
+        type: command
+        command: pnpm --filter @spc/core exec vitest run src/plan-validate.test.ts
+
+  - id: SELF-005
+    statement: Task execution respects declared write boundaries.
+    priority: must
+    acceptance:
+      - id: SELF-005-A
+        type: command
+        command: pnpm --filter @spc/executor exec vitest run src/enforce.test.ts
+
+  - id: SELF-006
+    statement: Evidence persists after execution, including contradictions.
+    priority: must
+    acceptance:
+      - id: SELF-006-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/stores.test.ts
+
+  - id: SELF-007
+    statement: Requirements derive status from evidence.
+    priority: must
+    acceptance:
+      - id: SELF-007-A
+        type: command
+        command: pnpm --filter @spc/verifier exec vitest run src/criteria.test.ts
+
+  - id: SELF-008
+    statement: Interrupted runs can resume from the event log.
+    priority: must
+    acceptance:
+      - id: SELF-008-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/apply.test.ts
+
+outOfScope:
+  - publishing the packages
+  - long-running services

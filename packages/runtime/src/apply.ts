@@ -4,6 +4,7 @@ import {
   compileSpecSource,
   formatDiagnostics,
   hasErrors,
+  patternsOverlap,
   SpcError,
   validatePlan,
   planDigest as computePlanDigest,
@@ -13,7 +14,7 @@ import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { executeTask, enforceWriteScope, runScheduler, type ExecutionOutcome } from "@spc/executor";
 import { generateAmendment } from "@spc/planner";
 import { commitAll, currentRevision, diffStat, git, statusDelta, statusPorcelain } from "@spc/repo";
-import { createWorktree } from "@spc/repo";
+import { createWorktree, removeWorktree } from "@spc/repo";
 import { observeRepository } from "@spc/repo";
 import { renderRunSummary } from "@spc/renderer";
 import { mustPropertiesSatisfied } from "@spc/verifier";
@@ -67,7 +68,7 @@ export interface ApplyReport {
   summaryPath: string;
 }
 
-interface RunContext {
+export interface RunContext {
   paths: SpcPaths;
   config: ReturnType<typeof loadConfig>;
   provider: LLMProvider | null;
@@ -222,14 +223,25 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
   };
 
   // Materialize planner follow-up drafts as first-class run follow-ups.
+  // Benchmark-driven iteration (§31 medium-risk tier): with
+  // execution.proceedOnClarificationFollowups, spec_clarification drafts are
+  // demoted to non-blocking — recorded and visible, but not run-gating.
   for (const draft of plan.followups ?? []) {
-    const f = ctx.followups.create(draft, runId, now);
+    const demote =
+      ctx.config.execution.proceedOnClarificationFollowups &&
+      draft.type === "spec_clarification" &&
+      draft.blocking;
+    const f = ctx.followups.create(demote ? { ...draft, blocking: false } : draft, runId, now);
     events.append("FOLLOWUP_CREATED", {
       followupId: f.id,
       blocking: f.blocking,
       type: f.type,
       ...(f.propertyId ? { propertyId: f.propertyId } : {}),
+      ...(demote ? { demoted: true } : {}),
     });
+    if (demote) {
+      ctx.log(`Follow-up ${f.id} ("${f.title}") demoted to non-blocking by policy; proceeding.`);
+    }
   }
   const blocking = ctx.followups.openBlocking();
   if (blocking.length > 0 && !options.force) {
@@ -237,14 +249,15 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
     return finalize(ctx, "blocked", []);
   }
 
-  // Execution isolation: one worktree per run.
+  // Execution isolation: one worktree per run (plus per-task worktrees when
+  // execution.parallelism > 1).
   const wt = createWorktree(options.repoRoot, meta.specId, runId, paths.worktreesDir);
   ctx.worktreePath = wt.path;
   ctx.worktreeBranch = wt.branch;
   ctx.meta = { ...meta, branch: wt.branch, worktree: wt.path };
   writeFileSync(paths.metadataFile(runId), JSON.stringify(ctx.meta, null, 2), "utf8");
 
-  return driveRun(ctx);
+  return ctx.config.execution.parallelism > 1 ? driveRunParallel(ctx) : driveRun(ctx);
 }
 
 /** Entry point for `spc apply --resume <runId>`. */
@@ -311,7 +324,7 @@ export async function resumeRun(options: ApplyOptions & { resumeRunId: string },
     log: deps.log ?? (() => {}),
   };
   ctx.log(`Resuming run ${runId} (replayed ${events.length} events, ${Object.keys(state.tasks).length} tasks)`);
-  return driveRun(ctx);
+  return ctx.config.execution.parallelism > 1 ? driveRunParallel(ctx) : driveRun(ctx);
 }
 
 /** The scheduler loop plus verification, commit and completion semantics. */
@@ -445,158 +458,8 @@ async function driveRun(ctx: RunContext): Promise<ApplyReport> {
     return "failed";
   };
 
-  const execute = async (task: Task, attempt: number, failureContext?: { code: string; message: string }): Promise<ExecutionOutcome> => {
-    if (ctx.modelCalls >= ctx.config.execution.maxModelCalls) {
-      return {
-        taskId: task.id,
-        status: "failed",
-        summary: "model call budget exhausted",
-        result: { status: "failed", summary: "model call budget exhausted", changes: [], observations: [], evidenceCandidates: [], followups: [] },
-        appliedChanges: [],
-        failure: { code: "MODEL_BUDGET_EXCEEDED", message: `maxModelCalls=${ctx.config.execution.maxModelCalls}` },
-      };
-    }
-    const before = statusPorcelain(worktree);
-
-    if (task.kind === "verify") {
-      const subset = ctx.specIr.properties.filter((p) => (task.verifies ?? []).includes(p.id));
-      const sweep = await verifyProperties({
-        properties: subset,
-        runId: ctx.meta.runId,
-        cwd: worktree,
-        revision: currentRevision(worktree),
-        config: ctx.config,
-        provider: ctx.provider,
-        evidence: ctx.evidence,
-        followups: ctx.followups,
-        events: ctx.events,
-        taskId: task.id,
-        now: ctx.now,
-        onUsage: usageSink,
-      });
-      ctx.state = {
-        ...ctx.state,
-        requirements: { ...ctx.state.requirements, ...Object.fromEntries(sweep.states.map((s) => [s.propertyId, s])) },
-      };
-      const delta = statusDelta(before, statusPorcelain(worktree));
-      const violations = enforceWriteScope(task.targets?.write ?? [], [...delta.keys()]);
-      if (violations.length > 0) {
-        return failedOutcome(task, violations[0]!.code, `${violations[0]!.code}: ${violations[0]!.reason}`);
-      }
-      const summary = sweep.states.map((s) => `${s.propertyId}=${s.status}`).join(", ");
-      return {
-        taskId: task.id,
-        status: "completed",
-        summary: `verification: ${summary}`,
-        result: { status: "completed", summary: `verification: ${summary}`, changes: [], observations: [], evidenceCandidates: [], followups: [] },
-        appliedChanges: [],
-      };
-    }
-
-    if (!ctx.provider) {
-      return failedOutcome(task, "NO_PROVIDER", "no LLM provider configured for execution");
-    }
-    const priorResults = Object.values(ctx.state.tasks)
-      .filter((s) => s.status === "completed" && task.dependsOn?.includes(s.taskId))
-      .map((s) => ({ taskId: s.taskId, summary: `completed (attempt ${s.attempt})` }));
-    let outcome: ExecutionOutcome;
-    try {
-      outcome = await executeTask(
-        {
-          task,
-          specIr: ctx.specIr,
-          snapshot: {
-            revision: ctx.snapshotRevision,
-            dirty: false,
-            languages: [],
-            manifests: [],
-            directories: [],
-            tests: [],
-            commands: {},
-            relevantArtifacts: [],
-            createdAt: ctx.now(),
-            digest: ctx.snapshotDigest,
-          },
-          worktreeRoot: worktree,
-          attempt,
-          priorResults,
-          observations: [...ctx.observations.all()],
-          ...(failureContext ? { failureContext } : {}),
-        },
-        { provider: ctx.provider, onUsage: usageSink },
-      );
-    } catch (e) {
-      return failedOutcome(task, (e as { code?: string }).code ?? "EXECUTOR_ERROR", (e as Error).message);
-    }
-
-    // Persist observations / evidence candidates / follow-up drafts.
-    for (const draft of outcome.result.observations) {
-      const obs = ctx.observations.add({ ...draft, taskId: task.id }, ctx.meta.runId);
-      ctx.events.append("OBSERVATION_RECORDED", {
-        observationId: obs.id,
-        taskId: task.id,
-        type: obs.type,
-        statement: obs.statement,
-        invalidates: obs.invalidates ?? {},
-      });
-    }
-    for (const candidate of outcome.result.evidenceCandidates) {
-      const evidence = ctx.evidence.add({
-        id: `EV-${String(ctx.evidence.all().length + 1).padStart(4, "0")}`,
-        runId: ctx.meta.runId,
-        taskId: task.id,
-        propertyRefs: [candidate.propertyId],
-        kind: "agent",
-        outcome: "supports",
-        producer: { type: "agent", identity: ctx.provider.name },
-        timestamp: ctx.now(),
-        repositoryRevision: ctx.snapshotRevision,
-        payload: { informationalClaim: candidate.statement },
-      });
-      ctx.events.append("EVIDENCE_RECORDED", { evidenceId: evidence.id, propertyRefs: evidence.propertyRefs, kind: "agent", outcome: "supports" });
-    }
-    for (const draft of outcome.result.followups) {
-      const f = ctx.followups.create(draft, ctx.meta.runId, ctx.now);
-      ctx.events.append("FOLLOWUP_CREATED", { followupId: f.id, blocking: f.blocking, type: f.type });
-    }
-
-    // Re-check the ACTUAL diff against the declared write scope.
-    const delta = statusDelta(before, statusPorcelain(worktree));
-    for (const [p, change] of delta) {
-      ctx.events.append("FILE_CHANGED", { taskId: task.id, path: p, change });
-    }
-    const violations = enforceWriteScope(task.targets?.write ?? [], [...delta.keys()]);
-    if (violations.length > 0 && outcome.status === "completed") {
-      ctx.evidence.add({
-        id: `EV-${String(ctx.evidence.all().length + 1).padStart(4, "0")}`,
-        runId: ctx.meta.runId,
-        taskId: task.id,
-        propertyRefs: task.satisfies ?? [],
-        kind: "diff",
-        outcome: "contradicts",
-        producer: { type: "runtime" },
-        timestamp: ctx.now(),
-        repositoryRevision: ctx.snapshotRevision,
-        payload: { violations: violations.map((v) => ({ path: v.path, code: v.code, reason: v.reason })) },
-      });
-      return failedOutcome(task, violations[0]!.code, `${violations[0]!.code}: ${violations[0]!.reason}`);
-    }
-    if (delta.size > 0) {
-      ctx.evidence.add({
-        id: `EV-${String(ctx.evidence.all().length + 1).padStart(4, "0")}`,
-        runId: ctx.meta.runId,
-        taskId: task.id,
-        propertyRefs: task.satisfies ?? [],
-        kind: "diff",
-        outcome: "supports",
-        producer: { type: "runtime" },
-        timestamp: ctx.now(),
-        repositoryRevision: ctx.snapshotRevision,
-        payload: { changedPaths: Object.fromEntries(delta) },
-      });
-    }
-    return outcome;
-  };
+  const execute = (task: Task, attempt: number, failureContext?: { code: string; message: string }): Promise<ExecutionOutcome> =>
+    executeTaskInRun(ctx, usageSink, task, attempt, failureContext, worktree);
 
   const result = await runScheduler({
     getPlan: () => currentPlan,
@@ -608,6 +471,18 @@ async function driveRun(ctx: RunContext): Promise<ApplyReport> {
   });
   schedulerFailedTasks = result.failedTasks;
   schedulerOutcome = result.outcome;
+  return finishRun(ctx, currentPlan, usageSink, schedulerOutcome, schedulerFailedTasks);
+}
+
+/** Shared run tail: commit, final verification sweep, completion semantics. */
+async function finishRun(
+  ctx: RunContext,
+  currentPlan: Plan,
+  usageSink: (record: UsageRecord) => void,
+  schedulerOutcome: "done" | "deadlocked" | "replan_failed",
+  schedulerFailedTasks: readonly string[],
+): Promise<ApplyReport> {
+  const worktree = ctx.worktreePath!;
   ctx.state = { ...ctx.state, tasks: { ...ctx.state.tasks } };
   persistState(ctx.paths.stateFile(ctx.meta.runId), ctx.state);
 
@@ -658,9 +533,440 @@ async function driveRun(ctx: RunContext): Promise<ApplyReport> {
   });
 }
 
+/**
+ * Execute one task inside a run (shared by the sequential and parallel
+ * drivers): model budget guard, verify-task dispatch, executor invocation,
+ * observation/evidence/follow-up persistence, and write-scope enforcement
+ * against the actual git delta of `worktreeRoot`.
+ */
+export async function executeTaskInRun(
+  ctx: RunContext,
+  usageSink: (record: UsageRecord) => void,
+  task: Task,
+  attempt: number,
+  failureContext: { code: string; message: string } | undefined,
+  worktreeRoot: string,
+): Promise<ExecutionOutcome> {
+  if (ctx.modelCalls >= ctx.config.execution.maxModelCalls) {
+    return {
+      taskId: task.id,
+      status: "failed",
+      summary: "model call budget exhausted",
+      result: { status: "failed", summary: "model call budget exhausted", changes: [], observations: [], evidenceCandidates: [], followups: [] },
+      appliedChanges: [],
+      failure: { code: "MODEL_BUDGET_EXCEEDED", message: `maxModelCalls=${ctx.config.execution.maxModelCalls}` },
+    };
+  }
+  const before = statusPorcelain(worktreeRoot);
+
+  if (task.kind === "verify") {
+    const subset = ctx.specIr.properties.filter((p) => (task.verifies ?? []).includes(p.id));
+    const sweep = await verifyProperties({
+      properties: subset,
+      runId: ctx.meta.runId,
+      cwd: worktreeRoot,
+      revision: currentRevision(worktreeRoot),
+      config: ctx.config,
+      provider: ctx.provider,
+      evidence: ctx.evidence,
+      followups: ctx.followups,
+      events: ctx.events,
+      taskId: task.id,
+      now: ctx.now,
+      onUsage: usageSink,
+    });
+    ctx.state = {
+      ...ctx.state,
+      requirements: { ...ctx.state.requirements, ...Object.fromEntries(sweep.states.map((s) => [s.propertyId, s])) },
+    };
+    const delta = statusDelta(before, statusPorcelain(worktreeRoot));
+    const violations = enforceWriteScope(task.targets?.write ?? [], [...delta.keys()]);
+    if (violations.length > 0) {
+      return failedOutcome(task, violations[0]!.code, `${violations[0]!.code}: ${violations[0]!.reason}`);
+    }
+    const summary = sweep.states.map((s) => `${s.propertyId}=${s.status}`).join(", ");
+    return {
+      taskId: task.id,
+      status: "completed",
+      summary: `verification: ${summary}`,
+      result: { status: "completed", summary: `verification: ${summary}`, changes: [], observations: [], evidenceCandidates: [], followups: [] },
+      appliedChanges: [],
+    };
+  }
+
+  if (!ctx.provider) {
+    return failedOutcome(task, "NO_PROVIDER", "no LLM provider configured for execution");
+  }
+  const priorResults = Object.values(ctx.state.tasks)
+    .filter((s) => s.status === "completed" && task.dependsOn?.includes(s.taskId))
+    .map((s) => ({ taskId: s.taskId, summary: `completed (attempt ${s.attempt})` }));
+  let outcome: ExecutionOutcome;
+  try {
+    outcome = await executeTask(
+      {
+        task,
+        specIr: ctx.specIr,
+        snapshot: {
+          revision: ctx.snapshotRevision,
+          dirty: false,
+          languages: [],
+          manifests: [],
+          directories: [],
+          tests: [],
+          commands: {},
+          relevantArtifacts: [],
+          createdAt: ctx.now(),
+          digest: ctx.snapshotDigest,
+        },
+        worktreeRoot,
+        attempt,
+        priorResults,
+        observations: [...ctx.observations.all()],
+        ...(failureContext ? { failureContext } : {}),
+      },
+      { provider: ctx.provider, onUsage: usageSink },
+    );
+  } catch (e) {
+    return failedOutcome(task, (e as { code?: string }).code ?? "EXECUTOR_ERROR", (e as Error).message);
+  }
+
+  // Persist observations / evidence candidates / follow-up drafts.
+  for (const draft of outcome.result.observations) {
+    const obs = ctx.observations.add({ ...draft, taskId: task.id }, ctx.meta.runId);
+    ctx.events.append("OBSERVATION_RECORDED", {
+      observationId: obs.id,
+      taskId: task.id,
+      type: obs.type,
+      statement: obs.statement,
+      invalidates: obs.invalidates ?? {},
+    });
+  }
+  for (const candidate of outcome.result.evidenceCandidates) {
+    const evidence = ctx.evidence.add({
+      id: `EV-${String(ctx.evidence.all().length + 1).padStart(4, "0")}`,
+      runId: ctx.meta.runId,
+      taskId: task.id,
+      propertyRefs: [candidate.propertyId],
+      kind: "agent",
+      outcome: "supports",
+      producer: { type: "agent", identity: ctx.provider.name },
+      timestamp: ctx.now(),
+      repositoryRevision: ctx.snapshotRevision,
+      payload: { informationalClaim: candidate.statement },
+    });
+    ctx.events.append("EVIDENCE_RECORDED", { evidenceId: evidence.id, propertyRefs: evidence.propertyRefs, kind: "agent", outcome: "supports" });
+  }
+  for (const draft of outcome.result.followups) {
+    const f = ctx.followups.create(draft, ctx.meta.runId, ctx.now);
+    ctx.events.append("FOLLOWUP_CREATED", { followupId: f.id, blocking: f.blocking, type: f.type });
+  }
+
+  // Re-check the ACTUAL diff against the declared write scope.
+  const delta = statusDelta(before, statusPorcelain(worktreeRoot));
+  for (const [p, change] of delta) {
+    ctx.events.append("FILE_CHANGED", { taskId: task.id, path: p, change });
+  }
+  const violations = enforceWriteScope(task.targets?.write ?? [], [...delta.keys()]);
+  if (violations.length > 0 && outcome.status === "completed") {
+    ctx.evidence.add({
+      id: `EV-${String(ctx.evidence.all().length + 1).padStart(4, "0")}`,
+      runId: ctx.meta.runId,
+      taskId: task.id,
+      propertyRefs: task.satisfies ?? [],
+      kind: "diff",
+      outcome: "contradicts",
+      producer: { type: "runtime" },
+      timestamp: ctx.now(),
+      repositoryRevision: ctx.snapshotRevision,
+      payload: { violations: violations.map((v) => ({ path: v.path, code: v.code, reason: v.reason })) },
+    });
+    return failedOutcome(task, violations[0]!.code, `${violations[0]!.code}: ${violations[0]!.reason}`);
+  }
+  if (delta.size > 0) {
+    ctx.evidence.add({
+      id: `EV-${String(ctx.evidence.all().length + 1).padStart(4, "0")}`,
+      runId: ctx.meta.runId,
+      taskId: task.id,
+      propertyRefs: task.satisfies ?? [],
+      kind: "diff",
+      outcome: "supports",
+      producer: { type: "runtime" },
+      timestamp: ctx.now(),
+      repositoryRevision: ctx.snapshotRevision,
+      payload: { changedPaths: Object.fromEntries(delta) },
+    });
+  }
+  return outcome;
+}
+
 function countChanged(worktree: string, from: string, to: string): number {
   const r = git(worktree, ["diff", "--name-only", `${from}..${to}`]);
   return r.stdout.split("\n").filter((l) => l.trim() !== "").length;
+}
+
+/**
+ * Parallel driver (§78): ready tasks execute concurrently in per-task
+ * worktrees branched from the integration HEAD, gated on disjoint write sets
+ * (SPC2007 already orders overlapping writers with dependencies). Completed
+ * task patches merge back into the integration branch deterministically; a
+ * cherry-pick conflict becomes an EXECUTION_CONFLICT task failure, never a
+ * silent resolution.
+ */
+async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
+  const integration = ctx.worktreePath!;
+  const maxParallel = Math.max(1, ctx.config.execution.parallelism);
+  const usageSink = (record: UsageRecord): void => {
+    ctx.modelCalls += 1;
+    appendUsageRecord(ctx.paths.usageFile(ctx.meta.runId), record);
+    ctx.events.append("USAGE_RECORDED", { role: record.role, requestId: record.requestId, model: record.model });
+  };
+  const transition = (taskId: string, next: TaskState): void => {
+    ctx.state = { ...ctx.state, tasks: { ...ctx.state.tasks, [taskId]: next } };
+    const p: Record<string, unknown> = { taskId, attempt: next.attempt };
+    if (next.status === "running") {
+      ctx.events.append("TASK_READY", p);
+      ctx.events.append("TASK_STARTED", p);
+    } else if (next.status === "completed") {
+      ctx.events.append("TASK_COMPLETED", { ...p, summary: "task completed" });
+    } else if (next.status === "failed") {
+      ctx.events.append("TASK_FAILED", { ...p, error: next.failure ?? { code: "TASK_FAILED", message: "failed" } });
+    } else if (next.status === "blocked") {
+      ctx.events.append("TASK_BLOCKED", { ...p, error: next.failure ?? { code: "TASK_BLOCKED", message: "blocked" } });
+    } else if (next.status === "needs_replan") {
+      ctx.events.append("TASK_NEEDS_REPLAN", p);
+    }
+    persistState(ctx.paths.stateFile(ctx.meta.runId), ctx.state);
+  };
+
+  let currentPlan = ctx.plan;
+  let schedulerOutcome: "done" | "deadlocked" | "replan_failed" = "done";
+  const failedTasks: string[] = [];
+  const inFlight = new Map<string, Promise<void>>();
+  const inFlightWrites = new Map<string, string[]>();
+  const BLOCKING = new Set(["failed", "blocked", "cancelled", "needs_replan"]);
+
+  const replanFor = async (taskId: string): Promise<"amended" | "failed"> => {
+    // Drain in-flight siblings before touching the plan.
+    while (inFlight.size > 0) await Promise.race([...inFlight.values()]);
+    const triggering = ctx.observations.all().filter(
+      (o) => o.taskId === taskId || (o.invalidates?.taskIds ?? []).includes(taskId),
+    );
+    ctx.events.append("REPLAN_REQUESTED", { taskId, observationIds: triggering.map((o) => o.id) });
+    if (!ctx.provider) return "failed";
+    if (ctx.state.replans >= ctx.config.execution.maxReplans) return "failed";
+    const executed = Object.entries(ctx.state.tasks)
+      .filter(([, s]) => s.status === "completed" || s.status === "running")
+      .map(([id]) => id);
+    const result = await generateAmendment({
+      specIr: ctx.specIr,
+      plan: currentPlan,
+      taskStates: new Map(Object.entries(ctx.state.tasks)),
+      executedTaskIds: executed,
+      triggeringObservations:
+        triggering.length > 0
+          ? [...triggering]
+          : [
+              {
+                id: "OBS-implicit",
+                runId: ctx.meta.runId,
+                taskId,
+                type: "unexpected",
+                statement: `task ${taskId} requested a replan`,
+                confidence: "confirmed",
+              },
+            ],
+      provider: ctx.provider,
+      amendmentId: `AM-${String(ctx.state.replans + 1).padStart(3, "0")}`,
+      now: ctx.now,
+      onUsage: usageSink,
+    });
+    if (!result.amendment || !result.amendedPlan) return "failed";
+    const amended = result.amendedPlan;
+    const runDir = ctx.paths.runDir(ctx.meta.runId);
+    const priorVersions = existsSync(runDir)
+      ? readdirSync(runDir).filter((f) => /^plan-v\d+\.json$/.test(f)).length
+      : 0;
+    writeFileSync(path.join(runDir, `plan-v${priorVersions + 1}.json`), JSON.stringify(currentPlan, null, 2), "utf8");
+    writeFileSync(ctx.paths.planFile(currentPlan.metadata.id), JSON.stringify(result.amendedPlan, null, 2), "utf8");
+    writeFileSync(
+      path.join(ctx.paths.amendmentsDir(ctx.meta.runId), `${result.amendment.id}.json`),
+      JSON.stringify(result.amendment, null, 2),
+      "utf8",
+    );
+    const oldIds = new Set(currentPlan.tasks.map((t) => t.id));
+    const added = amended.tasks.filter((t) => !oldIds.has(t.id)).map((t) => t.id);
+    for (const id of added) {
+      ctx.state = { ...ctx.state, tasks: { ...ctx.state.tasks, [id]: { taskId: id, status: "pending", attempt: 0 } } };
+    }
+    currentPlan = amended;
+    ctx.plan = amended;
+    ctx.events.append("PLAN_AMENDED", {
+      amendmentId: result.amendment.id,
+      planDigest: computePlanDigest(amended),
+      removedTaskIds: [...oldIds].filter((id) => !amended.tasks.some((t) => t.id === id)),
+      addedTaskIds: added,
+      operations: result.amendment.operations.map((o) => o.op),
+    });
+    ctx.state = { ...ctx.state, replans: ctx.state.replans + 1 };
+    persistState(ctx.paths.stateFile(ctx.meta.runId), ctx.state);
+    return "amended";
+  };
+
+  const runOne = async (task: Task): Promise<void> => {
+    try {
+      const prior = ctx.state.tasks[task.id];
+      const attempt = (prior?.attempt ?? 0) + 1;
+      transition(task.id, {
+        taskId: task.id,
+        status: "running",
+        attempt,
+        startedAt: ctx.now(),
+        ...(prior?.failure ? { failure: prior.failure } : {}),
+      });
+
+      // Per-task isolation, branched from the integration HEAD at launch.
+      const startPoint = currentRevision(integration);
+      const wt = createWorktree(
+        ctx.paths.repoRoot,
+        ctx.meta.specId,
+        `${ctx.meta.runId}--${task.id}`,
+        ctx.paths.worktreesDir,
+        { startPoint },
+      );
+      let outcome: ExecutionOutcome;
+      try {
+        outcome = await executeTaskInRun(
+          ctx,
+          usageSink,
+          task,
+          attempt,
+          attempt > 1 && prior?.failure ? { code: prior.failure.code, message: prior.failure.message } : undefined,
+          wt.path,
+        );
+        // Merge the task patch deterministically into the integration branch.
+        const sha = commitAll(wt.path, `spc: task ${task.id} (run ${ctx.meta.runId})`);
+        if (sha) {
+          const merged = mergeTaskPatch(integration, sha);
+          if (!merged.ok) {
+            ctx.events.append("EXECUTION_CONFLICT", {
+              taskId: task.id,
+              revision: sha,
+              message: "task patch conflicted during deterministic merge",
+            });
+            outcome = failedOutcome(task, "EXECUTION_CONFLICT", "task patch conflicted during deterministic merge");
+          } else {
+            ctx.events.append("PATCH_MERGED", { taskId: task.id, revision: sha });
+          }
+        }
+      } finally {
+        removeWorktree(ctx.paths.repoRoot, wt.path);
+      }
+
+      switch (outcome.status) {
+        case "completed":
+          transition(task.id, {
+            taskId: task.id,
+            status: "completed",
+            attempt,
+            startedAt: ctx.now(),
+            completedAt: ctx.now(),
+          });
+          break;
+        case "failed": {
+          const failure = outcome.failure ?? { code: "TASK_FAILED", message: outcome.summary };
+          if (attempt - 1 < ctx.config.execution.maxTaskRetries) {
+            transition(task.id, { taskId: task.id, status: "pending", attempt, failure });
+          } else {
+            transition(task.id, { taskId: task.id, status: "failed", attempt, failure });
+            failedTasks.push(task.id);
+          }
+          break;
+        }
+        case "blocked":
+          transition(task.id, {
+            taskId: task.id,
+            status: "blocked",
+            attempt,
+            failure: outcome.failure ?? { code: "TASK_BLOCKED", message: outcome.summary },
+          });
+          break;
+        case "needs_replan": {
+          transition(task.id, { taskId: task.id, status: "needs_replan", attempt });
+          const r = await replanFor(task.id);
+          if (r !== "amended") schedulerOutcome = "replan_failed";
+          break;
+        }
+      }
+    } finally {
+      inFlight.delete(task.id);
+      inFlightWrites.delete(task.id);
+    }
+  };
+
+  for (;;) {
+    const plan = currentPlan;
+    const stateOf = (id: string): TaskState => ctx.state.tasks[id] ?? { taskId: id, status: "pending", attempt: 0 };
+
+    for (const t of plan.tasks) {
+      if (stateOf(t.id).status === "running") {
+        transition(t.id, { ...stateOf(t.id), status: "pending" });
+      }
+    }
+    for (const t of plan.tasks) {
+      if (stateOf(t.id).status !== "pending") continue;
+      const blockedDeps = (t.dependsOn ?? []).filter((d) => BLOCKING.has(stateOf(d).status));
+      if (blockedDeps.length > 0) {
+        transition(t.id, { ...stateOf(t.id), status: "blocked" });
+      }
+    }
+
+    const pending = plan.tasks.filter((t) => stateOf(t.id).status === "pending" && !inFlight.has(t.id));
+    if (pending.length === 0 && inFlight.size === 0) break;
+
+    const ready = pending.filter((t) =>
+      (t.dependsOn ?? []).every((d) => stateOf(d).status === "completed" || stateOf(d).status === "skipped"),
+    );
+    if (ready.length > 0) {
+      for (const task of ready) {
+        if (inFlight.size >= maxParallel) break;
+        const writes = task.targets?.write ?? [];
+        const overlaps = [...inFlightWrites.values()].some(
+          (other) => writes.length > 0 && other.length > 0 && writes.some((w) => other.some((o) => patternsOverlap(w, o))),
+        );
+        if (overlaps) continue; // stays pending; ordering dependency or later round
+        inFlightWrites.set(task.id, writes);
+        inFlight.set(task.id, runOne(task));
+      }
+    }
+    if (inFlight.size === 0) {
+      if (pending.length > 0) {
+        schedulerOutcome = "deadlocked";
+        break;
+      }
+      break;
+    }
+    await Promise.race([...inFlight.values()]);
+  }
+  while (inFlight.size > 0) await Promise.race([...inFlight.values()]);
+
+  return finishRun(ctx, currentPlan, usageSink, schedulerOutcome, failedTasks);
+}
+
+export { failedOutcome };
+
+/**
+ * Deterministically merge a committed task patch into the integration
+ * branch. Because task worktrees are cut from the post-merge HEAD and
+ * overlapping writers are gated, conflicts are structurally prevented; this
+ * handler is defense-in-depth for the cases that slip through (e.g. deletes
+ * racing modifies) and never resolves conflicts silently.
+ */
+export function mergeTaskPatch(integrationWorktree: string, sha: string): { ok: boolean } {
+  const pick = git(integrationWorktree, ["cherry-pick", sha]);
+  if (pick.ok) return { ok: true };
+  git(integrationWorktree, ["cherry-pick", "--abort"]);
+  git(integrationWorktree, ["reset", "--hard", "HEAD"]);
+  return { ok: false };
 }
 
 function failedOutcome(task: Task, code: string, message: string): ExecutionOutcome {

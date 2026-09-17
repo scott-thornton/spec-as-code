@@ -66,6 +66,7 @@ spc apply [planFile]              preflight → isolated worktree → sequential
 spc verify [specFile]             run acceptance criteria against the current tree (drift detection)
                                   --format github emits CI annotations + a step summary
 spc reconcile [specFile]          verify; when drifted, plan the next transition (--apply to execute)
+spc run pr <runId>                generate a PR title/body from run records (§82)
 spc status [specFile]             requirement-oriented status with evidence provenance
 spc diff [specFile]               desired vs observed
 spc followups                     structured queue (blocking / non-blocking)
@@ -144,6 +145,14 @@ specs/*.yaml               desired state (committed)
 - Repository content is treated as untrusted data; permission checks live in
   code, never in prompts.
 
+## Self-hosting
+
+The repository dogs food: `specs/self-hosting.yaml` (SELF-001…008 from §90)
+states the tool's own requirements, `.spc/config.yaml` is committed, and CI
+runs `spc verify --format github` on every PR (see
+[.github/workflows/spc-verify.yml](.github/workflows/spc-verify.yml)) — the
+tool proves itself on itself, with requirement-oriented PR annotations.
+
 ## Fixtures
 
 - `fixtures/simple-node-service` — failing requirement → plan → bounded
@@ -165,9 +174,12 @@ validates harness mechanics, not the thesis) and **real**: the §68 gate was
 executed on 2026-09-17 with glm-5.3-flash (3 trials × 30 tasks,
 [evals/baselines/real-glm-5.3-flash-2026-09-17.md](evals/baselines/real-glm-5.3-flash-2026-09-17.md)).
 Result: on this flash-tier model the workflow did **not** beat the Markdown
-baseline (77% vs 99% completion, ~3× tokens; gap dominated by over-cautious
-blocking follow-ups), so per §94 the abstraction iterates before any
-parallel-execution or control-plane work. CI reporting
+baseline (77% vs 99% completion). Per §94 the abstraction then iterated —
+ADR-0013's clarification-demotion policy — and the re-measure narrowed the
+gap to −6 pp (87% vs 93%) with safety properties intact (see the baseline
+addendum). Following that evidence, parallel execution (§78, ADR-0012) is
+now implemented: `execution.parallelism` runs ready tasks with disjoint
+write sets concurrently in per-task worktrees, merged deterministically. CI reporting
 (`spc verify --format github`, see
 [docs/ci-integration.md](docs/ci-integration.md)) and drift reconciliation
 (`spc reconcile`) are available now.

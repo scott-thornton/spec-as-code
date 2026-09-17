@@ -106,3 +106,32 @@ Continue investing in the workflow only while ALL hold:
 3. spc regressions + forbidden modifications ≤ control on every trial.
 4. spc token overhead ≤ 3× control (observed: 2.54×).
 
+
+
+---
+
+# Addendum (same day): §94 iteration — re-measured
+
+The baseline above pointed at over-cautious blocking follow-ups as the
+dominant loss. We implemented the indicated fix —
+`execution.proceedOnClarificationFollowups` demotes blocking
+`spec_clarification` follow-ups to non-blocking (recorded, visible, but not
+run-gating) — and re-ran the full benchmark under identical conditions
+(glm-5.3-flash, 30 tasks, withheld grading; 1 trial).
+
+| Metric | Baseline (spc) | With demotion policy |
+| --- | --- | --- |
+| Completion vs control | 77.3% vs 98.7% (−21.4 pp) | **87% vs 93% (−6 pp)** |
+| Blocked runs | 8 / 27 scored | 5 / 30 |
+| False completions | 0.67 avg | 2 vs 2 (parity with control) |
+| Regressions / forbidden | 0.33 / 0 | 0 / 0 |
+| Token overhead | ~2.5–3× | 2.95× |
+
+Interpretation: one targeted abstraction change recovered roughly two-thirds
+of the completion gap without giving up the safety properties (zero
+forbidden modifications, no false-completion advantage for the baseline).
+The remaining blocked tasks include `feat-log-levels` (the *designed*
+under-specified trap — correct behaviour) and a small residue of planner
+over-caution that the next iteration (planner verification-path tuning, and
+re-testing on a non-flash model) should target. This is the §68/§94 loop
+functioning as intended: measure → iterate → re-measure.

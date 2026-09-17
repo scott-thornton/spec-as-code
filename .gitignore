@@ -3,5 +3,8 @@ dist/
 *.tsbuildinfo
 .DS_Store
 coverage/
-/.spc/
+/.spc/runs/
+/.spc/worktrees/
+/.spc/plans/
+/.spc/cache/
 results/
