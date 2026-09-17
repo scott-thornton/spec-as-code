@@ -1,0 +1,41 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Guard null user
+          kind: modify
+          intent: return anonymous for null
+          satisfies:
+            - FIX-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - lib/user.mjs
+        - id: T002
+          title: Verify FIX-001, FIX-C01
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - FIX-001
+            - FIX-C01
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Added null guard.
+    changes:
+      - op: update
+        path: lib/user.mjs
+        content: |
+          export function displayName(user) {
+            if (user === null || user === undefined) {
+              return "anonymous";
+            }
+            return user.name.toUpperCase();
+          }

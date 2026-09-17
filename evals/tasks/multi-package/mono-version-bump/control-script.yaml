@@ -1,0 +1,36 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Bump packages/shared to v2.
+      2. Update packages/a and the tests.
+executor:
+  implement:
+    summary: Bumped to v2.
+    changes:
+      - op: update
+        path: packages/shared/meta.mjs
+        content: |
+          export const API = "v2";
+      - op: update
+        path: packages/a/index.mjs
+        content: |
+          import { API } from "../shared/meta.mjs";
+
+          export function apiName() {
+            return `api-${API}`;
+          }
+      - op: update
+        path: tests/api.test.mjs
+        content: |
+          import test from "node:test";
+          import assert from "node:assert/strict";
+          import { apiName as a } from "../packages/a/index.mjs";
+          import { apiName as b } from "../packages/b/index.mjs";
+
+          test("api names", () => {
+            assert.equal(a(), "api-v2");
+          });
+    claimedDone: true
+    ranTests: false

@@ -1,0 +1,34 @@
+id: api-deprecate-field
+category: api-change
+title: Add displayName alongside name
+description: summary(user) returns { name }. Add a displayName field
+  (upper-cased); keep the name field for compatibility.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: api-deprecate-field
+    title: displayName field
+  goal: Summary exposes displayName while name remains.
+  requirements:
+    - id: API-001
+      statement: summary() returns displayName (upper-case) and keeps name.
+      priority: must
+      acceptance:
+        - id: API-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: both fields present
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: pass
+  forbidden: []

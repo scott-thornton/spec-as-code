@@ -1,0 +1,76 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Rename doubleInternal to double
+          kind: modify
+          intent: rename with alias
+          satisfies:
+            - RF-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - lib/util.mjs
+        - id: T002
+          title: Rename halveInternal to halve
+          kind: modify
+          intent: rename with alias
+          dependsOn:
+            - T001
+          satisfies:
+            - RF-002
+          targets:
+            read:
+              - tests/**
+            write:
+              - lib/util.mjs
+        - id: T003
+          title: Verify RF-001, RF-002, RF-C01
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T002
+          verifies:
+            - RF-001
+            - RF-002
+            - RF-C01
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Renamed doubleInternal.
+    changes:
+      - op: update
+        path: lib/util.mjs
+        content: |
+          export function double(n) {
+            return n * 2;
+          }
+
+          export const doubleInternal = double;
+
+          export function halveInternal(n) {
+            return n / 2;
+          }
+  T002:
+    status: completed
+    summary: Renamed halveInternal.
+    changes:
+      - op: update
+        path: lib/util.mjs
+        content: |
+          export function double(n) {
+            return n * 2;
+          }
+
+          export const doubleInternal = double;
+
+          export function halve(n) {
+            return n / 2;
+          }
+
+          export const halveInternal = halve;

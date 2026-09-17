@@ -1,0 +1,66 @@
+id: refactor-split-module
+category: refactoring
+title: Split handlers.mjs into focused modules
+description: lib/handlers.mjs holds two unrelated handlers. Split into
+  lib/handlers/handle-a.mjs and lib/handlers/handle-b.mjs, with lib/handlers.mjs
+  kept as a re-export barrel so existing imports continue to work. No behaviour
+  change.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: refactor-split-module
+    title: Split handlers
+  goal: Handlers live in focused modules behind the existing import path.
+  requirements:
+    - id: RF-001
+      statement: handleA lives in lib/handlers/handle-a.mjs.
+      priority: must
+      acceptance:
+        - id: RF-001-A
+          type: file
+          path: lib/handlers/handle-a.mjs
+          assert:
+            exists: true
+    - id: RF-002
+      statement: handleB lives in lib/handlers/handle-b.mjs.
+      priority: must
+      acceptance:
+        - id: RF-002-A
+          type: file
+          path: lib/handlers/handle-b.mjs
+          assert:
+            exists: true
+  constraints:
+    - id: RF-C01
+      statement: Existing imports from lib/handlers.mjs keep working.
+      acceptance:
+        - id: RF-C01-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: handle-a module exists
+      verify:
+        type: file
+        path: lib/handlers/handle-a.mjs
+        contains: handleA
+    - id: GT-002
+      description: handle-b module exists
+      verify:
+        type: file
+        path: lib/handlers/handle-b.mjs
+        contains: handleB
+    - id: GT-003
+      description: barrel re-exports both
+      verify:
+        type: command
+        command: node --test "grading/gt-3.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: pass
+  forbidden: []

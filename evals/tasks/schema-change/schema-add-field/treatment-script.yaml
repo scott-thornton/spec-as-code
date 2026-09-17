@@ -1,0 +1,38 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Add retries with default
+          kind: modify
+          intent: extend normalize and the test
+          satisfies:
+            - SCH-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - lib/config.mjs
+              - tests/**
+        - id: T002
+          title: Verify SCH-001
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - SCH-001
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Added retries with default.
+    changes:
+      - op: update
+        path: lib/config.mjs
+        content: |
+          export function normalize(input) {
+            return { url: input.url, retries: input.retries ?? 3 };
+          }

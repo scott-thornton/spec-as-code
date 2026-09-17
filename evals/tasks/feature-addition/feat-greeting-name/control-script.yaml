@@ -1,0 +1,21 @@
+planner:
+  value:
+    planMarkdown: |-
+      ## Plan
+
+      1. Edit lib/greet.mjs to add greetNamed.
+      2. Done.
+executor:
+  implement:
+    summary: Added greetNamed.
+    changes:
+      - op: update
+        path: lib/greet.mjs
+        content: |
+          export const greet = () => "hello";
+
+          export function greetNamed(name) {
+            return `hello, ${name}`;
+          }
+    claimedDone: true
+    ranTests: false

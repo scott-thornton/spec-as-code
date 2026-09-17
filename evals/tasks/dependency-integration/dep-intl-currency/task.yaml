@@ -1,0 +1,40 @@
+id: dep-intl-currency
+category: dependency-integration
+title: Format currency with Intl
+description: lib/money.mjs builds "$1,234.57" by hand. Use Intl.NumberFormat
+  (USD, 2 fraction digits); output must stay identical.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: dep-intl-currency
+    title: Intl currency
+  goal: usd() delegates to Intl.NumberFormat with identical output.
+  requirements:
+    - id: DEP-001
+      statement: usd() formats via Intl.NumberFormat with unchanged output.
+      priority: must
+      acceptance:
+        - id: DEP-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: output preserved
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+    - id: GT-002
+      description: uses Intl
+      verify:
+        type: file
+        path: lib/money.mjs
+        contains: Intl.NumberFormat
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: pass
+  forbidden: []

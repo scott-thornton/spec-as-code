@@ -1,0 +1,51 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Redact tokens
+          kind: modify
+          intent: mask the token and update the test to assert redaction
+          satisfies:
+            - SEC-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - lib/report.mjs
+              - tests/**
+        - id: T002
+          title: Verify SEC-001
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - SEC-001
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Redacted tokens.
+    changes:
+      - op: update
+        path: lib/report.mjs
+        content: |
+          export function line(user) {
+            return `user ${user.id} token [REDACTED]`;
+          }
+      - op: update
+        path: tests/report.test.mjs
+        content: >
+          import test from "node:test";
+
+          import assert from "node:assert/strict";
+
+          import { line } from "../lib/report.mjs";
+
+
+          test("token redacted", () => {
+            assert.equal(line({ id: "u1", token: "s3cret" }), "user u1 token [REDACTED]");
+          });

@@ -1,0 +1,40 @@
+id: feat-greeting-name
+category: feature-addition
+title: Add a personalized greeting
+description: The service greets anonymously. Add greetNamed(name) returning
+  "hello, <name>". Keep the existing greet() working.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: feat-greeting-name
+    title: Personalized greeting
+  goal: Greet users by name without breaking the anonymous greeting.
+  requirements:
+    - id: FEAT-001
+      statement: greetNamed(name) returns "hello, <name>".
+      priority: must
+      acceptance:
+        - id: FEAT-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: named greeting works
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+    - id: GT-002
+      description: anonymous greeting preserved
+      verify:
+        type: command
+        command: node --test "grading/gt-2.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: pass
+  forbidden: []

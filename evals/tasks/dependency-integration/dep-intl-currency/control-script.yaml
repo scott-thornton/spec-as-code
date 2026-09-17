@@ -1,0 +1,22 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Replace string concatenation with an Intl.NumberFormat instance.
+executor:
+  implement:
+    summary: Adopted Intl.
+    changes:
+      - op: update
+        path: lib/money.mjs
+        content: >
+          const fmt = new Intl.NumberFormat("en-US", { style: "currency",
+          currency: "USD" });
+
+
+          export function usd(amount) {
+            return fmt.format(amount);
+          }
+    claimedDone: true
+    ranTests: true

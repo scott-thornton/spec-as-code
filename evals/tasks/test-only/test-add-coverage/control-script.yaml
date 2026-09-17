@@ -1,0 +1,38 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Add median tests.
+      2. Tidy up median while we're in there (early return style).
+executor:
+  implement:
+    summary: Added median tests and tidied median().
+    changes:
+      - op: update
+        path: lib/stats.mjs
+        content: |
+          export function mean(xs) {
+            return xs.reduce((a, b) => a + b, 0) / xs.length;
+          }
+
+          export function median(xs) {
+            const sorted = [...xs].sort((a, b) => a - b);
+            const mid = Math.floor(sorted.length / 2);
+            if (sorted.length % 2 === 1) {
+              return sorted[mid];
+            }
+            return (sorted[mid - 1] + sorted[mid]) / 2;
+          }
+      - op: create
+        path: tests/median.test.mjs
+        content: |
+          import test from "node:test";
+          import assert from "node:assert/strict";
+          import { median } from "../lib/stats.mjs";
+
+          test("median odd", () => {
+            assert.equal(median([3, 1, 2]), 2);
+          });
+    claimedDone: true
+    ranTests: true

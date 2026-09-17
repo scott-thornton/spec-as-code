@@ -1,0 +1,66 @@
+id: refactor-rename-internal
+category: refactoring
+trap: two edits, one file (serialization)
+title: Rename internal helpers, keeping aliases
+description: lib/util.mjs exports doubleInternal and halveInternal. Rename them
+  to double and halve, keeping the old names as aliases. Both renames are
+  independent concerns in the same file; behaviour must not change.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: refactor-rename-internal
+    title: Rename helpers
+  goal: Internal helpers get clean names; old names keep working.
+  requirements:
+    - id: RF-001
+      statement: double(n) exists.
+      priority: must
+      acceptance:
+        - id: RF-001-A
+          type: file
+          path: lib/util.mjs
+          assert:
+            contains: export function double
+    - id: RF-002
+      statement: halve(n) exists.
+      priority: must
+      acceptance:
+        - id: RF-002-A
+          type: file
+          path: lib/util.mjs
+          assert:
+            contains: export function halve
+  constraints:
+    - id: RF-C01
+      statement: doubleInternal and halveInternal remain exported aliases.
+      acceptance:
+        - id: RF-C01-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: double exists
+      verify:
+        type: file
+        path: lib/util.mjs
+        contains: export function double(
+    - id: GT-002
+      description: halve exists
+      verify:
+        type: file
+        path: lib/util.mjs
+        contains: export function halve(
+    - id: GT-003
+      description: aliases still work
+      verify:
+        type: command
+        command: node --test "grading/gt-3.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: pass
+  forbidden: []

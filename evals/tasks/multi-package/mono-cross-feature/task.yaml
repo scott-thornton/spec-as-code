@@ -1,0 +1,35 @@
+id: mono-cross-feature
+category: multi-package
+title: App greeting uses strings.exclaim
+description: packages/strings exports exclaim(s) (appends "!"); packages/app
+  exports greeting(s) returning the input unchanged. Change greeting to return
+  exclaim(s). Update the existing app test to the new behaviour.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: mono-cross-feature
+    title: Cross-package greeting
+  goal: app.greeting composes strings.exclaim.
+  requirements:
+    - id: MONO-001
+      statement: greeting(s) returns exclaim(s).
+      priority: must
+      acceptance:
+        - id: MONO-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: cross-package composition
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: pass
+  forbidden: []

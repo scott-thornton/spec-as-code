@@ -1,0 +1,51 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Add displayName
+          kind: modify
+          intent: extend summary and adjust the test to the new object shape
+          satisfies:
+            - API-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - lib/summary.mjs
+              - tests/**
+        - id: T002
+          title: Verify API-001
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - API-001
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Added displayName.
+    changes:
+      - op: update
+        path: lib/summary.mjs
+        content: |
+          export function summary(user) {
+            return { name: user.name, displayName: user.name.toUpperCase() };
+          }
+      - op: update
+        path: tests/summary.test.mjs
+        content: >
+          import test from "node:test";
+
+          import assert from "node:assert/strict";
+
+          import { summary } from "../lib/summary.mjs";
+
+
+          test("summary has both fields", () => {
+            assert.deepEqual(summary({ name: "ada" }), { name: "ada", displayName: "ADA" });
+          });

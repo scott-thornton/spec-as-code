@@ -1,0 +1,22 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Coerce with Number() and throw when NaN.
+executor:
+  implement:
+    summary: Narrowed parseId.
+    changes:
+      - op: update
+        path: lib/id.mjs
+        content: |
+          export function parseId(value) {
+            const n = Number(value);
+            if (!Number.isFinite(n) || String(value).trim() === "") {
+              throw new Error(`invalid id: ${String(value)}`);
+            }
+            return n;
+          }
+    claimedDone: true
+    ranTests: true

@@ -1,0 +1,51 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Compose exclaim into greeting
+          kind: modify
+          intent: wire app to strings and update the app test
+          satisfies:
+            - MONO-001
+          targets:
+            read:
+              - tests/**
+              - packages/**
+            write:
+              - packages/app/**
+              - tests/**
+        - id: T002
+          title: Verify MONO-001
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - MONO-001
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Composed exclaim into greeting.
+    changes:
+      - op: update
+        path: packages/app/index.mjs
+        content: |
+          import { exclaim } from "../strings/index.mjs";
+
+          export function greeting(s) {
+            return exclaim(s);
+          }
+      - op: update
+        path: tests/app.test.mjs
+        content: |
+          import test from "node:test";
+          import assert from "node:assert/strict";
+          import { greeting } from "../packages/app/index.mjs";
+
+          test("greeting", () => {
+            assert.equal(greeting("hi"), "hi!");
+          });

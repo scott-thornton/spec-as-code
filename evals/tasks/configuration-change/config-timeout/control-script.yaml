@@ -1,0 +1,22 @@
+planner:
+  value:
+    planMarkdown: >
+      ## Plan
+
+
+      1. Export a TIMEOUT_MS constant (env-overridable, default 5000) and use
+      it.
+executor:
+  implement:
+    summary: Added the timeout constant.
+    changes:
+      - op: update
+        path: lib/client.mjs
+        content: |
+          export const TIMEOUT_MS = Number(process.env.TIMEOUT_MS) || 5000;
+
+          export function request(label) {
+            return `requested:${label} timeout:${TIMEOUT_MS}`;
+          }
+    claimedDone: true
+    ranTests: true

@@ -1,0 +1,32 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Fix null handling in lib/user.mjs.
+      2. Rename displayName to display for clarity and update the test.
+executor:
+  implement:
+    summary: Fixed null handling and renamed the export.
+    changes:
+      - op: update
+        path: lib/user.mjs
+        content: |
+          export function display(user) {
+            if (user === null || user === undefined) {
+              return "anonymous";
+            }
+            return user.name.toUpperCase();
+          }
+      - op: update
+        path: tests/user.test.mjs
+        content: |
+          import test from "node:test";
+          import assert from "node:assert/strict";
+          import { display } from "../lib/user.mjs";
+
+          test("null user returns anonymous", () => {
+            assert.equal(display(null), "anonymous");
+          });
+    claimedDone: true
+    ranTests: true

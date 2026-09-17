@@ -1,0 +1,27 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Create lib/handlers/handle-a.mjs and handle-b.mjs.
+      2. Remove the old lib/handlers.mjs (superseded).
+executor:
+  implement:
+    summary: Split the handlers module.
+    changes:
+      - op: create
+        path: lib/handlers/handle-a.mjs
+        content: |
+          export function handleA(x) {
+            return `a:${x}`;
+          }
+      - op: create
+        path: lib/handlers/handle-b.mjs
+        content: |
+          export function handleB(x) {
+            return `b:${x}`;
+          }
+      - op: delete
+        path: lib/handlers.mjs
+    claimedDone: true
+    ranTests: false

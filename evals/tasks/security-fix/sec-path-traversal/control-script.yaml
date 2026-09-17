@@ -1,0 +1,25 @@
+planner:
+  value:
+    planMarkdown: >
+      ## Plan
+
+
+      1. If rel contains .., log a warning and return the joined path so callers
+      can handle it.
+executor:
+  implement:
+    summary: Added traversal warning.
+    changes:
+      - op: update
+        path: lib/assets.mjs
+        content: |
+          import path from "node:path";
+
+          export function readPath(base, rel) {
+            if (String(rel).split("/").includes("..")) {
+              console.error("warning: traversal attempt");
+            }
+            return path.join(base, rel);
+          }
+    claimedDone: true
+    ranTests: false

@@ -1,0 +1,32 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Add displayName to the summary object; keep name.
+      2. Update the shape test.
+executor:
+  implement:
+    summary: Added displayName.
+    changes:
+      - op: update
+        path: lib/summary.mjs
+        content: |
+          export function summary(user) {
+            return { name: user.name, displayName: user.name.toUpperCase() };
+          }
+      - op: update
+        path: tests/summary.test.mjs
+        content: >
+          import test from "node:test";
+
+          import assert from "node:assert/strict";
+
+          import { summary } from "../lib/summary.mjs";
+
+
+          test("summary has both fields", () => {
+            assert.deepEqual(summary({ name: "ada" }), { name: "ada", displayName: "ADA" });
+          });
+    claimedDone: true
+    ranTests: true

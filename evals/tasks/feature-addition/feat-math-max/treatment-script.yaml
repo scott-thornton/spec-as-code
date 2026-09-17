@@ -1,0 +1,52 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Implement max
+          kind: modify
+          intent: add max with a test
+          satisfies:
+            - FEAT-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - lib/math.mjs
+              - tests/**
+        - id: T002
+          title: Verify FEAT-001
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - FEAT-001
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Added max with test.
+    changes:
+      - op: update
+        path: lib/math.mjs
+        content: |
+          export function sum(a, b) {
+            return a + b;
+          }
+
+          export function max(a, b) {
+            return a > b ? a : b;
+          }
+      - op: create
+        path: tests/max.test.mjs
+        content: |
+          import test from "node:test";
+          import assert from "node:assert/strict";
+          import { max } from "../lib/math.mjs";
+
+          test("max", () => {
+            assert.equal(max(2, 7), 7);
+          });

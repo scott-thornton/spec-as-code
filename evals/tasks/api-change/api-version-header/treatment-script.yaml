@@ -1,0 +1,51 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Add version header
+          kind: modify
+          intent: extend respond and update the shape test
+          satisfies:
+            - API-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - lib/respond.mjs
+              - tests/**
+        - id: T002
+          title: Verify API-001
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - API-001
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Added the version header.
+    changes:
+      - op: update
+        path: lib/respond.mjs
+        content: |
+          export function respond(body) {
+            return { status: 200, body, headers: { "X-API-Version": "1" } };
+          }
+      - op: update
+        path: tests/respond.test.mjs
+        content: >
+          import test from "node:test";
+
+          import assert from "node:assert/strict";
+
+          import { respond } from "../lib/respond.mjs";
+
+
+          test("respond shape", () => {
+            assert.deepEqual(respond("x"), { status: 200, body: "x", headers: { "X-API-Version": "1" } });
+          });

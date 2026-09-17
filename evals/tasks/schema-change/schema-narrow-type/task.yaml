@@ -1,0 +1,34 @@
+id: schema-narrow-type
+category: schema-change
+title: parseId must return numbers
+description: "parseId(v) currently returns whatever it is given. It must return
+  a number: numeric strings and numbers are converted, anything else throws."
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: schema-narrow-type
+    title: numeric ids
+  goal: parseId produces numbers or throws.
+  requirements:
+    - id: SCH-001
+      statement: parseId converts numeric input and throws otherwise.
+      priority: must
+      acceptance:
+        - id: SCH-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: conversion + rejection
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: fail
+  forbidden: []

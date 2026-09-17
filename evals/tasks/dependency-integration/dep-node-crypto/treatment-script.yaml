@@ -1,0 +1,40 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Switch to node:crypto
+          kind: modify
+          intent: replace the hand-rolled hash and update the test
+          satisfies:
+            - DEP-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - lib/hash.mjs
+              - tests/**
+        - id: T002
+          title: Verify DEP-001
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - DEP-001
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Replaced with node:crypto SHA-256.
+    changes:
+      - op: update
+        path: lib/hash.mjs
+        content: |
+          import { createHash } from "node:crypto";
+
+          export function hash(s) {
+            return createHash("sha256").update(s).digest("hex");
+          }

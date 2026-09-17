@@ -1,0 +1,41 @@
+id: config-gitignore-dist
+category: configuration-change
+title: Ignore build output
+description: The build writes to dist/ but .gitignore does not exclude it. Add
+  dist/ to .gitignore without removing existing entries.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: config-gitignore-dist
+    title: Ignore dist/
+  goal: Build output is not tracked.
+  requirements:
+    - id: CFG-001
+      statement: .gitignore contains dist/ and keeps node_modules/.
+      priority: must
+      acceptance:
+        - id: CFG-001-A
+          type: file
+          path: .gitignore
+          assert:
+            contains: dist/
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: dist ignored
+      verify:
+        type: file
+        path: .gitignore
+        contains: dist/
+    - id: GT-002
+      description: node_modules entry kept
+      verify:
+        type: file
+        path: .gitignore
+        contains: node_modules
+  regression:
+    command: node -e 0
+    expectBefore: pass
+  forbidden:
+    - tests/**

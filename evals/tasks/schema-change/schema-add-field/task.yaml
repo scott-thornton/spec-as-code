@@ -1,0 +1,37 @@
+id: schema-add-field
+category: schema-change
+title: Accept a retries field with default
+description: normalize({ url }) returns { url }. Accept an optional retries
+  number; when absent default it to 3; when present keep it.
+spec: >
+  apiVersion: spc.dev/v1alpha1
+
+  kind: Spec
+
+  metadata:
+    id: schema-add-field
+    title: retries field
+  goal: Configuration accepts retries with a default of 3.
+
+  requirements:
+    - id: SCH-001
+      statement: normalize() applies retries default 3 and keeps explicit values.
+      priority: must
+      acceptance:
+        - id: SCH-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: default and explicit retries
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: fail
+  forbidden: []

@@ -1,0 +1,34 @@
+id: feat-math-max
+category: feature-addition
+title: Add max() to the math helpers
+description: lib/math.mjs has sum(). Add max(a, b) returning the larger number.
+  Keep sum() working.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: feat-math-max
+    title: max() helper
+  goal: max(a, b) exists alongside sum().
+  requirements:
+    - id: FEAT-001
+      statement: max(a, b) returns the larger argument.
+      priority: must
+      acceptance:
+        - id: FEAT-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: max works
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: pass
+  forbidden: []

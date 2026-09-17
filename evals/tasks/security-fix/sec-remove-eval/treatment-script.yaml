@@ -1,0 +1,111 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Replace eval with a parser
+          kind: modify
+          intent: implement a small recursive-descent evaluator with tests
+          satisfies:
+            - SEC-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - lib/calc.mjs
+              - tests/**
+        - id: T002
+          title: Verify SEC-001, SEC-C01
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - SEC-001
+            - SEC-C01
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Replaced eval with a recursive-descent parser.
+    changes:
+      - op: update
+        path: lib/calc.mjs
+        content: >
+          function tokenize(src) {
+            const tokens = [];
+            let i = 0;
+            while (i < src.length) {
+              const ch = src[i];
+              if (ch === " ") {
+                i += 1;
+                continue;
+              }
+              if (/[0-9.]/.test(ch)) {
+                let j = i;
+                while (j < src.length && /[0-9.]/.test(src[j])) j += 1;
+                tokens.push(src.slice(i, j));
+                i = j;
+                continue;
+              }
+              if ("+-*/()".includes(ch)) {
+                tokens.push(ch);
+                i += 1;
+                continue;
+              }
+              throw new Error(`unexpected character: ${ch}`);
+            }
+            return tokens;
+          }
+
+
+          export function calc(expr) {
+            const tokens = tokenize(expr);
+            let pos = 0;
+            const peek = () => tokens[pos];
+            const take = () => tokens[pos++];
+            function parseExpr() {
+              let value = parseTerm();
+              while (peek() === "+" || peek() === "-") {
+                const op = take();
+                value = op === "+" ? value + parseTerm() : value - parseTerm();
+              }
+              return value;
+            }
+            function parseTerm() {
+              let value = parseFactor();
+              while (peek() === "*" || peek() === "/") {
+                const op = take();
+                value = op === "*" ? value * parseFactor() : value / parseFactor();
+              }
+              return value;
+            }
+            function parseFactor() {
+              if (peek() === "(") {
+                take();
+                const value = parseExpr();
+                if (take() !== ")") throw new Error("unbalanced expression");
+                return value;
+              }
+              const token = take();
+              if (token === undefined || !/^[0-9.]+$/.test(token)) {
+                throw new Error(`unexpected token: ${String(token)}`);
+              }
+              return Number(token);
+            }
+            const result = parseExpr();
+            if (pos !== tokens.length) throw new Error("trailing input");
+            return result;
+          }
+      - op: create
+        path: tests/calc-safe.test.mjs
+        content: |
+          import test from "node:test";
+          import assert from "node:assert/strict";
+          import { calc } from "../lib/calc.mjs";
+
+          test("rejects non-arithmetic", () => {
+            assert.throws(() => calc("process.exit(1)"));
+          });

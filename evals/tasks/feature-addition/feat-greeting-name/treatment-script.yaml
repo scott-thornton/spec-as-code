@@ -1,0 +1,50 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Implement named greeting
+          kind: modify
+          intent: add greetNamed and a test for it
+          satisfies:
+            - FEAT-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - lib/greet.mjs
+              - tests/**
+        - id: T002
+          title: Verify FEAT-001
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - FEAT-001
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Added greetNamed with test.
+    changes:
+      - op: update
+        path: lib/greet.mjs
+        content: |
+          export const greet = () => "hello";
+
+          export function greetNamed(name) {
+            return `hello, ${name}`;
+          }
+      - op: create
+        path: tests/named.test.mjs
+        content: |
+          import test from "node:test";
+          import assert from "node:assert/strict";
+          import { greetNamed } from "../lib/greet.mjs";
+
+          test("named greeting", () => {
+            assert.equal(greetNamed("ada"), "hello, ada");
+          });

@@ -1,0 +1,20 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Import createHash and return the sha256 hex digest.
+executor:
+  implement:
+    summary: Switched to node:crypto.
+    changes:
+      - op: update
+        path: lib/hash.mjs
+        content: |
+          import { createHash } from "node:crypto";
+
+          export function hash(s) {
+            return createHash("sha256").update(s).digest("hex");
+          }
+    claimedDone: true
+    ranTests: true

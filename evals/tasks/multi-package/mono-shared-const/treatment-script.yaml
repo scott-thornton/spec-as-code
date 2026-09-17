@@ -1,0 +1,59 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Extract shared version and repoint packages
+          kind: modify
+          intent: create the shared module and re-export in both packages
+          satisfies:
+            - MONO-001
+            - MONO-002
+          targets:
+            read:
+              - tests/**
+            write:
+              - packages/shared/**
+              - packages/a/**
+              - packages/b/**
+        - id: T002
+          title: Verify MONO-001, MONO-002
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - MONO-001
+            - MONO-002
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Extracted the shared constant.
+    changes:
+      - op: create
+        path: packages/shared/version.mjs
+        content: |
+          export const VERSION = "1";
+      - op: update
+        path: packages/a/index.mjs
+        content: |
+          export { VERSION } from "../shared/version.mjs";
+
+          import { VERSION } from "../shared/version.mjs";
+
+          export function aInfo() {
+            return `a:${VERSION}`;
+          }
+      - op: update
+        path: packages/b/index.mjs
+        content: |
+          export { VERSION } from "../shared/version.mjs";
+
+          import { VERSION } from "../shared/version.mjs";
+
+          export function bInfo() {
+            return `b:${VERSION}`;
+          }

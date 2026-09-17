@@ -1,0 +1,50 @@
+id: mono-shared-const
+category: multi-package
+title: Share the version constant
+description: packages/a and packages/b each define their own VERSION = "1".
+  Create packages/shared/version.mjs as the single source and have both packages
+  re-export from it. Behaviour must not change.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: mono-shared-const
+    title: Shared version module
+  goal: One version constant, consumed by both packages.
+  requirements:
+    - id: MONO-001
+      statement: packages/shared/version.mjs is the single source of VERSION.
+      priority: must
+      acceptance:
+        - id: MONO-001-A
+          type: file
+          path: packages/shared/version.mjs
+          assert:
+            exists: true
+    - id: MONO-002
+      statement: Both packages re-export the shared constant.
+      priority: must
+      acceptance:
+        - id: MONO-002-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: shared module exists
+      verify:
+        type: file
+        path: packages/shared/version.mjs
+        contains: '"1"'
+    - id: GT-002
+      description: both consume it
+      verify:
+        type: command
+        command: node --test "grading/gt-2.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: pass
+  forbidden: []

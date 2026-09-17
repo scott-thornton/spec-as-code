@@ -1,0 +1,52 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Adopt URLSearchParams
+          kind: modify
+          intent: replace manual concatenation with an encoding test
+          satisfies:
+            - DEP-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - lib/link.mjs
+              - tests/**
+        - id: T002
+          title: Verify DEP-001
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - DEP-001
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Adopted URLSearchParams.
+    changes:
+      - op: update
+        path: lib/link.mjs
+        content: |
+          export function link(params) {
+            const q = new URLSearchParams();
+            for (const [k, v] of Object.entries(params)) {
+              q.set(k, String(v));
+            }
+            return `https://example.test/?${q.toString()}`;
+          }
+      - op: create
+        path: tests/link-encoding.test.mjs
+        content: |
+          import test from "node:test";
+          import assert from "node:assert/strict";
+          import { link } from "../lib/link.mjs";
+
+          test("encoding", () => {
+            assert.equal(link({ q: "a b" }), "https://example.test/?q=a+b");
+          });

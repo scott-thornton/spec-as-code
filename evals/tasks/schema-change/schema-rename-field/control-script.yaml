@@ -1,0 +1,18 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Replace url with endpoint in normalize (clean break).
+executor:
+  implement:
+    summary: Renamed url to endpoint.
+    changes:
+      - op: update
+        path: lib/config.mjs
+        content: |
+          export function normalize(input) {
+            return { endpoint: input.endpoint };
+          }
+    claimedDone: true
+    ranTests: false

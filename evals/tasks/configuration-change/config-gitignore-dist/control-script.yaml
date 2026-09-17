@@ -1,0 +1,17 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Add dist/ to .gitignore.
+executor:
+  implement:
+    summary: Ignored dist/.
+    changes:
+      - op: update
+        path: .gitignore
+        content: |
+          node_modules/
+          dist/
+    claimedDone: true
+    ranTests: true

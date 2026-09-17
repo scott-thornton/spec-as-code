@@ -1,0 +1,37 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Add TIMEOUT_MS
+          kind: modify
+          intent: export the constant with env override
+          satisfies:
+            - CFG-001
+          targets:
+            write:
+              - lib/client.mjs
+        - id: T002
+          title: Verify CFG-001
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - CFG-001
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Added TIMEOUT_MS.
+    changes:
+      - op: update
+        path: lib/client.mjs
+        content: |
+          export const TIMEOUT_MS = Number(process.env.TIMEOUT_MS) || 5000;
+
+          export function request(label) {
+            return `requested:${label} timeout:${TIMEOUT_MS}`;
+          }

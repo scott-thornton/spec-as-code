@@ -1,0 +1,50 @@
+id: sec-remove-eval
+category: security-fix
+title: Remove eval from the calculator
+description: lib/calc.mjs uses eval. Replace it with a small safe evaluator
+  supporting + - * /, integers, parentheses and spaces. No eval, no Function
+  constructor anywhere in the file.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: sec-remove-eval
+    title: Safe calculator
+  goal: calc() evaluates arithmetic without eval.
+  requirements:
+    - id: SEC-001
+      statement: calc() evaluates + - * / and parentheses without eval.
+      priority: must
+      acceptance:
+        - id: SEC-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+  constraints:
+    - id: SEC-C01
+      statement: The file contains no eval and no Function constructor.
+      acceptance:
+        - id: SEC-C01-A
+          type: file
+          path: lib/calc.mjs
+          assert:
+            notContains: eval(
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: safe evaluation
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+    - id: GT-002
+      description: no eval left
+      verify:
+        type: file
+        path: lib/calc.mjs
+        notContains: eval(
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: pass
+  forbidden: []

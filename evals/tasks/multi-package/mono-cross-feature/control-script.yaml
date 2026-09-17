@@ -1,0 +1,20 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Import exclaim in packages/app and use it in greeting.
+executor:
+  implement:
+    summary: Wired greeting to exclaim.
+    changes:
+      - op: update
+        path: packages/app/index.mjs
+        content: |
+          import { exclaim } from "../strings/index.mjs";
+
+          export function greeting(s) {
+            return exclaim(s);
+          }
+    claimedDone: true
+    ranTests: false

@@ -1,0 +1,34 @@
+id: api-version-header
+category: api-change
+title: Include an API version header
+description: 'respond(body) returns { status: 200, body }. Add headers: {
+  "X-API-Version": "1" }. Keep status and body.'
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: api-version-header
+    title: API version header
+  goal: Responses carry the API version.
+  requirements:
+    - id: API-001
+      statement: respond() includes the X-API-Version header.
+      priority: must
+      acceptance:
+        - id: API-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: header present
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: pass
+  forbidden: []

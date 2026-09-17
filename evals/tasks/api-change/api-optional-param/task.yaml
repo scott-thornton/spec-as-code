@@ -1,0 +1,52 @@
+id: api-optional-param
+category: api-change
+trap: preserve old API
+title: Add an optional formal mode to render()
+description: 'render(user) returns "Hi <name>". Add an optional second argument
+  { formal: true } returning "Dear <name>". The existing one-argument call must
+  keep working exactly as before; the existing tests must keep passing.'
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: api-optional-param
+    title: Formal render mode
+  goal: render() supports a formal mode without breaking its existing signature.
+  requirements:
+    - id: API-001
+      statement: 'render(user, { formal: true }) returns "Dear <name>".'
+      priority: must
+      acceptance:
+        - id: API-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+  constraints:
+    - id: API-C01
+      statement: render(user) with one argument still returns "Hi <name>"; the
+        existing test suite must keep passing.
+      acceptance:
+        - id: API-C01-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: formal mode works
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+    - id: GT-002
+      description: old API preserved
+      verify:
+        type: command
+        command: node --test "grading/gt-2.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: pass
+  forbidden: []

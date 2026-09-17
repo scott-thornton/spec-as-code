@@ -1,0 +1,18 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Add retries with a ?? default in normalize.
+executor:
+  implement:
+    summary: Added retries default.
+    changes:
+      - op: update
+        path: lib/config.mjs
+        content: |
+          export function normalize(input) {
+            return { url: input.url, retries: input.retries ?? 3 };
+          }
+    claimedDone: true
+    ranTests: true

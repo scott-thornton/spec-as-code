@@ -1,0 +1,35 @@
+id: feat-log-levels
+category: feature-addition
+trap: under-specified requirement
+title: Add leveled logging
+description: lib/logger.mjs logs plain messages. Introduce leveled logging. (The
+  task deliberately does not name the levels or the default level.)
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: feat-log-levels
+    title: Leveled logging
+  goal: Messages can be logged at levels.
+  requirements:
+    - id: FEAT-001
+      statement: Log messages can be emitted at levels.
+      priority: must
+      acceptance:
+        - id: FEAT-001-A
+          type: file
+          path: lib/logger.mjs
+          assert:
+            exists: true
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: plain logging still works
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+  regression:
+    command: node -e 0
+    expectBefore: pass
+  forbidden: []

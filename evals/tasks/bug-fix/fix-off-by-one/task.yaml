@@ -1,0 +1,34 @@
+id: fix-off-by-one
+category: bug-fix
+title: Fix the off-by-one in range()
+description: range(n) must return exactly n elements [0..n-1]; it currently
+  returns n+1. The failing test documents the bug.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: fix-off-by-one
+    title: range() fix
+  goal: range(n) returns exactly n elements.
+  requirements:
+    - id: FIX-001
+      statement: range(n) has exactly n elements.
+      priority: must
+      acceptance:
+        - id: FIX-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: range contents correct
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: fail
+  forbidden: []

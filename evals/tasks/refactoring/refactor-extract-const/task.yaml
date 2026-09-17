@@ -1,0 +1,49 @@
+id: refactor-extract-const
+category: refactoring
+title: Extract pricing constants
+description: lib/pricing.mjs embeds magic numbers. Extract UNIT_PRICE = 25 and
+  BASE_FEE = 5 as named constants. No behaviour change.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: refactor-extract-const
+    title: Named pricing constants
+  goal: Pricing numbers are named constants; behaviour unchanged.
+  requirements:
+    - id: RF-001
+      statement: UNIT_PRICE and BASE_FEE constants exist.
+      priority: must
+      acceptance:
+        - id: RF-001-A
+          type: file
+          path: lib/pricing.mjs
+          assert:
+            contains: UNIT_PRICE
+  constraints:
+    - id: RF-C01
+      statement: total() behaviour unchanged.
+      acceptance:
+        - id: RF-C01-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: constants extracted
+      verify:
+        type: file
+        path: lib/pricing.mjs
+        contains: UNIT_PRICE
+    - id: GT-002
+      description: behaviour preserved
+      verify:
+        type: command
+        command: node --test "grading/gt-2.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: pass
+  forbidden: []

@@ -1,0 +1,46 @@
+id: fix-null-user
+category: bug-fix
+title: displayName(null) must not throw
+description: displayName(user) throws on null. Return "anonymous" for null. Keep
+  the export name displayName and the normal behaviour.
+spec: >
+  apiVersion: spc.dev/v1alpha1
+
+  kind: Spec
+
+  metadata:
+    id: fix-null-user
+    title: null-safe displayName
+  goal: displayName handles null without throwing.
+
+  requirements:
+    - id: FIX-001
+      statement: displayName(null) returns "anonymous".
+      priority: must
+      acceptance:
+        - id: FIX-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+  constraints:
+    - id: FIX-C01
+      statement: The export name displayName and the non-null behaviour are preserved.
+      acceptance:
+        - id: FIX-C01-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: null handled, export name preserved
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: fail
+  forbidden: []

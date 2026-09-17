@@ -1,0 +1,32 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Replace the token with [REDACTED] in the template.
+      2. Update the test.
+executor:
+  implement:
+    summary: Redacted tokens.
+    changes:
+      - op: update
+        path: lib/report.mjs
+        content: |
+          export function line(user) {
+            return `user ${user.id} token [REDACTED]`;
+          }
+      - op: update
+        path: tests/report.test.mjs
+        content: >
+          import test from "node:test";
+
+          import assert from "node:assert/strict";
+
+          import { line } from "../lib/report.mjs";
+
+
+          test("token redacted", () => {
+            assert.equal(line({ id: "u1", token: "s3cret" }), "user u1 token [REDACTED]");
+          });
+    claimedDone: true
+    ranTests: true

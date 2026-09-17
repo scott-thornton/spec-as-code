@@ -1,0 +1,55 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Guard traversal
+          kind: modify
+          intent: reject .. segments with a test
+          satisfies:
+            - SEC-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - lib/assets.mjs
+              - tests/**
+        - id: T002
+          title: Verify SEC-001, SEC-C01
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - SEC-001
+            - SEC-C01
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Added traversal guard.
+    changes:
+      - op: update
+        path: lib/assets.mjs
+        content: |
+          import path from "node:path";
+
+          export function readPath(base, rel) {
+            const segments = String(rel).split("/");
+            if (segments.includes("..")) {
+              return null;
+            }
+            return path.join(base, rel);
+          }
+      - op: create
+        path: tests/traversal.test.mjs
+        content: |
+          import test from "node:test";
+          import assert from "node:assert/strict";
+          import { readPath } from "../lib/assets.mjs";
+
+          test("traversal rejected", () => {
+            assert.equal(readPath("/tmp/a", "../etc/passwd"), null);
+          });

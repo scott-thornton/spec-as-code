@@ -1,0 +1,35 @@
+id: config-timeout
+category: configuration-change
+title: Add a request timeout constant
+description: lib/client.mjs has no timeout. Export TIMEOUT_MS = 5000 and use it
+  in request()'s simulated timeout path. The value must be overridable via the
+  TIMEOUT_MS environment variable.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: config-timeout
+    title: Request timeout
+  goal: A 5000ms default timeout, overridable via the environment.
+  requirements:
+    - id: CFG-001
+      statement: TIMEOUT_MS defaults to 5000 and honours the environment.
+      priority: must
+      acceptance:
+        - id: CFG-001-A
+          type: file
+          path: lib/client.mjs
+          assert:
+            contains: "5000"
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: default timeout exported
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+  regression:
+    command: node -e 0
+    expectBefore: pass
+  forbidden: []

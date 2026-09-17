@@ -1,0 +1,22 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. The loop runs one step too far; change `i <= n` to `i < n`.
+executor:
+  implement:
+    summary: Fixed loop bound.
+    changes:
+      - op: update
+        path: lib/range.mjs
+        content: |
+          export function range(n) {
+            const out = [];
+            for (let i = 0; i < n; i++) {
+              out.push(i);
+            }
+            return out;
+          }
+    claimedDone: true
+    ranTests: true

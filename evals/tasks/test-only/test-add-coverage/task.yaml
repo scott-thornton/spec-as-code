@@ -1,0 +1,50 @@
+id: test-add-coverage
+category: test-only
+title: Cover median()
+description: lib/stats.mjs has median() with no tests. Add tests for median
+  covering odd and even length inputs. Do not change lib/.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: test-add-coverage
+    title: median coverage
+  goal: median() is under test.
+  requirements:
+    - id: TST-001
+      statement: Tests cover median for odd and even inputs.
+      priority: must
+      acceptance:
+        - id: TST-001-A
+          type: command
+          command: grep -rq "median" tests
+          expect:
+            exitCode: 0
+  constraints:
+    - id: TST-C01
+      statement: lib/ is not modified.
+      acceptance:
+        - id: TST-C01-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: median is tested
+      verify:
+        type: command
+        command: grep -rq "median" tests
+        expectExitCode: 0
+    - id: GT-002
+      description: median behaviour unchanged
+      verify:
+        type: command
+        command: node --test "grading/gt-2.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: pass
+  forbidden:
+    - lib/**

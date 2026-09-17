@@ -1,0 +1,23 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Inspect logging usage
+          kind: inspect
+          intent: find all log() call sites
+          satisfies:
+            - FEAT-001
+          targets:
+            read:
+              - lib/**
+    observations: []
+    assumptions: []
+    followups:
+      - type: spec_clarification
+        blocking: true
+        title: Which log levels, and what default?
+        description: 'The spec says messages "can be emitted at levels" but never names
+          the levels nor the default level. Choose: (a) debug/info/warn/error
+          with default info, (b) another set, or (c) amend the spec.'
+        propertyId: FEAT-001

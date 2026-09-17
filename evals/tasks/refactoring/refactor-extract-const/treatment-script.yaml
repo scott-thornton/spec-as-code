@@ -1,0 +1,41 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Extract constants
+          kind: modify
+          intent: name the magic numbers
+          satisfies:
+            - RF-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - lib/pricing.mjs
+        - id: T002
+          title: Verify RF-001, RF-C01
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - RF-001
+            - RF-C01
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Extracted constants.
+    changes:
+      - op: update
+        path: lib/pricing.mjs
+        content: |
+          export const UNIT_PRICE = 25;
+          export const BASE_FEE = 5;
+
+          export function total(items) {
+            return items.length * UNIT_PRICE + BASE_FEE;
+          }

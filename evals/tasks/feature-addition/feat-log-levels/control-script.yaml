@@ -1,0 +1,21 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Add levels info/warn/error with default info to lib/logger.mjs.
+      2. log(message) keeps working at the default level.
+executor:
+  implement:
+    summary: Added leveled logging with default level info.
+    changes:
+      - op: update
+        path: lib/logger.mjs
+        content: |
+          export const LEVELS = ["info", "warn", "error"];
+
+          export function log(message, level = "info") {
+            console.error(`[${level}] ${message}`);
+          }
+    claimedDone: true
+    ranTests: false

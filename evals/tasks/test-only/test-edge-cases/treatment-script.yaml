@@ -1,0 +1,47 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Add edge-case tests
+          kind: test
+          intent: cover empty and unicode inputs
+          satisfies:
+            - TST-001
+          targets:
+            read:
+              - lib/**
+              - tests/**
+            write:
+              - tests/**
+        - id: T002
+          title: Verify TST-001, TST-C01
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - TST-001
+            - TST-C01
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Added edge-case tests.
+    changes:
+      - op: create
+        path: tests/slug-edge.test.mjs
+        content: |
+          import test from "node:test";
+          import assert from "node:assert/strict";
+          import { slug } from "../lib/slug.mjs";
+
+          test("empty input", () => {
+            assert.equal(slug(""), "");
+          });
+
+          test("unicode", () => {
+            assert.equal(slug("Héllo Wörld"), "hello-world");
+          });

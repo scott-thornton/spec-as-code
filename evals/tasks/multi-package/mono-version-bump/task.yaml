@@ -1,0 +1,42 @@
+id: mono-version-bump
+category: multi-package
+title: Bump the shared API version to v2
+description: packages/shared/meta.mjs exports API = "v1"; packages/a and
+  packages/b expose apiName() returning "api-v1" and are tested accordingly.
+  Bump the shared constant to "v2" and update BOTH consumers (and the tests) so
+  apiName() returns "api-v2" everywhere.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: mono-version-bump
+    title: API v2
+  goal: The shared API version is v2 everywhere.
+  requirements:
+    - id: MONO-001
+      statement: Shared constant is v2 and both apiName()s return api-v2.
+      priority: must
+      acceptance:
+        - id: MONO-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: both consumers bumped
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+    - id: GT-002
+      description: shared constant bumped
+      verify:
+        type: file
+        path: packages/shared/meta.mjs
+        contains: '"v2"'
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: pass
+  forbidden: []

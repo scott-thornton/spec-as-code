@@ -1,0 +1,34 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Add dist/ to .gitignore
+          kind: modify
+          intent: append the build output entry
+          satisfies:
+            - CFG-001
+          targets:
+            write:
+              - .gitignore
+        - id: T002
+          title: Verify CFG-001
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - CFG-001
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Ignored dist/.
+    changes:
+      - op: update
+        path: .gitignore
+        content: |
+          node_modules/
+          dist/

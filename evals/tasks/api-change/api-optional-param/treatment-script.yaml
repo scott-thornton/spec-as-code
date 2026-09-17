@@ -1,0 +1,49 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Add optional formal mode
+          kind: modify
+          intent: extend render with an options argument and cover both modes with tests
+          satisfies:
+            - API-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - lib/render.mjs
+              - tests/**
+        - id: T002
+          title: Verify API-001, API-C01
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - API-001
+            - API-C01
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Added formal mode with tests for both signatures.
+    changes:
+      - op: update
+        path: lib/render.mjs
+        content: |
+          export function render(user, opts = {}) {
+            return `${opts.formal ? "Dear" : "Hi"} ${user.name}`;
+          }
+      - op: create
+        path: tests/render-formal.test.mjs
+        content: |
+          import test from "node:test";
+          import assert from "node:assert/strict";
+          import { render } from "../lib/render.mjs";
+
+          test("formal mode", () => {
+            assert.equal(render({ name: "ada" }, { formal: true }), "Dear ada");
+          });

@@ -1,0 +1,41 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Adopt Intl.NumberFormat
+          kind: modify
+          intent: replace manual formatting
+          satisfies:
+            - DEP-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - lib/money.mjs
+        - id: T002
+          title: Verify DEP-001
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - DEP-001
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Adopted Intl.NumberFormat.
+    changes:
+      - op: update
+        path: lib/money.mjs
+        content: >
+          const fmt = new Intl.NumberFormat("en-US", { style: "currency",
+          currency: "USD" });
+
+
+          export function usd(amount) {
+            return fmt.format(amount);
+          }

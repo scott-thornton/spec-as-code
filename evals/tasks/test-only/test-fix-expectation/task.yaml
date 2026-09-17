@@ -1,0 +1,51 @@
+id: test-fix-expectation
+category: test-only
+title: Fix the wrong date expectation
+description: 'tests/format.test.mjs expects "12/31/2026" but the service
+  intentionally emits ISO dates (YYYY-MM-DD, see formatDate). The test is wrong:
+  fix the expectation. Do not change lib/.'
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: test-fix-expectation
+    title: Fix the expectation
+  goal: The suite passes against the intended ISO behaviour; lib is untouched.
+  requirements:
+    - id: TST-001
+      statement: The test expectation matches ISO output.
+      priority: must
+      acceptance:
+        - id: TST-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+  constraints:
+    - id: TST-C01
+      statement: lib/format.mjs is not modified; it keeps emitting ISO dates.
+      acceptance:
+        - id: TST-C01-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: suite passes
+      verify:
+        type: command
+        command: node --test "tests/*.test.mjs"
+        expectExitCode: 0
+    - id: GT-002
+      description: ISO behaviour preserved
+      verify:
+        type: command
+        command: node --test "grading/gt-2.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: fail
+  forbidden:
+    - lib/**

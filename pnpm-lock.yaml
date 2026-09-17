@@ -175,6 +175,61 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@22.20.3)(yaml@2.9.1)
+      yaml:
+        specifier: ^2.8.0
+        version: 2.9.1
+
+  evals/runner:
+    dependencies:
+      '@spc/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@spc/executor':
+        specifier: workspace:*
+        version: link:../../packages/executor
+      '@spc/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
+      '@spc/llm-fake':
+        specifier: workspace:*
+        version: link:../../packages/llm-fake
+      '@spc/llm-openai':
+        specifier: workspace:*
+        version: link:../../packages/llm-openai
+      '@spc/planner':
+        specifier: workspace:*
+        version: link:../../packages/planner
+      '@spc/repo':
+        specifier: workspace:*
+        version: link:../../packages/repo
+      '@spc/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+      '@spc/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
+      '@spc/verifier':
+        specifier: workspace:*
+        version: link:../../packages/verifier
+      commander:
+        specifier: ^14.0.0
+        version: 14.0.3
+      yaml:
+        specifier: ^2.8.0
+        version: 2.9.1
+      zod:
+        specifier: ^4.1.11
+        version: 4.6.5
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.10
+        version: 22.20.3
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.3)(yaml@2.9.1)
 
   packages/cli:
     dependencies:

@@ -1,0 +1,19 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Use process.env.PORT with a fallback.
+executor:
+  implement:
+    summary: Made the port configurable.
+    changes:
+      - op: update
+        path: lib/server.mjs
+        content: |
+          export function port() {
+            const fromEnv = Number(process.env.PORT);
+            return Number.isInteger(fromEnv) && fromEnv > 0 ? fromEnv : 8080;
+          }
+    claimedDone: true
+    ranTests: true

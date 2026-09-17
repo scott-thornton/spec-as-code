@@ -1,0 +1,41 @@
+id: dep-url-searchparams
+category: dependency-integration
+title: Build query strings with URLSearchParams
+description: 'lib/link.mjs concatenates query strings by hand. Use
+  URLSearchParams on the base https://example.test/; link({a: 1}) must return
+  "https://example.test/?a=1".'
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: dep-url-searchparams
+    title: URLSearchParams links
+  goal: link() builds URLs with URLSearchParams.
+  requirements:
+    - id: DEP-001
+      statement: link() uses URLSearchParams and encodes correctly.
+      priority: must
+      acceptance:
+        - id: DEP-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: encoding handled
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+    - id: GT-002
+      description: uses URLSearchParams
+      verify:
+        type: file
+        path: lib/link.mjs
+        contains: URLSearchParams
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: pass
+  forbidden: []

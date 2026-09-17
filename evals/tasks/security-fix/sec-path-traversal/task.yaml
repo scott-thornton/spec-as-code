@@ -1,0 +1,50 @@
+id: sec-path-traversal
+category: security-fix
+title: Reject path traversal in readPath
+description: lib/assets.mjs joins user input onto a base path. readPath(base,
+  rel) must return null when rel tries to escape the base (contains ..); normal
+  relative paths keep working.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: sec-path-traversal
+    title: Traversal guard
+  goal: readPath refuses to escape the base directory.
+  requirements:
+    - id: SEC-001
+      statement: readPath returns null for traversal attempts.
+      priority: must
+      acceptance:
+        - id: SEC-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+  constraints:
+    - id: SEC-C01
+      statement: Normal relative paths keep resolving.
+      acceptance:
+        - id: SEC-C01-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: traversal returns null
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+    - id: GT-002
+      description: normal paths unaffected
+      verify:
+        type: command
+        command: node --test "grading/gt-2.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: pass
+  forbidden: []

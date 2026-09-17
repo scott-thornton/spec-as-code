@@ -1,0 +1,44 @@
+id: schema-rename-field
+category: schema-change
+title: Prefer endpoint, keep url as alias
+description: normalize() currently reads url. Accept endpoint as the preferred
+  field name; when only url is given it must still work (endpoint falls back to
+  url).
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: schema-rename-field
+    title: endpoint field
+  goal: endpoint is the preferred config field; url remains accepted.
+  requirements:
+    - id: SCH-001
+      statement: normalize() accepts endpoint, falling back to url.
+      priority: must
+      acceptance:
+        - id: SCH-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+  constraints:
+    - id: SCH-C01
+      statement: Existing url-only configuration keeps working.
+      acceptance:
+        - id: SCH-C01-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: preferred + alias both work
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: pass
+  forbidden: []

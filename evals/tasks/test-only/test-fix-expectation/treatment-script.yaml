@@ -1,0 +1,43 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Fix the expectation
+          kind: test
+          intent: align the test with documented ISO behaviour
+          satisfies:
+            - TST-001
+          targets:
+            read:
+              - lib/**
+              - tests/**
+            write:
+              - tests/**
+        - id: T002
+          title: Verify TST-001, TST-C01
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - TST-001
+            - TST-C01
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Fixed the expectation.
+    changes:
+      - op: update
+        path: tests/format.test.mjs
+        content: |
+          import test from "node:test";
+          import assert from "node:assert/strict";
+          import { formatDate } from "../lib/format.mjs";
+
+          test("date format", () => {
+            assert.equal(formatDate(new Date("2026-12-31")), "2026-12-31");
+          });

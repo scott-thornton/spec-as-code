@@ -1,0 +1,40 @@
+id: dep-node-crypto
+category: dependency-integration
+title: Use node:crypto for hashing
+description: lib/hash.mjs hand-rolls a weak hash. Replace it with SHA-256 via
+  node:crypto createHash; hash(s) returns the lowercase hex digest.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: dep-node-crypto
+    title: SHA-256 hashing
+  goal: hash() is a real SHA-256 via node:crypto.
+  requirements:
+    - id: DEP-001
+      statement: hash() returns the SHA-256 hex digest using node:crypto.
+      priority: must
+      acceptance:
+        - id: DEP-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: digest correct
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+    - id: GT-002
+      description: uses node:crypto
+      verify:
+        type: file
+        path: lib/hash.mjs
+        contains: node:crypto
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: fail
+  forbidden: []

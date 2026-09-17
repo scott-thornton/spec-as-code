@@ -1,0 +1,27 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Create packages/shared/version.mjs.
+      2. Repoint packages/a (the one with the failing-ish usage).
+executor:
+  implement:
+    summary: Shared the version constant.
+    changes:
+      - op: create
+        path: packages/shared/version.mjs
+        content: |
+          export const VERSION = "1";
+      - op: update
+        path: packages/a/index.mjs
+        content: |
+          export { VERSION } from "../shared/version.mjs";
+
+          import { VERSION } from "../shared/version.mjs";
+
+          export function aInfo() {
+            return `a:${VERSION}`;
+          }
+    claimedDone: true
+    ranTests: true

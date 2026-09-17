@@ -1,0 +1,54 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Narrow parseId
+          kind: modify
+          intent: validate and convert with a rejection test
+          satisfies:
+            - SCH-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - lib/id.mjs
+              - tests/**
+        - id: T002
+          title: Verify SCH-001
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - SCH-001
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Narrowed parseId.
+    changes:
+      - op: update
+        path: lib/id.mjs
+        content: |
+          export function parseId(value) {
+            const n = Number(value);
+            if (!Number.isFinite(n) || String(value).trim() === "") {
+              throw new Error(`invalid id: ${String(value)}`);
+            }
+            return n;
+          }
+      - op: update
+        path: tests/id.test.mjs
+        content: |
+          import test from "node:test";
+          import assert from "node:assert/strict";
+          import { parseId } from "../lib/id.mjs";
+
+          test("numeric ids", () => {
+            assert.equal(parseId("12"), 12);
+            assert.equal(parseId(7), 7);
+            assert.throws(() => parseId("abc"));
+          });

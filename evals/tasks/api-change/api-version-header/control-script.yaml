@@ -1,0 +1,32 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Add headers to the respond object.
+      2. Update the shape test.
+executor:
+  implement:
+    summary: Added version header.
+    changes:
+      - op: update
+        path: lib/respond.mjs
+        content: |
+          export function respond(body) {
+            return { status: 200, body, headers: { "X-API-Version": "1" } };
+          }
+      - op: update
+        path: tests/respond.test.mjs
+        content: >
+          import test from "node:test";
+
+          import assert from "node:assert/strict";
+
+          import { respond } from "../lib/respond.mjs";
+
+
+          test("respond shape", () => {
+            assert.deepEqual(respond("x"), { status: 200, body: "x", headers: { "X-API-Version": "1" } });
+          });
+    claimedDone: true
+    ranTests: true

@@ -1,0 +1,36 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Read PORT from env
+          kind: modify
+          intent: env override with default
+          satisfies:
+            - CFG-001
+          targets:
+            write:
+              - lib/server.mjs
+        - id: T002
+          title: Verify CFG-001
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - CFG-001
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Read PORT from the environment.
+    changes:
+      - op: update
+        path: lib/server.mjs
+        content: |
+          export function port() {
+            const fromEnv = Number(process.env.PORT);
+            return Number.isInteger(fromEnv) && fromEnv > 0 ? fromEnv : 8080;
+          }

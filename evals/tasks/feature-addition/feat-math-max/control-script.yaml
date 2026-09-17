@@ -1,0 +1,22 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Add max to lib/math.mjs.
+executor:
+  implement:
+    summary: Added max.
+    changes:
+      - op: update
+        path: lib/math.mjs
+        content: |
+          export function sum(a, b) {
+            return a + b;
+          }
+
+          export function max(a, b) {
+            return a > b ? a : b;
+          }
+    claimedDone: true
+    ranTests: true

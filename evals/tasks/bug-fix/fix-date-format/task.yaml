@@ -1,0 +1,34 @@
+id: fix-date-format
+category: bug-fix
+title: Fix the date format to ISO
+description: formatDate must emit YYYY-MM-DD; it currently emits MM-DD-YYYY. The
+  failing test documents the bug.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: fix-date-format
+    title: ISO dates
+  goal: formatDate emits YYYY-MM-DD.
+  requirements:
+    - id: FIX-001
+      statement: formatDate emits ISO dates.
+      priority: must
+      acceptance:
+        - id: FIX-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: ISO output
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: fail
+  forbidden: []

@@ -1,0 +1,35 @@
+id: sec-redact-token
+category: security-fix
+title: Redact tokens in report lines
+description: lib/report.mjs logs user tokens in cleartext. line(user) must
+  replace the token with [REDACTED]; everything else stays. Update the test to
+  assert redaction.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: sec-redact-token
+    title: Token redaction
+  goal: Tokens never appear in report lines.
+  requirements:
+    - id: SEC-001
+      statement: line() renders the token as [REDACTED].
+      priority: must
+      acceptance:
+        - id: SEC-001-A
+          type: command
+          command: node --test "tests/*.test.mjs"
+          expect:
+            exitCode: 0
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: token redacted
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+  regression:
+    command: node --test "tests/*.test.mjs"
+    expectBefore: pass
+  forbidden: []

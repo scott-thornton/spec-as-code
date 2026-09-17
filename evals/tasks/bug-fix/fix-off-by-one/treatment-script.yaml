@@ -1,0 +1,41 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Fix loop bound
+          kind: modify
+          intent: change <= to < in range()
+          satisfies:
+            - FIX-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - lib/range.mjs
+        - id: T002
+          title: Verify FIX-001
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - FIX-001
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Fixed the loop bound.
+    changes:
+      - op: update
+        path: lib/range.mjs
+        content: |
+          export function range(n) {
+            const out = [];
+            for (let i = 0; i < n; i++) {
+              out.push(i);
+            }
+            return out;
+          }

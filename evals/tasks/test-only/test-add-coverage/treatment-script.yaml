@@ -1,0 +1,47 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Add median tests
+          kind: test
+          intent: cover odd and even inputs without touching lib/
+          satisfies:
+            - TST-001
+          targets:
+            read:
+              - lib/**
+              - tests/**
+            write:
+              - tests/**
+        - id: T002
+          title: Verify TST-001, TST-C01
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - TST-001
+            - TST-C01
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Added median tests.
+    changes:
+      - op: create
+        path: tests/median.test.mjs
+        content: |
+          import test from "node:test";
+          import assert from "node:assert/strict";
+          import { median } from "../lib/stats.mjs";
+
+          test("median odd", () => {
+            assert.equal(median([3, 1, 2]), 2);
+          });
+
+          test("median even", () => {
+            assert.equal(median([4, 1, 3, 2]), 2.5);
+          });

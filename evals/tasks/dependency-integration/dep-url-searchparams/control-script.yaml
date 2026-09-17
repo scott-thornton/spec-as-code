@@ -1,0 +1,22 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Replace manual concatenation with URLSearchParams.
+executor:
+  implement:
+    summary: Adopted URLSearchParams.
+    changes:
+      - op: update
+        path: lib/link.mjs
+        content: |
+          export function link(params) {
+            const q = new URLSearchParams();
+            for (const [k, v] of Object.entries(params)) {
+              q.set(k, String(v));
+            }
+            return `https://example.test/?${q.toString()}`;
+          }
+    claimedDone: true
+    ranTests: true

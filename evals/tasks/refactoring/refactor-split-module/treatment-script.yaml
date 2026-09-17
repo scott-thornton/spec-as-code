@@ -1,0 +1,53 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Split handler modules
+          kind: modify
+          intent: create focused modules and keep the barrel
+          satisfies:
+            - RF-001
+            - RF-002
+          targets:
+            read:
+              - lib/**
+              - tests/**
+            write:
+              - lib/handlers/**
+              - lib/handlers.mjs
+        - id: T002
+          title: Verify RF-001, RF-002, RF-C01
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T001
+          verifies:
+            - RF-001
+            - RF-002
+            - RF-C01
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Split handlers and kept the barrel.
+    changes:
+      - op: create
+        path: lib/handlers/handle-a.mjs
+        content: |
+          export function handleA(x) {
+            return `a:${x}`;
+          }
+      - op: create
+        path: lib/handlers/handle-b.mjs
+        content: |
+          export function handleB(x) {
+            return `b:${x}`;
+          }
+      - op: update
+        path: lib/handlers.mjs
+        content: |
+          export { handleA } from "./handlers/handle-a.mjs";
+          export { handleB } from "./handlers/handle-b.mjs";

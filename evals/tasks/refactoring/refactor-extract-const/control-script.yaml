@@ -1,0 +1,21 @@
+planner:
+  value:
+    planMarkdown: |
+      ## Plan
+
+      1. Introduce constants and use them in total().
+executor:
+  implement:
+    summary: Extracted constants.
+    changes:
+      - op: update
+        path: lib/pricing.mjs
+        content: |
+          export const UNIT_PRICE = 25;
+          export const BASE_FEE = 5;
+
+          export function total(items) {
+            return items.length * UNIT_PRICE + BASE_FEE;
+          }
+    claimedDone: true
+    ranTests: true

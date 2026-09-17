@@ -1,0 +1,80 @@
+planner:
+  value:
+    plan:
+      tasks:
+        - id: T001
+          title: Bump shared constant
+          kind: modify
+          intent: API -> v2
+          satisfies:
+            - MONO-001
+          targets:
+            write:
+              - packages/shared/**
+        - id: T002
+          title: Update both consumers and tests
+          kind: modify
+          intent: derive apiName from the shared constant; update tests
+          dependsOn:
+            - T001
+          satisfies:
+            - MONO-001
+          targets:
+            read:
+              - tests/**
+            write:
+              - packages/a/**
+              - packages/b/**
+              - tests/**
+        - id: T003
+          title: Verify MONO-001
+          kind: verify
+          intent: run acceptance criteria for the listed properties
+          dependsOn:
+            - T002
+          verifies:
+            - MONO-001
+    observations: []
+    assumptions: []
+    followups: []
+executor:
+  T001:
+    status: completed
+    summary: Bumped shared constant.
+    changes:
+      - op: update
+        path: packages/shared/meta.mjs
+        content: |
+          export const API = "v2";
+  T002:
+    status: completed
+    summary: Updated consumers and tests.
+    changes:
+      - op: update
+        path: packages/a/index.mjs
+        content: |
+          import { API } from "../shared/meta.mjs";
+
+          export function apiName() {
+            return `api-${API}`;
+          }
+      - op: update
+        path: packages/b/index.mjs
+        content: |
+          import { API } from "../shared/meta.mjs";
+
+          export function apiName() {
+            return `api-${API}`;
+          }
+      - op: update
+        path: tests/api.test.mjs
+        content: |
+          import test from "node:test";
+          import assert from "node:assert/strict";
+          import { apiName as a } from "../packages/a/index.mjs";
+          import { apiName as b } from "../packages/b/index.mjs";
+
+          test("api names", () => {
+            assert.equal(a(), "api-v2");
+            assert.equal(b(), "api-v2");
+          });

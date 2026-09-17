@@ -1,0 +1,34 @@
+id: config-env-port
+category: configuration-change
+title: Make the port configurable
+description: lib/server.mjs hard-codes 8080. Read the port from
+  process.env.PORT, falling back to 8080.
+spec: |
+  apiVersion: spc.dev/v1alpha1
+  kind: Spec
+  metadata:
+    id: config-env-port
+    title: PORT from environment
+  goal: The port comes from PORT with default 8080.
+  requirements:
+    - id: CFG-001
+      statement: port() honours process.env.PORT with default 8080.
+      priority: must
+      acceptance:
+        - id: CFG-001-A
+          type: file
+          path: lib/server.mjs
+          assert:
+            contains: process.env.PORT
+groundTruth:
+  requirements:
+    - id: GT-001
+      description: env override and default
+      verify:
+        type: command
+        command: node --test "grading/gt-1.mjs"
+        expectExitCode: 0
+  regression:
+    command: node -e 0
+    expectBefore: pass
+  forbidden: []
