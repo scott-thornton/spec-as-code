@@ -15,14 +15,16 @@ Spec (desired) ─► Plan (validated transition) ─► Execute (bounded, isola
 The critical invariant: **an agent saying "done" is never sufficient evidence
 that a requirement is satisfied.**
 
-**Status: experimental (v0.1.0).** The full workflow works end to end and the
-tool verifies itself in CI. On the evidence question we publish what we
-measured rather than what flatters: on a flash-tier model (glm-5.3-flash)
-the structured workflow completed 6 percentage points fewer requirements
-than a plain Markdown-plan baseline, while keeping zero forbidden
-modifications and honest failure reporting; one targeted iteration recovered
-two thirds of that gap. Stronger models and real usage are the open
-questions. Details and raw numbers: [evals/baselines](evals/baselines/).
+**Status: experimental (v0.1.0).** The workflow runs end to end, and the
+tool verifies its own requirements in its own CI. It guarantees: agents
+execute with bounded write scopes, requirement status comes only from
+recorded evidence, runs are isolated in their own worktrees and fully
+replayable, and uncertainty blocks honestly instead of being guessed
+through. Comparative benchmark results (one flash-tier model, small tasks)
+are published unaltered in [evals/baselines](evals/baselines/); where the
+structured approach pays off most - larger repositories, stronger models -
+is not yet measured. A complete worked example lives in
+[examples/bookmark-service](examples/bookmark-service/README.md).
 
 ## Documentation
 
