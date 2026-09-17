@@ -64,6 +64,8 @@ spc apply [planFile]              preflight → isolated worktree → sequential
                                   write-scope enforcement → verification → summary
                                   (--resume <runId> recovers interrupted runs)
 spc verify [specFile]             run acceptance criteria against the current tree (drift detection)
+                                  --format github emits CI annotations + a step summary
+spc reconcile [specFile]          verify; when drifted, plan the next transition (--apply to execute)
 spc status [specFile]             requirement-oriented status with evidence provenance
 spc diff [specFile]               desired vs observed
 spc followups                     structured queue (blocking / non-blocking)
@@ -154,7 +156,15 @@ specs/*.yaml               desired state (committed)
 
 ## Status of the project
 
-V0 of an experimental workflow. The next milestone (per the project plan) is
-the benchmark harness comparing this workflow against a Markdown-plan
-baseline; no infrastructure (server, database, control plane) is planned
-before that evidence exists.
+V0 of an experimental workflow, plus the benchmark harness (see
+[evals/README.md](evals/README.md)): 30 tasks across 10 categories with
+withheld grading, comparing a Markdown-plan baseline against the spc workflow
+across completion, false completion declarations, regressions and forbidden
+modifications. The committed baseline runs in **scripted mode** (deterministic
+fake providers) — it validates the harness and illustrates the predicted
+failure modes, and is explicitly *not* evidence about real models. The next
+gate (ADR-0011) is a real-provider benchmark; parallel execution and any
+control plane stay deferred until that evidence exists. CI reporting
+(`spc verify --format github`, see
+[docs/ci-integration.md](docs/ci-integration.md)) and drift reconciliation
+(`spc reconcile`) are available now.

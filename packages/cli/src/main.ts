@@ -6,6 +6,7 @@ import { runSpecShow, runSpecValidate } from "./commands/spec.js";
 import { runPlan, runPlanApprove, runPlanShow, runPlanValidate } from "./commands/plan.js";
 import { runApply } from "./commands/apply.js";
 import { runVerify } from "./commands/verify.js";
+import { runReconcile } from "./commands/reconcile.js";
 import { runDiff, runStatus } from "./commands/status.js";
 import { runFollowupResolve, runFollowups } from "./commands/followups.js";
 import { runShow } from "./commands/run.js";
@@ -97,8 +98,18 @@ program
   .command("verify [specFile]")
   .description("run acceptance criteria against the current working tree")
   .option("--cwd <dir>", "repository directory", process.cwd())
-  .action(async (specFile: string | undefined, opts: { cwd: string }) => {
-    process.exitCode = await runVerify(specFile, opts.cwd);
+  .option("--format <format>", "text | github (CI annotations + step summary)", "text")
+  .action(async (specFile: string | undefined, opts: { cwd: string; format: string }) => {
+    process.exitCode = await runVerify(specFile, opts.cwd, opts.format === "github" ? "github" : "text");
+  });
+
+program
+  .command("reconcile [specFile]")
+  .description("verify desired state; when drifted, plan (and optionally apply) the next transition")
+  .option("--apply", "execute the generated transition plan immediately")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action(async (specFile: string | undefined, opts: { apply?: boolean; cwd: string }) => {
+    process.exitCode = await runReconcile(specFile, { apply: opts.apply, cwd: opts.cwd });
   });
 
 program

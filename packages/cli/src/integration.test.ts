@@ -128,6 +128,23 @@ describe("end-to-end: greeting fixture", () => {
     expect(r.stdout).toContain(`# Run ${runId}`);
     expect(r.stdout).toContain("satisfied");
   });
+
+  it("spc verify --format github emits annotations and a step summary", () => {
+    const summaryFile = path.join(tmpRoot, "step-summary.md");
+    const r = spawnSync(
+      process.execPath,
+      [CLI, "verify", "--format", "github"],
+      { cwd: repo, encoding: "utf8", env: { ...process.env, NO_COLOR: "1", GITHUB_STEP_SUMMARY: summaryFile } },
+    );
+    // Main tree is still unsatisfied (fix lives on the run branch): CI mode
+    // must flag it as an error annotation.
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("::error title=");
+    expect(r.stdout).toContain("GREETING-001");
+    const summary = readFileSync(summaryFile, "utf8");
+    expect(summary).toContain("### spc verification — greeting-api");
+    expect(summary).toContain("| GREETING-001 | must | unsatisfied |");
+  });
 });
 
 describe("end-to-end: replanning fixture", () => {

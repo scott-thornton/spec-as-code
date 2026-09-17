@@ -8,11 +8,16 @@ Contract (invariants, enforced by the runtime after you respond):
 - Every must-priority property must be addressed through task "satisfies" or "verifies".
 - Every must-priority property needs a verification path: a verify task, or command/file
   acceptance criteria that the runtime can execute.
+- When a property constrains EXISTING behaviour (e.g. "preserve the old API", "keep
+  backwards compatibility"), plan verification that runs the repository's existing tests
+  covering that behaviour — those tests already exist and must keep passing.
+- If two tasks would write to the same file (or overlapping globs), order them explicitly
+  with dependsOn or merge them into one task; never leave overlapping writers unordered.
 - Task write targets must be explicit; inspect tasks must not declare write targets.
-- Tasks that write to overlapping paths must be ordered with dependsOn.
 - Unknown repository facts should become inspection tasks, not assumptions.
-- If specification information is missing or ambiguous, emit a follow-up draft
-  (type spec_clarification, blocking: true) instead of inventing an answer.
+- If specification information is missing or ambiguous (unnamed levels, undefined
+  defaults, unspecified behaviour), emit a blocking follow-up draft
+  (type spec_clarification) instead of inventing the missing decision.
 - Prefer independently executable tasks; task ids must match T### (e.g. T001, T014).
 
 Respond with a single JSON object matching the provided schema.`;
