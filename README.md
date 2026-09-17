@@ -160,11 +160,14 @@ V0 of an experimental workflow, plus the benchmark harness (see
 [evals/README.md](evals/README.md)): 30 tasks across 10 categories with
 withheld grading, comparing a Markdown-plan baseline against the spc workflow
 across completion, false completion declarations, regressions and forbidden
-modifications. The committed baseline runs in **scripted mode** (deterministic
-fake providers) — it validates the harness and illustrates the predicted
-failure modes, and is explicitly *not* evidence about real models. The next
-gate (ADR-0011) is a real-provider benchmark; parallel execution and any
-control plane stay deferred until that evidence exists. CI reporting
+modifications. Baselines exist in two modes: **scripted** (deterministic fake providers —
+validates harness mechanics, not the thesis) and **real**: the §68 gate was
+executed on 2026-09-17 with glm-5.3-flash (3 trials × 30 tasks,
+[evals/baselines/real-glm-5.3-flash-2026-09-17.md](evals/baselines/real-glm-5.3-flash-2026-09-17.md)).
+Result: on this flash-tier model the workflow did **not** beat the Markdown
+baseline (77% vs 99% completion, ~3× tokens; gap dominated by over-cautious
+blocking follow-ups), so per §94 the abstraction iterates before any
+parallel-execution or control-plane work. CI reporting
 (`spc verify --format github`, see
 [docs/ci-integration.md](docs/ci-integration.md)) and drift reconciliation
 (`spc reconcile`) are available now.

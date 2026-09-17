@@ -1,7 +1,7 @@
 # ADR-0011: Benchmark-first gating for infrastructure work
 
 Date: 2026-09-17
-Status: accepted
+Status: accepted (gate executed — see evals/baselines/real-glm-5.3-flash-2026-09-17.md)
 
 ## Context
 
@@ -34,8 +34,12 @@ credentials and budget that are not available in this environment.
 ## Consequences
 
 - Effort goes to measurement, not machinery.
-- If the real benchmark shows no improvement, the honest response (§94) is to
-  revisit the thesis rather than add infrastructure.
+- The real gate has now been run (3 trials × 30 tasks, glm-5.3-flash): the
+  workflow did NOT beat the baseline on this model/task size (77% vs 99%
+  completion, ~3× tokens), so the §94 response applies — iterate the
+  abstraction (auto-resolution of low-risk clarification follow-ups, planner
+  verification-path tuning), re-run the benchmark, and keep parallel
+  execution / control planes deferred.
 
 ## Alternatives considered
 

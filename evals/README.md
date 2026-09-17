@@ -55,15 +55,33 @@ about real models**; the numbers are baked into the scripts by construction.
 Real experiments:
 
 ```bash
+# OpenAI-compatible:
 OPENAI_API_KEY=… node evals/runner/dist/main.js \
   --provider openai --model gpt-4.1 --trials 3 --out evals/results/real-$(date +%Y%m%d)
+
+# Anthropic-compatible (e.g. GLM coding endpoint):
+GLM_API_KEY=… node evals/runner/dist/main.js \
+  --provider anthropic --model glm-4.6 \
+  --base-url https://api.z.ai/api/anthropic --api-key-env GLM_API_KEY \
+  --trials 1 --out evals/results/real-glm-4.6-t1
 ```
 
-In real mode both arms use the same live model; the treatment arm runs the
-actual spc runtime (planner → validated plan → bounded executor → independent
-verifier), the control arm runs the one-shot Markdown-plan flow. Acceptance
-thresholds are deliberately **not** hardcoded anywhere: per §68 they are set
-only after real-mode variance stabilizes across repeated trials.
+In real mode both arms use the same live model and receive the same bounded
+repository dump (neither has tool access); the treatment arm runs the actual
+spc runtime (planner → validated plan → bounded executor → independent
+verifier), the control arm runs the two-invocation Markdown-plan flow.
+Transient provider failures (timeouts, rate limits) are retried with backoff.
+Token usage is recorded per arm. Run trials as separate invocations for
+incremental safety, then aggregate:
+
+```bash
+node evals/tools/aggregate-real.mjs evals/results/real-glm-4.6-t{1,2,3} \
+  > evals/baselines/real-glm-4.6.md
+```
+
+Acceptance thresholds are deliberately **not** hardcoded in the harness: per
+§68 they are derived from observed cross-trial variance and recorded in the
+baseline document.
 
 ## Harness tests
 
