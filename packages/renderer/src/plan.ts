@@ -23,17 +23,21 @@ export function renderPlan(plan: Plan, ir: SpecIR | null = null): string {
   const byId = new Map(plan.tasks.map((t) => [t.id, t]));
   const roots = plan.tasks.filter((t) => (t.dependsOn ?? []).length === 0 || (t.dependsOn ?? []).some((d) => !byId.has(d)));
   const order: string[] = [];
-  const visit = (t: Plan["tasks"][number], depth: number, seen = new Set<string>()): void => {
-    if (seen.has(t.id)) return;
-    seen.add(t.id);
+  const visited = new Set<string>();
+  const visit = (t: Plan["tasks"][number], depth: number): void => {
+    if (visited.has(t.id)) return;
+    visited.add(t.id);
     order.push(`${"  ".repeat(depth)}${t.id} ${t.title} [${t.kind}]`);
     for (const child of plan.tasks.filter((c) => (c.dependsOn ?? []).includes(t.id))) {
-      visit(child, depth + 1, seen);
+      visit(child, depth + 1);
     }
   };
   for (const r of roots.length > 0 ? roots : [plan.tasks[0]!]) visit(r, 0);
   for (const t of plan.tasks) {
-    if (!order.some((l) => l.startsWith(t.id))) order.push(`${t.id} ${t.title} [${t.kind}]`);
+    if (!visited.has(t.id)) {
+      visited.add(t.id);
+      order.push(`${t.id} ${t.title} [${t.kind}]`);
+    }
   }
   lines.push("", ...order.map((o) => `  ${o}`), "");
 

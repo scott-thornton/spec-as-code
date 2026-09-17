@@ -48,6 +48,7 @@ describe("usage accounting", () => {
       }),
     );
     const [rec] = t.all();
+    if (!rec) throw new Error("no usage record");
     expect(rec.role).toBe("planner");
     expect(rec.inputDigest).toMatch(/^sha256:/);
     expect(rec.outputDigest).toMatch(/^sha256:/);

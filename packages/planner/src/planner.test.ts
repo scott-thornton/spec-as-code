@@ -64,13 +64,15 @@ const goodPlannerOutput = {
 
 /** Scripted inline provider: sequential values per role. */
 function scripted(script: { planner?: unknown[]; replanner?: unknown[] }): LLMProvider {
-  const idx = { planner: 0, replanner: 0 };
+  const idx: Record<string, number> = { planner: 0, replanner: 0 };
   return {
     name: "scripted-test",
     model: "test",
     async generateStructured<T>(request: StructuredRequest<T>): Promise<StructuredResponse<T>> {
-      const list = script[request.role] ?? [];
-      const value = list[idx[request.role]++] ?? list[list.length - 1];
+      const list = (script as Record<string, unknown[] | undefined>)[request.role] ?? [];
+      const i = idx[request.role] ?? 0;
+      const value = list[i] ?? list[list.length - 1];
+      idx[request.role] = i + 1;
       if (value === undefined) throw new Error(`no scripted value for role ${request.role}`);
       return { value: value as T, usage: { model: "test", durationMs: 0 } };
     },

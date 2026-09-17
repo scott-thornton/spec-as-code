@@ -2,8 +2,8 @@ import { afterAll, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { DEFAULT_CONFIG, type DesiredProperty } from "@spc/schema";
-import type { Evidence, LLMProvider, StructuredRequest, StructuredResponse } from "@spc/llm";
+import { DEFAULT_CONFIG, type DesiredProperty, type Evidence } from "@spc/schema";
+import type { LLMProvider, StructuredRequest, StructuredResponse } from "@spc/llm";
 import { verifyCriterion } from "./criteria.js";
 import { evaluateProperty } from "./evaluate.js";
 
