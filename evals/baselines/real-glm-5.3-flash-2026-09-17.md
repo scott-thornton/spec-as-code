@@ -5,6 +5,16 @@
 - 3 trials × 30 tasks; grading from withheld tests (never arm self-reports)
 - Endpoint rate limiting cost some tasks (t1: 2, t2: 11, t3: 5 errored rows excluded from aggregates); coverage is uneven but the per-trial picture is consistent
 
+## What code this measures
+
+All numbers in this document describe the tool **as it existed when the runs
+executed** (2026-09-17, pre-fix). The executor-side clarification-demotion
+fix (ADR-0013 addendum) and the api-version-header corpus fix postdate these
+trials: that task now completes 3/3 on the same model where it blocked 3/3
+here. The full-trial aggregate has not been re-run with the fixed code, so
+treat these figures as the pre-fix record, not the current tool's expected
+performance.
+
 ## Verdict
 
 **The thesis is not validated on this model and task size.** Across 72 scored

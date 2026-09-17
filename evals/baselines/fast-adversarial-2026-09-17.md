@@ -50,6 +50,14 @@ means flash handles these small adversarial tasks fine when unstructured -
 the caution tax buys nothing at this task size, consistent with the
 full-baseline conclusion.
 
+## What code this measures
+
+The flash extraction below comes from the same pre-fix trials as the full
+baseline (see its "What code this measures" note). The post-fix status of
+the one systematic blocker: api-version-header now completes 3/3 on
+glm-5.3-flash. The other blocked-run losses have not been re-measured with
+fixed code.
+
 ## Combined verdict
 
 - Machinery: validated - a competent agent passes through the structured
