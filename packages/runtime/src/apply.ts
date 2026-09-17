@@ -674,6 +674,18 @@ export async function executeTaskInRun(
   const priorResults = Object.values(ctx.state.tasks)
     .filter((s) => s.status === "completed" && task.dependsOn?.includes(s.taskId))
     .map((s) => ({ taskId: s.taskId, summary: `completed (attempt ${s.attempt})` }));
+  // Under the demotion policy, open clarifications are context to proceed
+  // on, not blockers (ADR-0013).
+  const openClarifications = ctx.config.execution.proceedOnClarificationFollowups
+    ? ctx.followups
+        .all()
+        .filter((f) => f.status === "open" && f.type === "spec_clarification")
+        .map((f) => ({
+          title: f.title,
+          description: f.description,
+          ...(f.recommendedDefault ? { recommendedDefault: f.recommendedDefault } : {}),
+        }))
+    : undefined;
   let outcome: ExecutionOutcome;
   try {
     outcome = await executeTask(
@@ -697,11 +709,51 @@ export async function executeTaskInRun(
         priorResults,
         observations: [...ctx.observations.all()],
         ...(failureContext ? { failureContext } : {}),
+        ...(openClarifications ? { openClarifications } : {}),
       },
       { provider: ctx.provider, onUsage: usageSink },
     );
   } catch (e) {
     return failedOutcome(task, (e as { code?: string }).code ?? "EXECUTOR_ERROR", (e as Error).message);
+  }
+
+  // ADR-0013, executor side: when the demotion policy is active and a task
+  // blocks with ONLY clarification drafts, the policy and the executor
+  // contract disagree. The runtime resolves it deterministically: demote the
+  // drafts and fail the task with proceed-on-default guidance so the normal
+  // retry path re-executes it with that context injected.
+  if (
+    outcome.status === "blocked" &&
+    ctx.config.execution.proceedOnClarificationFollowups &&
+    outcome.result.followups.length > 0 &&
+    outcome.result.followups.every((d) => d.type === "spec_clarification")
+  ) {
+    for (const draft of outcome.result.followups) {
+      const f = ctx.followups.create({ ...draft, blocking: false }, ctx.meta.runId, ctx.now);
+      ctx.events.append("FOLLOWUP_CREATED", {
+        followupId: f.id,
+        blocking: false,
+        type: f.type,
+        demoted: true,
+        retryGuidance: "CLARIFICATION_PROCEED",
+      });
+    }
+    for (const draft of outcome.result.observations) {
+      const obs = ctx.observations.add({ ...draft, taskId: task.id }, ctx.meta.runId);
+      ctx.events.append("OBSERVATION_RECORDED", {
+        observationId: obs.id,
+        taskId: task.id,
+        type: obs.type,
+        statement: obs.statement,
+        invalidates: obs.invalidates ?? {},
+      });
+    }
+    ctx.log(`Task ${task.id} blocked on clarifications under demotion policy; retrying with proceed-on-default guidance.`);
+    return failedOutcome(
+      task,
+      "CLARIFICATION_PROCEED",
+      "open clarification follow-ups are non-blocking in this run: proceed using their recommendedDefault (or the smallest defensible choice) and record the decision as an observation",
+    );
   }
 
   // Persist observations / evidence candidates / follow-up drafts.

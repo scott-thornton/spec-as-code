@@ -20,6 +20,7 @@ export interface ExecuteTaskInput {
   priorResults: { taskId: string; summary: string }[];
   observations: ObservationDraft[];
   failureContext?: { code: string; message: string };
+  openClarifications?: { title: string; description: string; recommendedDefault?: string }[];
 }
 
 export interface ExecutionOutcome {
@@ -89,6 +90,13 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
     allowedWritePaths: task.targets?.write ?? [],
     ...(input.failureContext
       ? { failureContext: { ...input.failureContext, attempt } }
+      : {}),
+    ...(input.openClarifications && input.openClarifications.length > 0
+      ? {
+          clarificationPolicy:
+            "spec clarifications are non-blocking in this run: proceed with the recommendedDefault (or smallest defensible choice) and record the decision as an observation",
+          openClarifications: input.openClarifications,
+        }
       : {}),
   };
 

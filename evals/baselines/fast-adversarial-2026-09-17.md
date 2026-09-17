@@ -38,8 +38,12 @@ blocked-run tax seen on flash is model caution, not structural friction.
 Zero false-done, zero regressions, zero forbidden changes on either arm in
 every trial. Every spc loss is a `blocked` run, never a bad edit.
 
-**Reading:** api-version-header blocked in 3/3 flash trials - a systematic
-planner-contract gap, not noise, and the top concrete fix target.
+**Reading (updated post-fix):** api-version-header blocked in 3/3 flash
+trials. Root cause turned out to be two bugs stacked: the executor
+re-blocking on clarifications the demotion policy had already demoted
+(fixed in the runtime, ADR-0013 addendum), and the task spec omitting the
+header value the grading expected (fixed in the corpus). After both fixes:
+3/3 succeeded on glm-5.3-flash, completion 1.0, zero follow-ups raised.
 feat-log-levels blocking is correct behavior (it is the under-specified
 trap). The remainder is scattered caution. Control completing 100% here
 means flash handles these small adversarial tasks fine when unstructured -

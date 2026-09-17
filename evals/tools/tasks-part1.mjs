@@ -654,7 +654,9 @@ export const TASKS_PART_1 = [
       kind: "Spec",
       metadata: { id: "api-version-header", title: "API version header" },
       goal: "Responses carry the API version.",
-      requirements: [req("API-001", "respond() includes the X-API-Version header.", "must", [cmdAcc("API-001-A", TEST_CMD)])],
+      requirements: [
+        req("API-001", 'respond() includes headers: { "X-API-Version": "1" } while keeping status and body.', "must", [cmdAcc("API-001-A", TEST_CMD)]),
+      ],
     },
     groundTruth: {
       requirements: [gt("GT-001", "header present", gtCmd('node --test "grading/gt-1.mjs"'))],
