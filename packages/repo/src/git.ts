@@ -72,7 +72,9 @@ export interface WorktreeStatus {
 }
 
 export function statusPorcelain(cwd: string): WorktreeStatus {
-  const out = gitOk(cwd, ["status", "--porcelain"]);
+  // -uall: never collapse untracked directories; we need per-file paths
+  // for write-scope enforcement.
+  const out = gitOk(cwd, ["status", "--porcelain", "-uall"]);
   const entries = new Map<string, string>();
   for (const line of out.split("\n")) {
     if (line.trim() === "") continue;

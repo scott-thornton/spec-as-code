@@ -22,9 +22,11 @@
     "@spc/renderer": "workspace:*",
     "@spc/repo": "workspace:*",
     "@spc/schema": "workspace:*",
-    "@spc/verifier": "workspace:*"
+    "@spc/verifier": "workspace:*",
+    "yaml": "^2.8.0"
   },
   "devDependencies": {
+    "@spc/llm-fake": "workspace:*",
     "@types/node": "^22.10.10",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"

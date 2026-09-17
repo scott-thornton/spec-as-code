@@ -439,7 +439,13 @@ importers:
       '@spc/verifier':
         specifier: workspace:*
         version: link:../verifier
+      yaml:
+        specifier: ^2.8.0
+        version: 2.9.1
     devDependencies:
+      '@spc/llm-fake':
+        specifier: workspace:*
+        version: link:../llm-fake
       '@types/node':
         specifier: ^22.10.10
         version: 22.20.3
