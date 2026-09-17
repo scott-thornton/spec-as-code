@@ -43,7 +43,8 @@ apply to harness answers unchanged - the guardrails are the point.
 ## Consequences
 
 - Any agent that can read and write files (or a human with an editor) can
-  serve as planner/executor with zero API spend.
+  serve as planner/executor; the work is billed to that agent's existing
+  subscription or key rather than a separate spc-held API key.
 - The waiting process blocks up to `harnessResponseTimeoutMs`; for very long
   deliberation, raise the timeout - or let it time out and rely on the
   existing retry/resume machinery.

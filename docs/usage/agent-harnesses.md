@@ -160,8 +160,11 @@ cp -r .agents/skills/spc ~/.agents/skills/               # personal, everywhere
 ## Choosing a model
 
 - **Harness provider** when a coding agent is already in the loop: the agent
-  answers with full repo context, you spend zero API tokens, and every
-  answer is guardrailed and recorded.
+  answers with full repo context using the session you already pay for (no
+  separate API key for spc), and every answer is guardrailed and recorded.
+  Note the tokens are not free - they come out of that agent's subscription
+  quota or meter, and an exploring agent can use more than a direct call
+  would.
 - **API providers** (openai/anthropic adapters) for unattended runs, CI, or
   the benchmark harness.
 - **Fake provider** for deterministic tests and rehearsal.
