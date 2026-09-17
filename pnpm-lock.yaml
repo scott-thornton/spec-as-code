@@ -196,6 +196,9 @@ importers:
       '@spc/llm-fake':
         specifier: workspace:*
         version: link:../../packages/llm-fake
+      '@spc/llm-harness':
+        specifier: workspace:*
+        version: link:../../packages/llm-harness
       '@spc/llm-openai':
         specifier: workspace:*
         version: link:../../packages/llm-openai
