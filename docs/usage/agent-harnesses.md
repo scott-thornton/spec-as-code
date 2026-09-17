@@ -133,6 +133,30 @@ surface.
 agent can anticipate what comes next; the invocation number separates
 retries and repair rounds.
 
+## Skill packaging for harness agents
+
+Strictly, no skill is required: the file protocol plus `--format json` is
+the entire contract, and any agent that reads the docs can drive the loop.
+In practice you want the harness to already know the loop, without a human
+pasting documentation each session. That is what the bundled skill is for:
+
+```text
+.agents/skills/spc/SKILL.md
+```
+
+It encodes the full agent playbook: when to prefer the spc loop over direct
+editing, the command sequence, the `spc agent` response protocol, how to
+read JSON status, and the hard rules (never edit run records, never widen
+write scopes, never self-certify requirements, never merge the run branch).
+Harnesses that discover skills (ZCode checks `<project>/.zcode/skills/`,
+`<project>/.agents/skills/`, then the home-directory equivalents) pick it up
+automatically. To use it in another repository, copy the directory:
+
+```bash
+cp -r .agents/skills/spc <target-repo>/.agents/skills/   # per-repo
+cp -r .agents/skills/spc ~/.agents/skills/               # personal, everywhere
+```
+
 ## Choosing a model
 
 - **Harness provider** when a coding agent is already in the loop: the agent
