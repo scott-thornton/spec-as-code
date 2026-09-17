@@ -1,8 +1,8 @@
 {
-  "name": "spc-monorepo",
+  "name": "spec-as-code",
   "version": "0.1.0",
   "private": true,
-  "description": "Spec-as-Code / Plan-as-Code agent system: requirements as declarative desired state, evidence-based satisfaction.",
+  "description": "Spec-as-Code: declarative requirements, validated plans, bounded agent execution, evidence-backed satisfaction.",
   "packageManager": "pnpm@12.4.2",
   "engines": {
     "node": ">=22"
@@ -23,5 +23,19 @@
     "onlyBuiltDependencies": [
       "esbuild"
     ]
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/scott-thornton/spec-as-code.git"
+  },
+  "author": "Scott Thornton",
+  "license": "MIT",
+  "keywords": [
+    "spec-as-code",
+    "plan-as-code",
+    "requirements",
+    "agents",
+    "verification",
+    "developer-tools"
+  ]
 }

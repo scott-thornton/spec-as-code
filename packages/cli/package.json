@@ -42,5 +42,13 @@
     "@types/node": "^22.10.10",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
-  }
+  },
+  "description": "The spc CLI: spec, plan, apply, verify, status - the complete Spec-as-Code loop.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/scott-thornton/spec-as-code.git",
+    "directory": "packages/cli"
+  },
+  "author": "Scott Thornton",
+  "license": "MIT"
 }

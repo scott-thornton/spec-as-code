@@ -1,4 +1,4 @@
-# spc - Spec-as-Code / Plan-as-Code (V0)
+# spec-as-code (`spc`)
 
 A local developer tool that treats software requirements as **declarative
 desired state**, produces **validated execution plans**, executes them through
@@ -14,6 +14,15 @@ Spec (desired) ─► Plan (validated transition) ─► Execute (bounded, isola
 
 The critical invariant: **an agent saying "done" is never sufficient evidence
 that a requirement is satisfied.**
+
+**Status: experimental (v0.1.0).** The full workflow works end to end and the
+tool verifies itself in CI. On the evidence question we publish what we
+measured rather than what flatters: on a flash-tier model (glm-5.3-flash)
+the structured workflow completed 6 percentage points fewer requirements
+than a plain Markdown-plan baseline, while keeping zero forbidden
+modifications and honest failure reporting; one targeted iteration recovered
+two thirds of that gap. Stronger models and real usage are the open
+questions. Details and raw numbers: [evals/baselines](evals/baselines/).
 
 ## Documentation
 
@@ -31,11 +40,16 @@ that a requirement is satisfied.**
 
 ## Quick start
 
+Built from this repository for now (npm packaging is planned):
+
 ```bash
+git clone https://github.com/scott-thornton/spec-as-code
+cd spec-as-code
 pnpm install --frozen-lockfile
 pnpm build
 pnpm typecheck
 pnpm test
+alias spc='node "$PWD/packages/cli/dist/main.js"'
 ```
 
 Try the vertical slice against a fixture (deterministic - no live model):
@@ -185,7 +199,7 @@ cycles are compile errors.
 
 ## Self-hosting
 
-The repository dogs food: `specs/self-hosting.yaml` (SELF-001…008 from §90)
+The tool verifies itself: `specs/self-hosting.yaml` (SELF-001 through SELF-008 from §90)
 states the tool's own requirements, `.spc/config.yaml` is committed, and CI
 runs `spc verify --format github` on every PR (see
 [.github/workflows/spc-verify.yml](.github/workflows/spc-verify.yml)) - the
@@ -221,3 +235,13 @@ write sets concurrently in per-task worktrees, merged deterministically. CI repo
 (`spc verify --format github`, see
 [docs/ci-integration.md](docs/ci-integration.md)) and drift reconciliation
 (`spc reconcile`) are available now.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md); day-to-day contributor rules (for
+agents and humans) live in [AGENTS.md](AGENTS.md). CI verifies the tool's
+own spec on every pull request.
+
+## License
+
+[MIT](LICENSE) - Copyright (c) 2026 Scott Thornton.

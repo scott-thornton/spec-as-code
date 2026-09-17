@@ -64,15 +64,15 @@ import sibling packages from their built `dist/`.
 - Error codes are stable public surface: `SPC*` for compiler/validator
   diagnostics, named codes for runtime errors; document new ones in
   `docs/usage/diagnostics.md`.
-- The repository dogfoods: `specs/self-hosting.yaml` states the tool's own
+- The tool verifies itself: `specs/self-hosting.yaml` states spc's own
   requirements and CI runs `spc verify --format github` on every PR. Keep
   it green.
 - Commit messages: `feat|fix|docs|chore: summary` in plain words.
 
-## Dogfooding note
+## Using spc on itself
 
 For changes to this repository itself, prefer the normal engineering flow
-(tests first, small commits). Running the spc loop on spc is supported and
-encouraged for feature-scale work: author a spec under `specs/`, plan,
+(tests first, small commits). Running the spc loop on this repository is
+supported and encouraged for feature-scale work: author a spec under `specs/`, plan,
 apply, and let CI verify - but never bypass the hard rules above by editing
 run records to make status look better.
