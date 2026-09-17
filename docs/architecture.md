@@ -22,7 +22,7 @@ State ──► status/diff ──► next reconciliation
 | `@spc/llm-openai` | fetch-based OpenAI-compatible adapter | llm |
 | `@spc/planner` | planner + replanner with bounded repair loops | schema, core, llm, repo |
 | `@spc/executor` | sequential DAG scheduler, task execution, write enforcement, command policy | schema, core, llm, repo |
-| `@spc/verifier` | criterion dispatchers, evidence-based satisfaction evaluator | schema, core, llm, executor |
+| `@spc/verifier` | criterion dispatchers; derives requirement status from recorded evidence | schema, core, llm, executor |
 | `@spc/renderer` | one-directional Markdown/text views | schema, core |
 | `@spc/runtime` | runs, events, projections, stores, apply/resume orchestration, follow-ups | everything above |
 | `@spc/cli` | composition root, command surface | everything |

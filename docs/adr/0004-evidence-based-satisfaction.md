@@ -1,4 +1,4 @@
-# ADR-0004: Evidence-based satisfaction
+# ADR-0004: Requirement status comes from evidence
 
 Date: 2026-09-17
 Status: accepted

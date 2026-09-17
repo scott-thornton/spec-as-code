@@ -16,7 +16,7 @@ const program = new Command();
 
 program
   .name("spc")
-  .description("Spec-as-Code: declarative requirements, validated plans, evidence-backed satisfaction")
+  .description("Spec-as-Code: declarative requirements, validated plans, bounded agent execution, and status proven by running the verification")
   .version("0.1.0");
 
 program
