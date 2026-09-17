@@ -39,6 +39,7 @@ export async function generatePlan(input: GeneratePlanInput): Promise<GeneratePl
     const started = Date.now();
     const response = await input.provider.generateStructured({
       role: "planner",
+      key: `planner@${attempt}`,
       requestId,
       system: PLANNER_SYSTEM,
       prompt,

@@ -7,6 +7,7 @@ import type { LLMProvider } from "@spc/llm";
 import { FakeProvider, parseFakeScript } from "@spc/llm-fake";
 import { OpenAICompatProvider } from "@spc/llm-openai";
 import { AnthropicCompatProvider } from "@spc/llm-anthropic";
+import { HarnessProvider, HarnessStore } from "@spc/llm-harness";
 import { findRepoRoot } from "@spc/repo";
 import { loadConfig } from "@spc/runtime";
 
@@ -93,6 +94,12 @@ export async function createProvider(config: Config, repoRoot: string): Promise<
         apiKey,
         ...(config.provider.baseURL ? { baseURL: config.provider.baseURL } : {}),
       });
+    }
+    case "harness": {
+      return new HarnessProvider(
+        new HarnessStore(repoRoot),
+        config.execution.harnessResponseTimeoutMs,
+      );
     }
     case "anthropic": {
       const model = config.provider.model;

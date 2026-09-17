@@ -1,11 +1,16 @@
 import path from "node:path";
 import { allOpenFollowups, loadRunView, resolveFollowup } from "@spc/runtime";
+import { jsonFollowups } from "./json-views.js";
 import { loadRepoConfig, resolveRepoRoot, resolveSpec } from "../context.js";
 
 /** `spc followups` - structured queue across runs. */
-export function runFollowups(cwd?: string): number {
+export function runFollowups(cwd?: string, format: "text" | "json" = "text"): number {
   const repoRoot = resolveRepoRoot(cwd);
   const open = allOpenFollowups(path.join(repoRoot, ".spc", "runs"));
+  if (format === "json") {
+    console.log(jsonFollowups(open));
+    return open.filter((x) => x.followup.blocking).length > 0 ? 1 : 0;
+  }
   const blocking = open.filter((x) => x.followup.blocking);
   const nonBlocking = open.filter((x) => !x.followup.blocking);
 

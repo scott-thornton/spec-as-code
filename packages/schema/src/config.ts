@@ -3,7 +3,7 @@ import { z } from "zod";
 export const policyValueSchema = z.enum(["allow", "approval", "deny"]);
 
 export const providerConfigSchema = z.strictObject({
-  name: z.enum(["fake", "openai", "anthropic", "none"]).default("none"),
+  name: z.enum(["fake", "openai", "anthropic", "harness", "none"]).default("none"),
   model: z.string().optional(),
   baseURL: z.string().optional(),
   apiKeyEnv: z.string().optional(),
@@ -31,6 +31,8 @@ export const executionConfigSchema = z.strictObject({
    * requires human approval (blocking follow-up) for high-risk ones.
    */
   amendmentApproval: z.enum(["auto", "tiered"]).default("auto"),
+  /** Harness provider: how long to wait for an external agent's answer per request. */
+  harnessResponseTimeoutMs: z.number().int().positive().default(900_000),
   /** Extra high-risk write patterns for tiered amendment approval. */
   highRiskWritePatterns: z.array(z.string().min(1)).default([]),
 });

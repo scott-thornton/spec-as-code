@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { formatDiagnostics } from "@spc/core";
 import { renderSpecMarkdown, renderSpecText } from "@spc/renderer";
+import { jsonSpecValidation } from "./json-views.js";
 import { compileSpecFile } from "../context.js";
 
 function sourceOf(file: string): string {
@@ -12,8 +13,26 @@ function sourceOf(file: string): string {
 }
 
 /** `spc spec validate <file>` - compiler-quality diagnostics + digest. */
-export function runSpecValidate(file: string): number {
+export function runSpecValidate(file: string, format: "text" | "json" = "text"): number {
   const result = compileSpecFile(file);
+  if (format === "json") {
+    const ok = result.ok && result.ir !== null;
+    console.log(
+      jsonSpecValidation({
+        ok,
+        digest: result.ir?.digest ?? null,
+        diagnostics: result.diagnostics.map((d) => ({
+          code: d.code,
+          severity: d.severity,
+          message: d.message,
+          ...(d.loc ? { loc: d.loc } : {}),
+        })),
+        propertyCount: result.ir?.properties.length ?? 0,
+        mustCount: result.ir?.properties.filter((p) => p.priority === "must").length ?? 0,
+      }),
+    );
+    return ok ? 0 : 1;
+  }
   const sources = new Map([[file, sourceOf(file)]]);
   if (result.diagnostics.length > 0) {
     console.log(formatDiagnostics(result.diagnostics, sources));

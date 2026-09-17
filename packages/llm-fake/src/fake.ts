@@ -52,6 +52,10 @@ export class FakeProvider implements LLMProvider {
       case "replanner": {
         const table = this.script.replanner ?? {};
         if (key !== "" && table[key] !== undefined) return table[key];
+        // Replanner keys carry the repair attempt (taskId@n); fall back to
+        // the bare trigger task id, mirroring the executor's attempt rule.
+        const base = key.split("@")[0] ?? key;
+        if (base !== "" && table[base] !== undefined) return table[base];
         throw missing(`replanner.${key || "<no key>"}`);
       }
       case "verifier": {

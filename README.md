@@ -22,6 +22,7 @@ that a requirement is satisfied.**
 - [CLI reference](docs/usage/cli-reference.md) - every command, flag and exit code
 - [Configuration reference](docs/usage/configuration.md) - every `.spc/config.yaml` option
 - [Workflows](docs/usage/workflows.md) - recipes: features, drift, invariants, parallelism, CI
+- [Agent harnesses](docs/usage/agent-harnesses.md) - running spc through ZCode and friends: JSON output + the harness provider
 - [Follow-ups and approvals](docs/usage/followups-and-approvals.md) - the human loop, gates and waivers
 - [Diagnostics reference](docs/usage/diagnostics.md) - every SPC code and runtime error
 - [Architecture](docs/architecture.md) and [ADRs](docs/adr/) - the decisions and their reasons

@@ -8,7 +8,10 @@ to operate on a repository other than the current directory.
 Exit codes: `0` success; `1` validation or verification failure (the thing
 you asked for is not true); `2` runtime error (bad invocation, missing
 provider, Git failure and similar). Diagnostics carry stable `SPC*` codes;
-see the [diagnostics reference](diagnostics.md).
+see the [diagnostics reference](diagnostics.md). Read commands
+(`spec validate`, `plan show`, `verify`, `status`, `diff`, `followups`,
+`agent list`) accept `--format json` for machine-readable output with
+stable field names.
 
 ## spc init
 
@@ -246,6 +249,23 @@ directories:
 ```bash
 ls .spc/runs
 ```
+
+## spc agent
+
+```bash
+spc agent list [--format text|json]
+spc agent show <id>
+spc agent respond <id> (--file <path> | --stdin) [--by <who>]
+```
+
+The harness-provider half of agent-harness integration: lists pending model
+requests awaiting an external answer, prints one in full (prompt plus the
+embedded JSON Schema the answer must satisfy), and submits an answer (a
+JSON value, not a wrapper). Invalid answers requeue automatically with the
+validation errors attached; valid answers are kept under
+`.spc/harness/answered/` as the decision record. `agent list` exits `1`
+while requests are pending. See
+[Agent harnesses](agent-harnesses.md).
 
 ## spc-evals (benchmark harness)
 

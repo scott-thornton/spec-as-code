@@ -18,6 +18,10 @@ provider:
   #           agent criteria need a real (or fake) provider.
   # fake    - deterministic scripted responses from the file named by
   #           `script`; used by fixtures and tests, useful for dry runs.
+  # harness - no API calls: each model request is written to
+  #           .spc/harness/pending/ with its JSON Schema, and any external
+  #           agent (a coding harness or a human) answers via
+  #           `spc agent respond`. See docs/usage/agent-harnesses.md.
   # openai  - any OpenAI-compatible chat-completions endpoint.
   # anthropic - any Anthropic-compatible messages endpoint (including
   #           GLM's coding endpoint).

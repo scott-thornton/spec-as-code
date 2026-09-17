@@ -9,7 +9,7 @@ import { createProvider, loadRepoConfig, resolveRepoRoot, resolveSpec } from "..
 export async function runVerify(
   specFile: string | undefined,
   cwd?: string,
-  format: "text" | "github" = "text",
+  format: "text" | "github" | "json" = "text",
 ): Promise<number> {
   const repoRoot = resolveRepoRoot(cwd);
   const config = loadRepoConfig(repoRoot);
@@ -20,7 +20,25 @@ export async function runVerify(
   }
   const report = await createVerifyRun({ repoRoot, specIr: ir, config, provider });
 
-  if (format === "github") {
+  if (format === "json") {
+    console.log(
+      JSON.stringify(
+        {
+          runId: report.runId,
+          properties: report.states.map((s) => ({
+            id: s.propertyId,
+            status: s.status,
+            ...(s.reason ? { reason: s.reason } : {}),
+          })),
+          followups: report.followups
+            .filter((f) => f.status === "open")
+            .map((f) => ({ id: f.id, type: f.type, blocking: f.blocking, title: f.title })),
+        },
+        null,
+        2,
+      ),
+    );
+  } else if (format === "github") {
     // CI mode: annotations on stdout, Markdown block into the step summary.
     for (const line of renderGithubAnnotations(ir, report.states)) {
       console.log(line);

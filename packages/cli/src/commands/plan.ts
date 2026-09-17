@@ -121,11 +121,15 @@ export function runPlanValidate(planFileArg: string | undefined): number {
 }
 
 /** `spc plan show [file]` */
-export function runPlanShow(planFileArg: string | undefined): number {
+export function runPlanShow(planFileArg: string | undefined, format: "text" | "json" = "text"): number {
   const repoRoot = resolveRepoRoot();
   const paths = spcPaths(repoRoot);
   const file = planFileArg ?? latestPlan(paths);
   const plan = loadPlanFile(file);
+  if (format === "json") {
+    console.log(JSON.stringify(plan, null, 2));
+    return 0;
+  }
   const spec = findSpecForPlan(repoRoot, plan);
   console.log(renderPlan(plan, spec?.ir ?? null));
   return 0;

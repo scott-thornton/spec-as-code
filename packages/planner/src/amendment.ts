@@ -48,7 +48,7 @@ export async function generateAmendment(input: GenerateAmendmentInput): Promise<
     const started = Date.now();
     const response = await input.provider.generateStructured({
       role: "replanner",
-      key: input.triggeringObservations[0]?.taskId ?? input.triggeringObservations[0]?.id,
+      key: `${input.triggeringObservations[0]?.taskId ?? input.triggeringObservations[0]?.id}@${attempt}`,
       requestId,
       system: REPLANNER_SYSTEM,
       prompt,

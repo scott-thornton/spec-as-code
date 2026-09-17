@@ -35,7 +35,8 @@
     "commander": "^14.0.0",
     "yaml": "^2.8.0",
     "zod": "^4.1.11",
-    "@spc/llm-anthropic": "workspace:*"
+    "@spc/llm-anthropic": "workspace:*",
+    "@spc/llm-harness": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.10",

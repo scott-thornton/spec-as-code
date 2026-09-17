@@ -251,6 +251,9 @@ importers:
       '@spc/llm-fake':
         specifier: workspace:*
         version: link:../llm-fake
+      '@spc/llm-harness':
+        specifier: workspace:*
+        version: link:../llm-harness
       '@spc/llm-openai':
         specifier: workspace:*
         version: link:../llm-openai
@@ -407,6 +410,25 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@22.20.3)(yaml@2.9.1)
+
+  packages/llm-harness:
+    dependencies:
+      '@spc/llm':
+        specifier: workspace:*
+        version: link:../llm
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.10
+        version: 22.20.3
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.3)(yaml@2.9.1)
+      zod:
+        specifier: ^4.1.11
+        version: 4.6.5
 
   packages/llm-openai:
     dependencies:
