@@ -42,7 +42,7 @@ export function renderRunSummary(input: SummaryInput): string {
       .map((id) => evidenceById.get(id))
       .filter((e): e is Evidence => e !== undefined);
     const provenance = evs.length > 0 ? evs.map((e) => `${evidenceTrustLabel(e.kind)}:${e.outcome}`).join(", ") : "no evidence";
-    lines.push(`- **${p.id}** — ${state?.status ?? "unknown"} (${provenance})`);
+    lines.push(`- **${p.id}** - ${state?.status ?? "unknown"} (${provenance})`);
   }
   lines.push("");
 
@@ -64,7 +64,7 @@ export function renderRunSummary(input: SummaryInput): string {
   if (open.length === 0 && resolved.length === 0) lines.push("None.");
   for (const f of open) lines.push(`- **OPEN** ${f.id}: ${f.title}${f.blocking ? " *(blocking)*" : ""}`);
   for (const f of resolved) {
-    lines.push(`- ~~${f.id}: ${f.title}~~ — resolved${f.resolution?.optionId ? ` (${f.resolution.optionId})` : ""}`);
+    lines.push(`- ~~${f.id}: ${f.title}~~ - resolved${f.resolution?.optionId ? ` (${f.resolution.optionId})` : ""}`);
   }
   lines.push("");
 

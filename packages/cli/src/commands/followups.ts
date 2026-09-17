@@ -2,7 +2,7 @@ import path from "node:path";
 import { allOpenFollowups, loadRunView, resolveFollowup } from "@spc/runtime";
 import { loadRepoConfig, resolveRepoRoot, resolveSpec } from "../context.js";
 
-/** `spc followups` — structured queue across runs. */
+/** `spc followups` - structured queue across runs. */
 export function runFollowups(cwd?: string): number {
   const repoRoot = resolveRepoRoot(cwd);
   const open = allOpenFollowups(path.join(repoRoot, ".spc", "runs"));
@@ -82,7 +82,7 @@ export function runFollowupResolve(options: {
   });
   console.log(`Resolved ${result.followup.id} (${result.followup.title}).`);
   for (const s of result.propertyStates) {
-    console.log(`  ${s.propertyId}: ${s.status}${s.reason ? ` — ${s.reason}` : ""}`);
+    console.log(`  ${s.propertyId}: ${s.status}${s.reason ? ` - ${s.reason}` : ""}`);
   }
   return 0;
 }

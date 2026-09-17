@@ -193,7 +193,7 @@ executor:
     gitOk(repo, ["checkout", "-b", "integration", "task-a"]);
     const merged = mergeTaskPatch(repo, shaB);
     expect(merged.ok).toBe(false);
-    // Integration restored to A's content — no partial merge state left behind.
+    // Integration restored to A's content - no partial merge state left behind.
     const content = readFileSync(path.join(repo, "src", "shared.mjs"), "utf8");
     expect(content).toBe("from A\n");
     const status = gitOk(repo, ["status", "--porcelain"]);

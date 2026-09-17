@@ -1,8 +1,8 @@
 # Architecture
 
 `spc` treats software requirements as declarative desired state. The core
-loop: **Spec → Plan → Execute → Verify → Status**, with evidence — never agent
-self-reporting — establishing requirement satisfaction.
+loop: **Spec → Plan → Execute → Verify → Status**, with evidence - never agent
+self-reporting - establishing requirement satisfaction.
 
 ```
 Desired Spec ──► compile (YAML→SpecIR+digest) ──► validated Plan ──► bounded
@@ -41,23 +41,23 @@ specs/*.yaml            human-authored desired state (committed)
 
 ## Invariants
 
-1. **Identity** — property ids are stable and pattern-enforced; array position
+1. **Identity** - property ids are stable and pattern-enforced; array position
    is presentation only.
-2. **Determinism** — digests over canonical JSON; schema/core are pure; unit
+2. **Determinism** - digests over canonical JSON; schema/core are pure; unit
    tests never touch a live model.
-3. **Separation** — planner/executor/verifier are distinct provider roles;
+3. **Separation** - planner/executor/verifier are distinct provider roles;
    the runtime owns all lifecycle state.
-4. **Evidence** — satisfaction is derived from append-only evidence with
+4. **Evidence** - satisfaction is derived from append-only evidence with
    explicit provenance (L1 deterministic … L4 human); contradictory evidence
    is retained forever.
-5. **Bounded execution** — per-task write scopes checked against the *actual*
+5. **Bounded execution** - per-task write scopes checked against the *actual*
    git delta; commands classified and policy-gated; one worktree per run;
    budgets on model calls, replans, retries, timeouts.
-6. **Explicit replanning** — observations invalidate tasks; amendments are
+6. **Explicit replanning** - observations invalidate tasks; amendments are
    validated and history-preserving; budgets fail visibly.
-7. **Structured uncertainty** — follow-ups are data, resolvable through the
+7. **Structured uncertainty** - follow-ups are data, resolvable through the
    CLI, and feed back as human evidence.
-8. **Recoverability** — state is a projection over events; interrupted runs
+8. **Recoverability** - state is a projection over events; interrupted runs
    resume by replay.
 
 See `docs/adr/` for decision records.

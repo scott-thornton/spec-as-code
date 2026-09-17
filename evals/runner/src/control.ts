@@ -9,7 +9,7 @@ import type { LoadedTask } from "./task.js";
  * Control arm (§66): the same model receives the task, the repository, and
  * Markdown planning instructions. One invocation writes PLAN.md; a second
  * implements. There is no write scope, no independent verification and no
- * evidence — completion is whatever the agent claims.
+ * evidence - completion is whatever the agent claims.
  */
 
 export const baselinePlanSchema = z.strictObject({

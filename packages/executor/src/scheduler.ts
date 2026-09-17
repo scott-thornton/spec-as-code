@@ -134,7 +134,7 @@ export async function runScheduler(io: SchedulerIO): Promise<SchedulerResult> {
         if (r === "amended") {
           // The runtime resets affected tasks to pending while applying the
           // amendment; the replaced task may no longer exist, so no direct
-          // transition here — just continue the loop.
+          // transition here - just continue the loop.
         } else {
           replanFailed = true;
         }

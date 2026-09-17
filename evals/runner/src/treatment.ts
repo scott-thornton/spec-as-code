@@ -121,7 +121,7 @@ export async function runTreatmentArm(options: {
       }
     }
   } catch {
-    // no events file (should not happen) — leave reasons empty
+    // no events file (should not happen) - leave reasons empty
   }
 
   return {

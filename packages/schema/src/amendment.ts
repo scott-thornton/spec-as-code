@@ -3,7 +3,7 @@ import { taskIdSchema } from "./ids.js";
 import { taskSchema, taskTargetsSchema } from "./plan.js";
 
 /**
- * Plan amendments are explicit, validated transitions — never silent
+ * Plan amendments are explicit, validated transitions - never silent
  * improvisation. Completed task history is preserved by the validator.
  */
 

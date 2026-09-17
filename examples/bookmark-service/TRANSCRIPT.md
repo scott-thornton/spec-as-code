@@ -1,4 +1,4 @@
-# spc walkthrough — bookmark-service (real model: glm-5.3)
+# spc walkthrough - bookmark-service (real model: glm-5.3)
 
 A senior-engineer-style spec (`specs/bookmarks-tags-csv.yaml`) run through the
 complete loop on 2026-09-17. Reproduce with `GLM_API_KEY=… ./run-demo.sh`
@@ -14,7 +14,7 @@ the config is inspectable; runtime dirs are gitignored.
   CSV in `src/export.mjs`) executed CONCURRENTLY in per-task worktrees and
   merged deterministically (`PATCH_MERGED` for both, no conflicts).
 - One provider flake (thinking-only response) failed the CSV-test task after
-  retry; its dependent verify task was correctly BLOCKED — no false success,
+  retry; its dependent verify task was correctly BLOCKED - no false success,
   and the run still reached `succeeded` because the properties were verified
   by deterministic evidence (the tags test file covered the CSV cases).
 - The public `exportJson()` contract survived untouched (BOOK-C01 green via
@@ -104,7 +104,7 @@ Details: .spc/runs/run-mu5n95b6-c920ddec/summary.md
 
 $ spc status
 Spec: bookmarks-tags-csv (sha256:a827046…)
-Run: run-mu5n95b6-c920ddec — succeeded
+Run: run-mu5n95b6-c920ddec - succeeded
 Result revision: 4cb42910ddb4
 
 MUST

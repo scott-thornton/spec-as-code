@@ -25,4 +25,4 @@ completed task is ever re-executed.
 
 ## Alternatives considered
 
-- SQLite state store: rejected for V0 — files + git are an advantage locally.
+- SQLite state store: rejected for V0 - files + git are an advantage locally.

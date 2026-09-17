@@ -102,7 +102,7 @@ describe("plan generation", () => {
       plan: {
         tasks: [
           // Missing verification path and coverage: GREETING-001 only satisfied, no verify,
-          // but it has a command criterion so only coverage matters — make it worse: unknown property.
+          // but it has a command criterion so only coverage matters - make it worse: unknown property.
           {
             id: "T001",
             title: "Wrong",

@@ -402,7 +402,7 @@ describe("recovery after interruption", () => {
     expect(state.tasks["T001"]?.attempt).toBe(2);
     expect(state.tasks["T002"]?.status).toBe("completed");
     expect(report.requirements.find((r) => r.propertyId === "GREETING-001")?.status).toBe("satisfied");
-    // Only one greeting.mjs exists — no duplicated work side effects.
+    // Only one greeting.mjs exists - no duplicated work side effects.
     const files = gitOk(report.worktree!, ["show", "HEAD:src/greeting.mjs"]);
     expect(files).toContain("hello");
   });

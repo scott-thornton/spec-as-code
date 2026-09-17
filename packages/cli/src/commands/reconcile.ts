@@ -26,11 +26,11 @@ export async function runReconcile(specFile: string | undefined, options: { appl
   }
   console.log("Drifted properties:");
   for (const d of result.drifted) {
-    console.log(`  ${d.status.padEnd(12)} ${d.propertyId}${d.reason ? ` — ${d.reason}` : ""}`);
+    console.log(`  ${d.status.padEnd(12)} ${d.propertyId}${d.reason ? ` - ${d.reason}` : ""}`);
   }
   if (result.applied) {
     console.log("");
-    console.log(`Reconciliation applied: run ${result.applied.runId} — ${result.applied.status.replace("_", " ")}`);
+    console.log(`Reconciliation applied: run ${result.applied.runId} - ${result.applied.status.replace("_", " ")}`);
     for (const r of result.applied.requirements) {
       console.log(`  ${r.status.padEnd(12)} ${r.propertyId}`);
     }

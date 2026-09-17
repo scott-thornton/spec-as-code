@@ -3,7 +3,7 @@ import type { Evidence, FollowUp, RunState, SpecIR } from "@spc/schema";
 
 /**
  * PR body generation (§82): a run can produce the pull-request title and
- * description — requirements addressed, verification evidence, known
+ * description - requirements addressed, verification evidence, known
  * limitations, follow-ups. Humans still decide whether to open or merge;
  * nothing is posted automatically.
  */
@@ -32,7 +32,7 @@ export function renderPrDraft(input: PrInput): PrDraft {
 
   const lines: string[] = [];
   lines.push(`## What`, "");
-  lines.push(`Applied plan \`${runState.planId ?? "—"}\` for spec **${specIr.spec.metadata.id}** (${specIr.spec.metadata.title}).`);
+  lines.push(`Applied plan \`${runState.planId ?? "-"}\` for spec **${specIr.spec.metadata.id}** (${specIr.spec.metadata.title}).`);
   lines.push(`Run: \`${runState.runId}\` · status: **${runState.status.replace("_", " ")}**`);
   if (runState.branch) lines.push(`Branch: \`${runState.branch}\``);
   lines.push("");
@@ -46,7 +46,7 @@ export function renderPrDraft(input: PrInput): PrDraft {
       .filter((e): e is Evidence => e !== undefined)
       .map((e) => `${evidenceTrustLabel(e.kind)}:${e.outcome}`)
       .join(", ");
-    lines.push(`| ${p.id} | ${p.priority} | ${state?.status ?? "unknown"} | ${evs || "—"} |`);
+    lines.push(`| ${p.id} | ${p.priority} | ${state?.status ?? "unknown"} | ${evs || "-"} |`);
   }
   lines.push("");
 

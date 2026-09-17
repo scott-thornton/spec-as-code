@@ -11,7 +11,7 @@ function sourceOf(file: string): string {
   }
 }
 
-/** `spc spec validate <file>` — compiler-quality diagnostics + digest. */
+/** `spc spec validate <file>` - compiler-quality diagnostics + digest. */
 export function runSpecValidate(file: string): number {
   const result = compileSpecFile(file);
   const sources = new Map([[file, sourceOf(file)]]);
@@ -45,7 +45,7 @@ export function runSpecValidate(file: string): number {
   return 0;
 }
 
-/** `spc spec show <file> [--format markdown|text]` — generated view. */
+/** `spc spec show <file> [--format markdown|text]` - generated view. */
 export function runSpecShow(file: string, format: "markdown" | "text"): number {
   const result = compileSpecFile(file);
   if (!result.ok || !result.ir) {

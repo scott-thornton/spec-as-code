@@ -18,7 +18,7 @@ the branch (identity `spc <spc@local>` if the repo has none configured) and
 `RUN_COMPLETED` records base and result revisions. V0 never merges or pushes;
 humans review and merge normally. Failure runs keep the worktree for
 inspection. Per-task write-scope enforcement diffs the actual worktree status
-(`git status --porcelain -uall`) against declared write targets — never
+(`git status --porcelain -uall`) against declared write targets - never
 trusting agent claims.
 
 ## Consequences

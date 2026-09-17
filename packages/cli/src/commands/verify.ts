@@ -37,7 +37,7 @@ export async function runVerify(
     console.log(`Verification run: ${report.runId}`);
     console.log("");
     for (const s of report.states) {
-      console.log(`  ${s.status.padEnd(12)} ${s.propertyId}${s.reason ? ` — ${s.reason}` : ""}`);
+      console.log(`  ${s.status.padEnd(12)} ${s.propertyId}${s.reason ? ` - ${s.reason}` : ""}`);
     }
     const open = report.followups.filter((f) => f.status === "open");
     if (open.length > 0) {

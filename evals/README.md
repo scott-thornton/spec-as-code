@@ -4,7 +4,7 @@ Controlled comparison of two workflows on the same tasks (project plan §65–§
 
 - **Control (Markdown-plan baseline)**: the model receives the task, the
   repository and Markdown planning instructions; it writes `PLAN.md`, then
-  implements. No write scope, no independent verification — completion is
+  implements. No write scope, no independent verification - completion is
   whatever the agent claims.
 - **Treatment (spc workflow)**: the same task flows through SpecIR → validated
   plan → bounded execution in an isolated worktree → verification → evidence.
@@ -18,7 +18,7 @@ model calls, replans, follow-ups raised.
 
 ```
 evals/
-  runner/          @spc/evals — harness (task loading, arms, grading, report)
+  runner/          @spc/evals - harness (task loading, arms, grading, report)
   tasks/<cat>/<id> repo/ (what the agent sees) · grading/ (withheld) ·
                    task.yaml · control-script.yaml · treatment-script.yaml
   tools/           committed generator for the 30 task definitions
@@ -41,14 +41,14 @@ node evals/runner/dist/main.js --tasks evals/tasks --out evals/results/latest
 node evals/runner/dist/main.js --category bug-fix --trials 3 --out /tmp/bugfix
 ```
 
-## Scripted mode vs real mode — read this before citing numbers
+## Scripted mode vs real mode - read this before citing numbers
 
 The default mode uses the **fake scripted provider** for both arms. The
 per-task scripts encode deterministic re-enactments of known baseline failure
 modes (overwriting a co-edited file, breaking an old API while "modernizing",
 touching forbidden paths during test-only work, declaring done early, …) and
 competent treatment behaviour. Scripted results validate **harness mechanics**
-— metrics computation, grading, drift and false-completion detection — and
+- metrics computation, grading, drift and false-completion detection - and
 illustrate the failure modes the thesis predicts. They are **not evidence
 about real models**; the numbers are baked into the scripts by construction.
 

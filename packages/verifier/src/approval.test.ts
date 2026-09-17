@@ -31,7 +31,7 @@ function ctx(overrides: { approvedCommands?: ReadonlySet<string> } = {}) {
 describe("§52 command approval flow", () => {
   it("approval-class commands do not run: inconclusive evidence + approval follow-up", async () => {
     // "npm install --help" classifies as packageInstall, which defaults to
-    // the approval policy — and is harmless/offline when actually run.
+    // the approval policy - and is harmless/offline when actually run.
     const r = await verifyCriterion(
       { id: "DEP-001-A", type: "command", command: "npm install --help" },
       property,

@@ -3,7 +3,7 @@ import { renderDiff, renderStatus } from "@spc/renderer";
 import { latestRunViewForSpec } from "@spc/runtime";
 import { resolveRepoRoot, resolveSpec } from "../context.js";
 
-/** `spc status [specFile]` — requirement-oriented view of the latest run. */
+/** `spc status [specFile]` - requirement-oriented view of the latest run. */
 export function runStatus(specFile: string | undefined, cwd?: string): number {
   const repoRoot = resolveRepoRoot(cwd);
   const { ir } = resolveSpec(path.join(repoRoot, "specs"), specFile ?? undefined);
@@ -19,7 +19,7 @@ export function runStatus(specFile: string | undefined, cwd?: string): number {
   return 0;
 }
 
-/** `spc diff [specFile]` — desired vs observed. */
+/** `spc diff [specFile]` - desired vs observed. */
 export function runDiff(specFile: string | undefined, cwd?: string): number {
   const repoRoot = resolveRepoRoot(cwd);
   const { ir } = resolveSpec(path.join(repoRoot, "specs"), specFile ?? undefined);

@@ -6,7 +6,7 @@ const SKIP_DIRS = new Set([".git", "node_modules", ".spc", "dist", "grading", "P
 /**
  * Bounded repository dump for real-model prompts. Neither arm gets tool
  * access, so both receive the same bounded view of the repository the task
- * ships with — fairness matters more than completeness here.
+ * ships with - fairness matters more than completeness here.
  */
 export function boundedRepoDump(repoDir: string, maxFiles = 14, maxTotalBytes = 24_000): { path: string; content: string }[] {
   const files: string[] = [];

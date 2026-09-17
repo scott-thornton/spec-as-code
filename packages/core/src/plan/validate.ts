@@ -13,7 +13,7 @@ export function validatePlan(plan: Plan, ir: SpecIR): Diagnostic[] {
   const byId = new Map<string, Task>();
   const propertyIds = new Set(ir.properties.map((p) => p.id));
 
-  // SPC2001 — unique task ids.
+  // SPC2001 - unique task ids.
   for (const t of tasks) {
     if (byId.has(t.id)) {
       diags.push(error("SPC2001", `duplicate task id ${t.id}.`));
@@ -22,7 +22,7 @@ export function validatePlan(plan: Plan, ir: SpecIR): Diagnostic[] {
     }
   }
 
-  // SPC2002 — known dependencies.
+  // SPC2002 - known dependencies.
   for (const t of tasks) {
     (t.dependsOn ?? []).forEach((dep) => {
       if (!byId.has(dep)) {
@@ -31,14 +31,14 @@ export function validatePlan(plan: Plan, ir: SpecIR): Diagnostic[] {
     });
   }
 
-  // SPC2003 — acyclic graph.
+  // SPC2003 - acyclic graph.
   const edges = (id: string): string[] => byId.get(id)?.dependsOn ?? [];
   const cycle = findCycle(tasks.map((t) => t.id), edges);
   if (cycle) {
     diags.push(error("SPC2003", `task dependency cycle detected: ${cycle.join(" -> ")}.`));
   }
 
-  // SPC2004 — known property references.
+  // SPC2004 - known property references.
   for (const t of tasks) {
     for (const ref of [...(t.satisfies ?? []), ...(t.verifies ?? [])]) {
       if (!propertyIds.has(ref)) {
@@ -49,8 +49,8 @@ export function validatePlan(plan: Plan, ir: SpecIR): Diagnostic[] {
     }
   }
 
-  // SPC2005 — must-property coverage via satisfies or verifies.
-  // SPC2006 — must-property verification path.
+  // SPC2005 - must-property coverage via satisfies or verifies.
+  // SPC2006 - must-property verification path.
   for (const p of ir.properties) {
     if (p.priority !== "must") continue;
     const satisfying = tasks.filter((t) => (t.satisfies ?? []).includes(p.id));
@@ -74,7 +74,7 @@ export function validatePlan(plan: Plan, ir: SpecIR): Diagnostic[] {
     }
   }
 
-  // SPC2007 — concurrent write conflicts without an ordering dependency.
+  // SPC2007 - concurrent write conflicts without an ordering dependency.
   const writers = tasks.filter((t) => (t.targets?.write ?? []).length > 0);
   for (let i = 0; i < writers.length; i++) {
     for (let j = i + 1; j < writers.length; j++) {
@@ -99,7 +99,7 @@ export function validatePlan(plan: Plan, ir: SpecIR): Diagnostic[] {
     }
   }
 
-  // SPC2008 / SPC2009 — plan/spec identity.
+  // SPC2008 / SPC2009 - plan/spec identity.
   if (plan.spec.id !== ir.spec.metadata.id) {
     diags.push(
       error("SPC2008", `plan references spec ${plan.spec.id} but was validated against ${ir.spec.metadata.id}.`),
@@ -111,14 +111,14 @@ export function validatePlan(plan: Plan, ir: SpecIR): Diagnostic[] {
     );
   }
 
-  // SPC2010 — inspect tasks never write.
+  // SPC2010 - inspect tasks never write.
   for (const t of tasks) {
     if (t.kind === "inspect" && (t.targets?.write ?? []).length > 0) {
       diags.push(error("SPC2010", `inspect task ${t.id} declares write targets; inspection is read-only.`));
     }
   }
 
-  // SPC2011 — safe relative target patterns.
+  // SPC2011 - safe relative target patterns.
   for (const t of tasks) {
     for (const p of [...(t.targets?.read ?? []), ...(t.targets?.write ?? [])]) {
       const norm = normalizeRelPath(p);

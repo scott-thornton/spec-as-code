@@ -32,7 +32,7 @@ export function renderStatus(input: StatusInput): string {
   lines.push(`Spec: ${specIr.spec.metadata.id} (${specIr.digest.slice(0, 14)}…)`);
 
   if (runState) {
-    lines.push(`Run: ${runState.runId} — ${runState.status.replace("_", " ")}`);
+    lines.push(`Run: ${runState.runId} - ${runState.status.replace("_", " ")}`);
     if (runState.resultRevision) lines.push(`Result revision: ${runState.resultRevision.slice(0, 12)}`);
   } else {
     lines.push("Run: none yet (all properties unknown)");

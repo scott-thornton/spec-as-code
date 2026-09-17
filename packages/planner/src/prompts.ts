@@ -10,7 +10,7 @@ Contract (invariants, enforced by the runtime after you respond):
   acceptance criteria that the runtime can execute.
 - When a property constrains EXISTING behaviour (e.g. "preserve the old API", "keep
   backwards compatibility"), plan verification that runs the repository's existing tests
-  covering that behaviour — those tests already exist and must keep passing.
+  covering that behaviour - those tests already exist and must keep passing.
 - If two tasks would write to the same file (or overlapping globs), order them explicitly
   with dependsOn or merge them into one task; never leave overlapping writers unordered.
 - Task write targets must be explicit; inspect tasks must not declare write targets.

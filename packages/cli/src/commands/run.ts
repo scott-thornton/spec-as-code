@@ -6,7 +6,7 @@ import { renderPrDraft } from "@spc/renderer";
 import { cancelRun, loadRunView } from "@spc/runtime";
 import { resolveRepoRoot } from "../context.js";
 
-/** `spc run show <runId>` — reconstruct what happened, without chat logs. */
+/** `spc run show <runId>` - reconstruct what happened, without chat logs. */
 export function runShow(runId: string, cwd?: string): number {
   const repoRoot = resolveRepoRoot(cwd);
   const view = loadRunView(path.join(repoRoot, ".spc", "runs"), runId);
@@ -23,7 +23,7 @@ export function runShow(runId: string, cwd?: string): number {
   return 0;
 }
 
-/** `spc run pr <runId>` — generate a PR title/body from run records (§82). */
+/** `spc run pr <runId>` - generate a PR title/body from run records (§82). */
 export function runPr(runId: string, options: { cwd?: string; out?: string }): number {
   const repoRoot = resolveRepoRoot(options.cwd);
   const view = loadRunView(path.join(repoRoot, ".spc", "runs"), runId);
@@ -67,7 +67,7 @@ function findSpecFileForRun(repoRoot: string, specId: string): string | null {
   return null;
 }
 
-/** `spc run cancel <runId>` — make an interrupted run's terminal state truthful. */
+/** `spc run cancel <runId>` - make an interrupted run's terminal state truthful. */
 export function runCancel(runId: string, cwd?: string): number {
   const repoRoot = resolveRepoRoot(cwd);
   const state = cancelRun(repoRoot, runId);

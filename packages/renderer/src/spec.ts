@@ -61,7 +61,7 @@ function describeCriterion(c: { type: string; command?: string; path?: string; i
       return `file \`${c.path ?? ""}\` matches assertions`;
     case "agent":
     case "human":
-      return `${c.type} review — ${c.instruction ?? ""}`;
+      return `${c.type} review - ${c.instruction ?? ""}`;
     default:
       return c.type;
   }

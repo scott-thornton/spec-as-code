@@ -85,7 +85,7 @@ export function renderSummary(result: BenchmarkResult): string {
   const control = armTotals(result.results, "control");
   const treatment = armTotals(result.results, "treatment");
   const lines: string[] = [];
-  lines.push(`# spc benchmark — ${result.mode} mode`, "");
+  lines.push(`# spc benchmark - ${result.mode} mode`, "");
   lines.push(`- Tasks: ${result.results.length} (${result.trials} trial(s) each)`);
   lines.push(`- Date: ${result.generatedAt}`);
   lines.push("");
@@ -145,7 +145,7 @@ export function renderSummary(result: BenchmarkResult): string {
   );
   for (const r of result.results) {
     if (r.error) {
-      lines.push(`| ${r.taskId} | ${r.category} | ERROR | ERROR | — | — | — | — |`);
+      lines.push(`| ${r.taskId} | ${r.category} | ERROR | ERROR | - | - | - | - |`);
       continue;
     }
     lines.push(
@@ -161,7 +161,7 @@ export function renderSummary(result: BenchmarkResult): string {
       "This run used **scripted** providers: both arms' behaviours are deterministic",
       "re-enactments encoded in per-task fake scripts. It validates the harness",
       "mechanics (metrics, grading, comparison) and illustrates the failure modes the",
-      "thesis predicts — it is NOT evidence about real models. Validating the thesis",
+      "thesis predicts - it is NOT evidence about real models. Validating the thesis",
       "requires real-provider mode (`spc-evals --provider openai`) and repeated trials;",
       "acceptance thresholds are intentionally not set until that variance is measured",
       "(§68 of the project plan).",

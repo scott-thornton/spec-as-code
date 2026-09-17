@@ -52,7 +52,7 @@ export function validateSpecLocal(spec: Spec, locs: Locs): Diagnostic[] {
   const diags: Diagnostic[] = [];
   const props = slots(spec);
 
-  // SPC1001 — duplicate property ids across requirements and constraints.
+  // SPC1001 - duplicate property ids across requirements and constraints.
   const firstSeen = new Map<string, PropertySlot>();
   for (const p of props) {
     const prior = firstSeen.get(p.id);
@@ -70,7 +70,7 @@ export function validateSpecLocal(spec: Spec, locs: Locs): Diagnostic[] {
     }
   }
 
-  // SPC1001 (criteria) — duplicate acceptance criterion ids across the spec.
+  // SPC1001 (criteria) - duplicate acceptance criterion ids across the spec.
   const critSeen = new Set<string>();
   for (const p of props) {
     const list =
@@ -92,7 +92,7 @@ export function validateSpecLocal(spec: Spec, locs: Locs): Diagnostic[] {
     });
   }
 
-  // SPC1004 / SPC1005 — acceptance completeness.
+  // SPC1004 / SPC1005 - acceptance completeness.
   for (const p of props) {
     const priority = effectivePriority(p);
     if (p.acceptanceCount === 0) {
@@ -116,7 +116,7 @@ export function validateSpecLocal(spec: Spec, locs: Locs): Diagnostic[] {
     }
   }
 
-  // SPC1009 — high-assurance categories (security/compliance) whose
+  // SPC1009 - high-assurance categories (security/compliance) whose
   // must-properties are verified only by agent/human judgment (§80).
   const raw = (base: "requirements" | "constraints", index: number) =>
     base === "requirements" ? spec.requirements[index] : spec.constraints?.[index];
@@ -148,7 +148,7 @@ export function validateSpecCrossRefs(spec: Spec, locs: Locs): Diagnostic[] {
   const props = slots(spec);
   const ids = new Set(props.map((p) => p.id));
 
-  // SPC1002 — unknown property dependencies.
+  // SPC1002 - unknown property dependencies.
   for (const p of props) {
     p.dependsOn.forEach((dep, di) => {
       if (!ids.has(dep)) {
@@ -164,7 +164,7 @@ export function validateSpecCrossRefs(spec: Spec, locs: Locs): Diagnostic[] {
     });
   }
 
-  // SPC1003 — dependency cycles.
+  // SPC1003 - dependency cycles.
   const edges = (id: string): string[] => props.find((p) => p.id === id)?.dependsOn ?? [];
   const cycle = findCycle(props.map((p) => p.id), edges);
   if (cycle) {

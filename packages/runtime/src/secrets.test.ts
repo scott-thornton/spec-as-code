@@ -72,7 +72,7 @@ describe("§53 named secret references", () => {
       expect(f?.title).toContain("SPC_TEST_TOKEN");
       const log = readFileSync(paths.eventsFile(report.runId), "utf8");
       expect(log).toContain('"secret":"SPC_TEST_TOKEN"');
-      // No worktree was created — blocked before execution.
+      // No worktree was created - blocked before execution.
       expect(report.worktree).toBeUndefined();
     } finally {
       if (prev !== undefined) process.env.SPC_TEST_TOKEN = prev;

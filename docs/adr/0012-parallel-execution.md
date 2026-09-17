@@ -8,7 +8,7 @@ Status: accepted
 §78 defers parallel execution until sequential semantics are reliable. The
 benchmark gate has now run (see evals/baselines/), the sequential engine is
 covered by deterministic tests including recovery, and the follow-up policy
-iteration re-measured — the §78 preconditions are satisfied in the only form
+iteration re-measured - the §78 preconditions are satisfied in the only form
 available without a live control plane.
 
 ## Decision

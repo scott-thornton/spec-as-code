@@ -251,7 +251,7 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
   // Materialize planner follow-up drafts as first-class run follow-ups.
   // Benchmark-driven iteration (§31 medium-risk tier): with
   // execution.proceedOnClarificationFollowups, spec_clarification drafts are
-  // demoted to non-blocking — recorded and visible, but not run-gating.
+  // demoted to non-blocking - recorded and visible, but not run-gating.
   for (const draft of plan.followups ?? []) {
     const demote =
       ctx.config.execution.proceedOnClarificationFollowups &&

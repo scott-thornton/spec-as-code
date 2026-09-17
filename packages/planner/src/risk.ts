@@ -6,13 +6,13 @@ import type { Config, PlanAmendment, Task } from "@spc/schema";
  * operations instead of a single all-or-nothing flag:
  *
  * - low:  addDependency, addTask/replaceTask limited to inspect/test/verify
- *         kinds, or scope-narrowing changeTarget — validate and continue.
- * - medium: any other change that touches no high-risk write patterns —
+ *         kinds, or scope-narrowing changeTarget - validate and continue.
+ * - medium: any other change that touches no high-risk write patterns -
  *         continue (the spec cannot change via amendment; "no public API
  *         change" is proxied by the high-risk pattern list below).
  * - high: any introduced task with risk "high", or whose write set touches
  *         high-risk paths (dependency manifests/lockfiles, migrations,
- *         deployment/workflow definitions) — require human approval.
+ *         deployment/workflow definitions) - require human approval.
  */
 
 /** Paths whose modification is treated as a public-API/infra-scale change. */

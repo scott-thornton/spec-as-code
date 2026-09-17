@@ -18,7 +18,7 @@ inconclusive (incl. outstanding human verification) -> `indeterminate`; all
 passing -> `satisfied`. Agent-only support is `indeterminate` unless
 `verification.allowAgentOnlyMustRequirements` is explicitly enabled (and is
 then flagged `weakEvidence`). States are the qualitative set
-`unknown/in_progress/satisfied/unsatisfied/indeterminate/waived` — never
+`unknown/in_progress/satisfied/unsatisfied/indeterminate/waived` - never
 percentages. Human waivers come only from resolved follow-ups. Evidence trust
 levels (1 deterministic command/test, 2 static file/diff, 3 agent, 4 human)
 stay visible in every rendering. Contradictory evidence is never deleted.
@@ -30,5 +30,5 @@ stay visible in every rendering. Contradictory evidence is never deleted.
 
 ## Alternatives considered
 
-- Weighted scores: rejected — false precision.
-- Executor self-attestation: rejected — the core anti-pattern.
+- Weighted scores: rejected - false precision.
+- Executor self-attestation: rejected - the core anti-pattern.

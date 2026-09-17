@@ -31,7 +31,7 @@ What happens:
 - the job summary table shows every property, its priority, observed state and
   evidence count;
 - `human`/`agent` criteria surface as indeterminate warnings rather than
-  silently passing — the PR shows exactly which claims await human judgment.
+  silently passing - the PR shows exactly which claims await human judgment.
 
 Notes:
 

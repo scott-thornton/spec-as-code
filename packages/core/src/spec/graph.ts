@@ -8,7 +8,7 @@ import { validateSpecCrossRefs } from "./semantic.js";
  * Spec composition (§79): `imports:` pulls requirements/constraints/outOfScope
  * from other spec files into one composed graph. Rules (ADR-0014):
  * - the entry file's metadata/goal define the composed spec; imports are libraries;
- * - property IDs are NEVER rewritten (traceability) — collisions across files
+ * - property IDs are NEVER rewritten (traceability) - collisions across files
  *   are rejected (SPC1008);
  * - `dependsOn` may reference imported properties; resolution and cycle checks
  *   run over the composed set;
@@ -89,7 +89,7 @@ export function compileSpecGraph(entryFile: string, read: (file: string) => stri
   flatten(entry);
   const imports = order.slice(1);
 
-  // SPC1008 — property ID collisions across files (IDs are never rewritten).
+  // SPC1008 - property ID collisions across files (IDs are never rewritten).
   const owner = new Map<string, string>();
   for (const f of order) {
     for (const p of [...f.spec.requirements, ...(f.spec.constraints ?? [])]) {

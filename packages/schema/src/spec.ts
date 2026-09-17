@@ -51,7 +51,7 @@ export const prioritySchema = z.enum(["must", "should", "may"]);
 
 /**
  * Higher-order requirement categories (§80). Metadata that shapes prompts,
- * rendering and category-aware lint warnings — never a separate verification
+ * rendering and category-aware lint warnings - never a separate verification
  * machinery (the four acceptance criterion types remain the only verifiers).
  */
 export const requirementCategorySchema = z.enum([

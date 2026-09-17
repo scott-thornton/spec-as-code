@@ -24,7 +24,7 @@ export function renderGithubAnnotations(specIr: SpecIR, states: readonly Require
 export function renderGithubSummary(input: { specIr: SpecIR; states: readonly RequirementState[]; runId: string }): string {
   const byId = new Map(input.states.map((s) => [s.propertyId, s]));
   const lines: string[] = [];
-  lines.push(`### spc verification — ${input.specIr.spec.metadata.id}`, "");
+  lines.push(`### spc verification - ${input.specIr.spec.metadata.id}`, "");
   lines.push(`Run \`${input.runId}\` · digest \`${input.specIr.digest.slice(0, 19)}…\``, "");
   lines.push("| Property | Priority | Observed | Evidence |", "| --- | --- | --- | --- |");
   for (const p of input.specIr.properties) {
@@ -38,7 +38,7 @@ export function renderGithubSummary(input: { specIr: SpecIR; states: readonly Re
   const indeterminate = input.states.filter((s) => s.status === "indeterminate").length;
   lines.push(
     failed > 0 || indeterminate > 0
-      ? `**${failed} unsatisfied, ${indeterminate} indeterminate** — see annotations and \`spc status\`.`
+      ? `**${failed} unsatisfied, ${indeterminate} indeterminate** - see annotations and \`spc status\`.`
       : "All properties satisfied.",
   );
   lines.push("");

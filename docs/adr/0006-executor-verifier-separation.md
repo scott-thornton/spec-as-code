@@ -6,7 +6,7 @@ Status: accepted
 ## Context
 
 The same model invocation that implements something must not be the one that
-decides whether the implementation is correct — implementation bias makes
+decides whether the implementation is correct - implementation bias makes
 self-verification systematically optimistic.
 
 ## Decision

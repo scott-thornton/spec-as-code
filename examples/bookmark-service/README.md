@@ -1,4 +1,4 @@
-# bookmark-service — a standalone spc example
+# bookmark-service - a standalone spc example
 
 A small, realistic service (in-memory bookmarks, a documented public export
 API) and a feature spec a senior engineer might actually write: add tags +
@@ -18,8 +18,8 @@ captured transcript with commentary is in [TRANSCRIPT.md](TRANSCRIPT.md).
 
 ## Layout
 
-- `src/`, `tests/` — the service (pre-feature state, suite green)
-- `specs/bookmarks-tags-csv.yaml` — the desired state
-- `.spc/config.yaml` — provider (Anthropic-compatible GLM endpoint),
-  `parallelism: 2` (the two writers are disjoint — ADR-0012), clarification
+- `src/`, `tests/` - the service (pre-feature state, suite green)
+- `specs/bookmarks-tags-csv.yaml` - the desired state
+- `.spc/config.yaml` - provider (Anthropic-compatible GLM endpoint),
+  `parallelism: 2` (the two writers are disjoint - ADR-0012), clarification
   demotion on (ADR-0013)

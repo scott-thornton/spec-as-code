@@ -88,7 +88,7 @@ export async function runPlan(specFile: string): Promise<number> {
   console.log(`Persisted: ${path.relative(process.cwd(), paths.planFile(planId))}`);
   console.log(`Planner attempts: ${result.attempts}`);
   for (const f of blocking) {
-    console.log(`\nBLOCKING follow-up drafted by planner: ${f.type} — ${f.title}\n  ${f.description}`);
+    console.log(`\nBLOCKING follow-up drafted by planner: ${f.type} - ${f.title}\n  ${f.description}`);
   }
   if (blocking.length > 0) {
     console.log("\nspc apply will be blocked until these are resolved.");

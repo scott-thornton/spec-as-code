@@ -34,7 +34,7 @@ export function printReport(report: ApplyReport): void {
   console.log("");
   console.log("Requirements:");
   for (const r of report.requirements) {
-    console.log(`  ${r.status.padEnd(12)} ${r.propertyId}${r.reason ? ` — ${r.reason}` : ""}`);
+    console.log(`  ${r.status.padEnd(12)} ${r.propertyId}${r.reason ? ` - ${r.reason}` : ""}`);
   }
   const open = report.followups.filter((f) => f.status === "open");
   if (open.length > 0) {

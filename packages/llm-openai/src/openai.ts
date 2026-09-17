@@ -20,7 +20,7 @@ interface ChatCompletionResponse {
 
 /**
  * Adapter for any OpenAI-compatible chat completions endpoint. Uses only
- * the platform fetch — no vendor SDK dependency. Deterministic CI never
+ * the platform fetch - no vendor SDK dependency. Deterministic CI never
  * calls this provider.
  */
 export class OpenAICompatProvider implements LLMProvider {

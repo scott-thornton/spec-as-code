@@ -8,7 +8,7 @@ import { persistState } from "./state.js";
 
 /**
  * Mark a run cancelled. Honest scope: this is for runs left `running` by an
- * interrupted process (crash, Ctrl-C) — there is no daemon, so an actively
+ * interrupted process (crash, Ctrl-C) - there is no daemon, so an actively
  * executing CLI process cannot be signalled mid-task. Cancelling makes the
  * terminal state truthful, unblocks preflight's shadow-run detection, and
  * makes `--resume` refuse.

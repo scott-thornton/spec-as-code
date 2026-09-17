@@ -157,7 +157,7 @@ describe("benchmark harness", () => {
     expect(treatment.falseCompletions).toBe(0);
 
     const summary = renderSummary(result);
-    expect(summary).toContain("# spc benchmark — scripted mode");
+    expect(summary).toContain("# spc benchmark - scripted mode");
     expect(summary).toContain("| MUST requirement completion | 0% | 100% |");
     expect(summary).toContain("Interpretation caveat");
     // Reports persisted.

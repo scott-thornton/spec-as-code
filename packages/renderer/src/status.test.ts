@@ -141,7 +141,7 @@ describe("renderers", () => {
     const text = renderRunSummary({ specIr: ir, runState, followups, evidence, changedFileCount: 3 });
     expect(text).toContain("# Run run-abc");
     expect(text).toContain("1 satisfied");
-    expect(text).toContain("**AUTH-001** — satisfied");
+    expect(text).toContain("**AUTH-001** - satisfied");
     expect(text).toContain("Remaining risk");
     expect(text).toContain("AUTH-C01 verified by non-deterministic evidence only");
     expect(text).toContain("Replans: 1");

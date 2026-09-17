@@ -1,4 +1,4 @@
-# Real-model benchmark — glm-5.3-flash (the §66–§68 gate)
+# Real-model benchmark - glm-5.3-flash (the §66–§68 gate)
 
 - Date: 2026-09-17 · Model: glm-5.3-flash via the Anthropic-compatible coding endpoint (api.z.ai)
 - Arms: Markdown-plan baseline (plan → implement, self-reported) vs the spc workflow (SpecIR → validated plan → bounded worktree execution → independent verification), same model, same bounded repo view per arm, no tool access
@@ -10,7 +10,7 @@
 **The thesis is not validated on this model and task size.** Across 72 scored
 task-pairs the spc workflow completed materially FEWER ground-truth
 requirements than the Markdown-plan baseline (77.3% ± 2.1% vs 98.7% ± 2.3%),
-did not reduce false completion declarations (0.67 vs 0.33 — both near zero),
+did not reduce false completion declarations (0.67 vs 0.33 - both near zero),
 and used ~3× the tokens. Neither arm introduced forbidden modifications;
 regressions were 0 (baseline) vs 0.33 (spc). Per §68's own gates this result
 says: do **not** proceed to parallel execution or control planes; per §94,
@@ -22,13 +22,13 @@ The completion gap is dominated by **blocked runs**, not bad edits: of the
 unsatisfied treatment outcomes, most were runs the planner halted with a
 blocking `spec_clarification` follow-up on tasks that were adequately
 specified (7 of 8 blocked tasks in trial 1). One blocked task
-(`feat-log-levels`) is the *designed* under-specified trap — blocking there is
+(`feat-log-levels`) is the *designed* under-specified trap - blocking there is
 correct behaviour. `api-version-header` blocked in all three trials
 (systematic, worth a planner-contract fix). When the workflow did execute, its
 edits were clean: zero forbidden modifications anywhere, and only one
 regression (sec-redact-token, trial 1). The safety machinery works; on a
 flash-tier model it is simply too trigger-happy, trading completion for
-caution — while the baseline one-shot flow was already good enough on these
+caution - while the baseline one-shot flow was already good enough on these
 small repositories to produce zero false-done claims.
 
 The plausible fixes this evidence points at (future work, explicitly gated on
@@ -37,7 +37,7 @@ clarification follow-ups (§31 medium-risk tier), planner prompt/repair tuning
 for verification-path planning, and re-testing on a non-flash model where the
 baseline is expected to be sloppier.
 
-# Real-model benchmark — aggregate over trials
+# Real-model benchmark - aggregate over trials
 
 - Trials: 3 (evals/results/real-glm53f-t1, evals/results/real-glm53f-t2, evals/results/real-glm53f-t3)
 - Tasks per trial: 30
@@ -110,13 +110,13 @@ Continue investing in the workflow only while ALL hold:
 
 ---
 
-# Addendum (same day): §94 iteration — re-measured
+# Addendum (same day): §94 iteration - re-measured
 
 The baseline above pointed at over-cautious blocking follow-ups as the
-dominant loss. We implemented the indicated fix —
+dominant loss. We implemented the indicated fix -
 `execution.proceedOnClarificationFollowups` demotes blocking
 `spec_clarification` follow-ups to non-blocking (recorded, visible, but not
-run-gating) — and re-ran the full benchmark under identical conditions
+run-gating) - and re-ran the full benchmark under identical conditions
 (glm-5.3-flash, 30 tasks, withheld grading; 1 trial).
 
 | Metric | Baseline (spc) | With demotion policy |
@@ -131,7 +131,7 @@ Interpretation: one targeted abstraction change recovered roughly two-thirds
 of the completion gap without giving up the safety properties (zero
 forbidden modifications, no false-completion advantage for the baseline).
 The remaining blocked tasks include `feat-log-levels` (the *designed*
-under-specified trap — correct behaviour) and a small residue of planner
+under-specified trap - correct behaviour) and a small residue of planner
 over-caution that the next iteration (planner verification-path tuning, and
 re-testing on a non-flash model) should target. This is the §68/§94 loop
 functioning as intended: measure → iterate → re-measure.

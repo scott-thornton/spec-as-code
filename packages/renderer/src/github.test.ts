@@ -65,7 +65,7 @@ describe("github format", () => {
       states: [state("AUTH-001", "unsatisfied"), state("AUTH-002", "satisfied"), state("AUTH-C01", "indeterminate")],
       runId: "v-run-1",
     });
-    expect(summary).toContain("### spc verification — oauth-login");
+    expect(summary).toContain("### spc verification - oauth-login");
     expect(summary).toContain("| AUTH-001 | must | unsatisfied | 1 record(s) |");
     expect(summary).toContain("1 unsatisfied, 1 indeterminate");
   });

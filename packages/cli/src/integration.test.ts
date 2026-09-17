@@ -142,7 +142,7 @@ describe("end-to-end: greeting fixture", () => {
     expect(r.stdout).toContain("::error title=");
     expect(r.stdout).toContain("GREETING-001");
     const summary = readFileSync(summaryFile, "utf8");
-    expect(summary).toContain("### spc verification — greeting-api");
+    expect(summary).toContain("### spc verification - greeting-api");
     expect(summary).toContain("| GREETING-001 | must | unsatisfied |");
   });
 });

@@ -1,4 +1,4 @@
-# spc — Spec-as-Code / Plan-as-Code (V0)
+# spc - Spec-as-Code / Plan-as-Code (V0)
 
 A local developer tool that treats software requirements as **declarative
 desired state**, produces **validated execution plans**, executes them through
@@ -15,6 +15,19 @@ Spec (desired) ─► Plan (validated transition) ─► Execute (bounded, isola
 The critical invariant: **an agent saying "done" is never sufficient evidence
 that a requirement is satisfied.**
 
+## Documentation
+
+- [Getting started](docs/usage/getting-started.md) - from zero to a verified run
+- [Spec authoring reference](docs/usage/spec-authoring.md) - every field, criterion type and identifier rule
+- [CLI reference](docs/usage/cli-reference.md) - every command, flag and exit code
+- [Configuration reference](docs/usage/configuration.md) - every `.spc/config.yaml` option
+- [Workflows](docs/usage/workflows.md) - recipes: features, drift, invariants, parallelism, CI
+- [Follow-ups and approvals](docs/usage/followups-and-approvals.md) - the human loop, gates and waivers
+- [Diagnostics reference](docs/usage/diagnostics.md) - every SPC code and runtime error
+- [Architecture](docs/architecture.md) and [ADRs](docs/adr/) - the decisions and their reasons
+- [CI integration](docs/ci-integration.md) - requirement status on pull requests
+- [Benchmark harness](evals/README.md) and [baselines](evals/baselines/)
+
 ## Quick start
 
 ```bash
@@ -24,7 +37,7 @@ pnpm typecheck
 pnpm test
 ```
 
-Try the vertical slice against a fixture (deterministic — no live model):
+Try the vertical slice against a fixture (deterministic - no live model):
 
 ```bash
 tmp=$(mktemp -d) && cp -R fixtures/simple-node-service/. "$tmp"/ && cd "$tmp"
@@ -112,7 +125,7 @@ outOfScope: [Google OAuth, enterprise SSO]
 ```
 
 Requirement states are qualitative: `unknown`, `in_progress`, `satisfied`,
-`unsatisfied`, `indeterminate`, `waived` — never percentages.
+`unsatisfied`, `indeterminate`, `waived` - never percentages.
 
 ## Repository layout (operating inside a project)
 
@@ -147,7 +160,7 @@ specs/*.yaml               desired state (committed)
 
 ## Spec composition (imports)
 **Also in the run loop:** requirement `category` tags (§80) with the SPC1009
-high-assurance warning; approval-gated acceptance commands (§52) — approval-class
+high-assurance warning; approval-gated acceptance commands (§52) - approval-class
 commands produce an approval follow-up and only run after
 `spc followup resolve <id> --option approve`; `environment.requiredSecrets`
 (§53) presence-checked at apply preflight (values never read); tiered
@@ -174,15 +187,15 @@ cycles are compile errors.
 The repository dogs food: `specs/self-hosting.yaml` (SELF-001…008 from §90)
 states the tool's own requirements, `.spc/config.yaml` is committed, and CI
 runs `spc verify --format github` on every PR (see
-[.github/workflows/spc-verify.yml](.github/workflows/spc-verify.yml)) — the
+[.github/workflows/spc-verify.yml](.github/workflows/spc-verify.yml)) - the
 tool proves itself on itself, with requirement-oriented PR annotations.
 
 ## Fixtures
 
-- `fixtures/simple-node-service` — failing requirement → plan → bounded
+- `fixtures/simple-node-service` - failing requirement → plan → bounded
   execution → verification → `GREETING-001 satisfied` with deterministic
   test evidence.
-- `fixtures/plan-replan-service` — planner targets the wrong path; the
+- `fixtures/plan-replan-service` - planner targets the wrong path; the
   executor records an observation, the task moves to `needs_replan`, a plan
   amendment replaces it with the correct target, execution resumes and
   succeeds with the original plan preserved in the run directory.
@@ -193,13 +206,13 @@ V0 of an experimental workflow, plus the benchmark harness (see
 [evals/README.md](evals/README.md)): 30 tasks across 10 categories with
 withheld grading, comparing a Markdown-plan baseline against the spc workflow
 across completion, false completion declarations, regressions and forbidden
-modifications. Baselines exist in two modes: **scripted** (deterministic fake providers —
+modifications. Baselines exist in two modes: **scripted** (deterministic fake providers -
 validates harness mechanics, not the thesis) and **real**: the §68 gate was
 executed on 2026-09-17 with glm-5.3-flash (3 trials × 30 tasks,
 [evals/baselines/real-glm-5.3-flash-2026-09-17.md](evals/baselines/real-glm-5.3-flash-2026-09-17.md)).
 Result: on this flash-tier model the workflow did **not** beat the Markdown
-baseline (77% vs 99% completion). Per §94 the abstraction then iterated —
-ADR-0013's clarification-demotion policy — and the re-measure narrowed the
+baseline (77% vs 99% completion). Per §94 the abstraction then iterated -
+ADR-0013's clarification-demotion policy - and the re-measure narrowed the
 gap to −6 pp (87% vs 93%) with safety properties intact (see the baseline
 addendum). Following that evidence, parallel execution (§78, ADR-0012) is
 now implemented: `execution.parallelism` runs ready tasks with disjoint
