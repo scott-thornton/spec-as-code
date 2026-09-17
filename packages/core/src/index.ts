@@ -5,6 +5,7 @@ export * from "./diagnostics.js";
 export * from "./graph.js";
 export * from "./glob.js";
 export * from "./spec/load.js";
+export * from "./spec/graph.js";
 export * from "./spec/semantic.js";
 export * from "./spec/normalize.js";
 export * from "./plan/validate.js";

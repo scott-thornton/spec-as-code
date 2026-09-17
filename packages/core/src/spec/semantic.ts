@@ -47,7 +47,8 @@ export function effectivePriority(slot: { priority: Priority | undefined; kind: 
   return slot.kind === "constraint" ? "must" : "must";
 }
 
-export function validateSpecSemantics(spec: Spec, locs: Locs): Diagnostic[] {
+/** Intra-file semantic checks: identity uniqueness, acceptance completeness. */
+export function validateSpecLocal(spec: Spec, locs: Locs): Diagnostic[] {
   const diags: Diagnostic[] = [];
   const props = slots(spec);
 
@@ -91,8 +92,40 @@ export function validateSpecSemantics(spec: Spec, locs: Locs): Diagnostic[] {
     });
   }
 
-  // SPC1002 — unknown property dependencies.
+  // SPC1004 / SPC1005 — acceptance completeness.
+  for (const p of props) {
+    const priority = effectivePriority(p);
+    if (p.acceptanceCount === 0) {
+      if (priority === "must") {
+        diags.push(
+          error(
+            "SPC1004",
+            `${p.kind} ${p.id} has priority "must" but no acceptance criteria; must-properties must be verifiable.`,
+            locs.get(`${p.base}.${p.index}.id`),
+          ),
+        );
+      } else {
+        diags.push(
+          warning(
+            "SPC1005",
+            `${p.kind} ${p.id} has priority "${priority}" and no acceptance criteria; it cannot be verified mechanically.`,
+            locs.get(`${p.base}.${p.index}.id`),
+          ),
+        );
+      }
+    }
+  }
+
+  return diags;
+}
+
+/** Cross-reference checks: dependsOn resolution and cycles (run over the full composed property set). */
+export function validateSpecCrossRefs(spec: Spec, locs: Locs): Diagnostic[] {
+  const diags: Diagnostic[] = [];
+  const props = slots(spec);
   const ids = new Set(props.map((p) => p.id));
+
+  // SPC1002 — unknown property dependencies.
   for (const p of props) {
     p.dependsOn.forEach((dep, di) => {
       if (!ids.has(dep)) {
@@ -122,29 +155,9 @@ export function validateSpecSemantics(spec: Spec, locs: Locs): Diagnostic[] {
     );
   }
 
-  // SPC1004 / SPC1005 — acceptance completeness.
-  for (const p of props) {
-    const priority = effectivePriority(p);
-    if (p.acceptanceCount === 0) {
-      if (priority === "must") {
-        diags.push(
-          error(
-            "SPC1004",
-            `${p.kind} ${p.id} has priority "must" but no acceptance criteria; must-properties must be verifiable.`,
-            locs.get(`${p.base}.${p.index}.id`),
-          ),
-        );
-      } else {
-        diags.push(
-          warning(
-            "SPC1005",
-            `${p.kind} ${p.id} has priority "${priority}" and no acceptance criteria; it cannot be verified mechanically.`,
-            locs.get(`${p.base}.${p.index}.id`),
-          ),
-        );
-      }
-    }
-  }
-
   return diags;
+}
+
+export function validateSpecSemantics(spec: Spec, locs: Locs): Diagnostic[] {
+  return [...validateSpecLocal(spec, locs), ...validateSpecCrossRefs(spec, locs)];
 }

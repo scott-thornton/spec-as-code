@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -184,5 +184,112 @@ describe("end-to-end: replanning fixture", () => {
     const r = spc(repo, ["status"]);
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("✓ SESSION-001");
+  });
+});
+
+describe("spec imports end to end (§79)", () => {
+  it("spc spec validate composes an imported invariants file", () => {
+    const repo = path.join(tmpRoot, "imports-e2e");
+    mkdirSync(path.join(repo, "specs"), { recursive: true });
+    writeFileSync(
+      path.join(repo, "specs", "_invariants.yaml"),
+      [
+        "apiVersion: spc.dev/v1alpha1",
+        "kind: Spec",
+        "metadata:",
+        "  id: org-invariants",
+        "  title: Org invariants",
+        "goal: Shared invariants.",
+        "requirements:",
+        "  - id: SEC-001",
+        "    statement: No plaintext secrets in src.",
+        "    priority: must",
+        "    acceptance:",
+        "      - id: SEC-001-A",
+        "        type: command",
+        "        command: node -e 0",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      path.join(repo, "specs", "feature.yaml"),
+      [
+        "apiVersion: spc.dev/v1alpha1",
+        "kind: Spec",
+        "metadata:",
+        "  id: feature-y",
+        "  title: Feature Y",
+        "goal: Works.",
+        "imports:",
+        "  - ./_invariants.yaml",
+        "requirements:",
+        "  - id: FEAT-001",
+        "    statement: Feature works.",
+        "    priority: must",
+        "    dependsOn:",
+        "      - SEC-001",
+        "    acceptance:",
+        "      - id: FEAT-001-A",
+        "        type: command",
+        "        command: node -e 0",
+        "",
+      ].join("\n"),
+    );
+    gitOk(repo, ["init", "-b", "main"]);
+    commitAll(repo, "fixture");
+    const r = spc(repo, ["spec", "validate", path.join(repo, "specs", "feature.yaml")]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("2 properties (2 must)");
+    // And `verify` composes the same graph.
+    const v = spc(repo, ["verify", path.join(repo, "specs", "feature.yaml")]);
+    expect(v.status).toBe(0);
+    expect(v.stdout).toContain("SEC-001");
+    expect(v.stdout).toContain("FEAT-001");
+  });
+
+  it("spc spec validate reports a cross-file id collision with both files", () => {
+    const repo = path.join(tmpRoot, "imports-collision");
+    mkdirSync(path.join(repo, "specs"), { recursive: true });
+    writeFileSync(
+      path.join(repo, "specs", "a.yaml"),
+      [
+        "apiVersion: spc.dev/v1alpha1",
+        "kind: Spec",
+        "metadata: { id: spec-a, title: A }",
+        "goal: g",
+        "imports: [./b.yaml]",
+        "requirements:",
+        "  - id: DUP-001",
+        "    statement: local",
+        "    priority: may",
+        "    acceptance:",
+        "      - id: DUP-001-A",
+        "        type: command",
+        "        command: node -e 0",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      path.join(repo, "specs", "b.yaml"),
+      [
+        "apiVersion: spc.dev/v1alpha1",
+        "kind: Spec",
+        "metadata: { id: spec-b, title: B }",
+        "goal: g",
+        "requirements:",
+        "  - id: DUP-001",
+        "    statement: imported",
+        "    priority: may",
+        "    acceptance:",
+        "      - id: DUP-001-B",
+        "        type: command",
+        "        command: node -e 0",
+        "",
+      ].join("\n"),
+    );
+    const r = spc(repo, ["spec", "validate", "specs/a.yaml"]);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("SPC1008");
+    expect(r.stdout).toContain("b.yaml");
   });
 });

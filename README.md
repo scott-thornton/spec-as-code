@@ -145,6 +145,20 @@ specs/*.yaml               desired state (committed)
 - Repository content is treated as untrusted data; permission checks live in
   code, never in prompts.
 
+## Spec composition (imports)
+
+Shared invariants live once and compose into feature specs (ADR-0014):
+
+```yaml
+imports:
+  - ./_invariants.yaml   # org-wide SEC-*/policy properties
+```
+
+The composed graph compiles as one spec: cross-file `dependsOn` resolves, the
+digest covers every file in the graph (plan staleness works across imports),
+ID collisions across files are rejected rather than rewritten, and import
+cycles are compile errors.
+
 ## Self-hosting
 
 The repository dogs food: `specs/self-hosting.yaml` (SELF-001…008 from §90)

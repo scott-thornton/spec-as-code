@@ -82,6 +82,8 @@ export const specSchema = z.strictObject({
     description: z.string().optional(),
   }),
   goal: z.string().min(1),
+  /** Relative paths to other spec files whose properties compose into this one (§79). */
+  imports: z.array(z.string().min(1)).optional(),
   requirements: z.array(requirementSchema).min(1),
   constraints: z.array(constraintSchema).optional(),
   outOfScope: z.array(z.string()).optional(),
@@ -125,6 +127,8 @@ export interface SpecIR {
   spec: NormalizedSpec;
   properties: DesiredProperty[];
   digest: string;
+  /** Files composed into this spec via imports (transitive), for tooling. */
+  importedFiles?: string[];
 }
 
 export function isDeterministicCriterion(c: AcceptanceCriterion): boolean {

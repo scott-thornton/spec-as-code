@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { SpcError, compileSpecSource } from "@spc/core";
-import { diffStat } from "@spc/repo";
+import { SpcError } from "@spc/core";
+import { compileSpecFile, diffStat } from "@spc/repo";
 import { renderPrDraft } from "@spc/renderer";
 import { loadRunView } from "@spc/runtime";
 import { resolveRepoRoot } from "../context.js";
@@ -31,7 +31,7 @@ export function runPr(runId: string, options: { cwd?: string; out?: string }): n
     throw new SpcError("RUN_NOT_FOUND", `run ${runId} not found under ${path.join(repoRoot, ".spc", "runs")}`);
   }
   const specFile = findSpecFileForRun(repoRoot, view.meta.specId);
-  const specIr = specFile ? compileSpecSource(readFileSync(specFile, "utf8"), specFile).ir : null;
+  const specIr = specFile ? compileSpecFile(specFile).ir : null;
   if (!specIr) {
     throw new SpcError("SPEC_NOT_FOUND", `spec ${view.meta.specId} not found under ${path.join(repoRoot, "specs")}`);
   }
@@ -61,7 +61,7 @@ function findSpecFileForRun(repoRoot: string, specId: string): string | null {
   for (const entry of readdirSync(specsDir).sort()) {
     if (!entry.endsWith(".yaml") && !entry.endsWith(".yml")) continue;
     const file = path.join(specsDir, entry);
-    const r = compileSpecSource(readFileSync(file, "utf8"), file);
+    const r = compileSpecFile(file);
     if (r.ok && r.ir?.spec.metadata.id === specId) return file;
   }
   return null;

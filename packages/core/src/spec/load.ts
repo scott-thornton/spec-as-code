@@ -4,7 +4,7 @@ import { specSchema, type Spec, type SpecIR } from "@spc/schema";
 import { error, hasErrors, type Diagnostic, type SourceLocation } from "../diagnostics.js";
 import { digestOf } from "../hash.js";
 import { normalizeSpec } from "./normalize.js";
-import { validateSpecSemantics } from "./semantic.js";
+import { validateSpecCrossRefs, validateSpecLocal } from "./semantic.js";
 
 export interface SpecCompileResult {
   ok: boolean;
@@ -136,6 +136,28 @@ function schemaDiagnostics(
  * -> normalization -> immutable SpecIR + digest.
  */
 export function compileSpecSource(source: string, file: string): SpecCompileResult {
+  const parsed = parseSpecSource(source, file);
+  if (!parsed.spec) {
+    return { ok: false, ir: null, diagnostics: parsed.diagnostics };
+  }
+  const diagnostics = [...parsed.diagnostics, ...validateSpecCrossRefs(parsed.spec, parsed.locs)];
+  if (hasErrors(diagnostics)) {
+    return { ok: false, ir: null, diagnostics };
+  }
+  return { ok: true, ir: finalizeSpec(parsed.spec), diagnostics };
+}
+
+export interface ParsedSpecSource {
+  /** Raw authored spec (defaults unresolved) or null when invalid. */
+  spec: Spec | null;
+  /** Intra-file semantic diagnostics (identity, acceptance) + parse/schema ones. */
+  diagnostics: Diagnostic[];
+  /** Source locations keyed by dotted path (requirements.0.dependsOn.1 …). */
+  locs: Map<string, SourceLocation>;
+}
+
+/** Parse + schema-validate + intra-file semantics; cross-file refs deferred. */
+export function parseSpecSource(source: string, file: string): ParsedSpecSource {
   const diagnostics: Diagnostic[] = [];
   const index = buildLineIndex(source);
 
@@ -143,13 +165,13 @@ export function compileSpecSource(source: string, file: string): SpecCompileResu
   try {
     documents = parseAllDocuments(source);
   } catch (e) {
-    return { ok: false, ir: null, diagnostics: [error("SPC0001", `YAML parse error: ${(e as Error).message}`)] };
+    return { spec: null, diagnostics: [error("SPC0001", `YAML parse error: ${(e as Error).message}`)], locs: new Map() };
   }
   if (documents.length !== 1) {
     return {
-      ok: false,
-      ir: null,
+      spec: null,
       diagnostics: [error("SPC0001", `expected exactly one YAML document in ${file}, found ${documents.length}.`)],
+      locs: new Map(),
     };
   }
   const doc = documents[0]!;
@@ -165,37 +187,38 @@ export function compileSpecSource(source: string, file: string): SpecCompileResu
     diagnostics.push(error("SPC0001", `YAML parse error: ${err.message}`, loc));
   }
   if (doc.errors.length > 0) {
-    return { ok: false, ir: null, diagnostics };
+    return { spec: null, diagnostics, locs: new Map() };
   }
 
   const ctx: WalkCtx = { doc, index, file, locs: new Map(), diagnostics: [], aliases: new Set() };
   const data = walkNode(doc.contents ?? null, "", ctx);
   diagnostics.push(...ctx.diagnostics);
   if (diagnostics.some((d) => d.code === "SPC0001")) {
-    return { ok: false, ir: null, diagnostics };
+    return { spec: null, diagnostics, locs: ctx.locs };
   }
 
   const parsed = specSchema.safeParse(data);
   if (!parsed.success) {
     diagnostics.push(...schemaDiagnostics(parsed.error.issues as never, ctx.locs));
-    return { ok: false, ir: null, diagnostics };
+    return { spec: null, diagnostics, locs: ctx.locs };
   }
   const spec: Spec = parsed.data;
 
-  diagnostics.push(...validateSpecSemantics(spec, ctx.locs));
+  diagnostics.push(...validateSpecLocal(spec, ctx.locs));
   if (hasErrors(diagnostics)) {
-    return { ok: false, ir: null, diagnostics };
+    return { spec: null, diagnostics, locs: ctx.locs };
   }
+  return { spec, diagnostics, locs: ctx.locs };
+}
 
+/** Normalize + digest a semantically valid spec into its immutable SpecIR. */
+export function finalizeSpec(spec: Spec, importedFiles?: string[]): SpecIR {
   const normalized = normalizeSpec(spec);
   const digest = digestOf(normalized);
   return {
-    ok: true,
-    ir: {
-      spec: normalized,
-      properties: [...normalized.requirements, ...normalized.constraints],
-      digest,
-    },
-    diagnostics,
+    spec: normalized,
+    properties: [...normalized.requirements, ...normalized.constraints],
+    digest,
+    ...(importedFiles && importedFiles.length > 0 ? { importedFiles } : {}),
   };
 }

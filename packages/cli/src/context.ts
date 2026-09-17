@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { compileSpecSource, SpcError, type SpecCompileResult } from "@spc/core";
+import { SpcError, type SpecCompileResult } from "@spc/core";
+import { compileSpecFile as compileSpecGraphFs } from "@spc/repo";
 import type { Config, SpecIR } from "@spc/schema";
 import type { LLMProvider } from "@spc/llm";
 import { FakeProvider, parseFakeScript } from "@spc/llm-fake";
@@ -32,7 +33,7 @@ export function compileSpecFile(file: string): SpecCompileResult {
   if (!existsSync(file)) {
     throw new SpcError("SPEC_FILE_NOT_FOUND", `spec file not found: ${file}`);
   }
-  return compileSpecSource(readFileSync(file, "utf8"), file);
+  return compileSpecGraphFs(file);
 }
 
 /** Resolve which spec to use: explicit file, or the single spec in specs/. */

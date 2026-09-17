@@ -1,8 +1,9 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { compileSpecSource, SpcError } from "@spc/core";
+import { SpcError } from "@spc/core";
 import { configSchema, planSchema, type Config, type Plan } from "@spc/schema";
 import { parse as parseYaml } from "yaml";
+import { compileSpecFile } from "@spc/repo";
 import type { RunMeta } from "./state.js";
 import type { SpcPaths } from "./paths.js";
 
@@ -69,7 +70,7 @@ export function findSpecFile(specsDir: string, specId: string): string | null {
   for (const entry of readdirSync(specsDir).sort()) {
     if (!entry.endsWith(".yaml") && !entry.endsWith(".yml")) continue;
     const file = path.join(specsDir, entry);
-    const result = compileSpecSource(readFileSync(file, "utf8"), file);
+    const result = compileSpecFile(file);
     if (result.ok && result.ir?.spec.metadata.id === specId) return file;
   }
   return null;

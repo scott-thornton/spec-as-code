@@ -13,7 +13,7 @@ import type { FollowUp, Observation, Plan, RequirementState, RunState, RunStatus
 import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { executeTask, enforceWriteScope, runScheduler, type ExecutionOutcome } from "@spc/executor";
 import { generateAmendment } from "@spc/planner";
-import { commitAll, currentRevision, diffStat, git, statusDelta, statusPorcelain } from "@spc/repo";
+import { commitAll, compileSpecFile, currentRevision, diffStat, git, statusDelta, statusPorcelain } from "@spc/repo";
 import { createWorktree, removeWorktree } from "@spc/repo";
 import { observeRepository } from "@spc/repo";
 import { renderRunSummary } from "@spc/renderer";
