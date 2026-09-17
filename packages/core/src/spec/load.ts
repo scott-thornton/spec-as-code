@@ -1,5 +1,5 @@
 import { isAlias, isMap, isScalar, isSeq, parseAllDocuments } from "yaml";
-import type { Node } from "yaml";
+import type { Document, Node } from "yaml";
 import { specSchema, type Spec, type SpecIR } from "@spc/schema";
 import { error, hasErrors, type Diagnostic, type SourceLocation } from "../diagnostics.js";
 import { digestOf } from "../hash.js";
@@ -25,7 +25,7 @@ function buildLineIndex(source: string): LineIndex {
   return { lineStarts, totalLength: source.length };
 }
 
-function offsetToLoc(index: LineIndex, offset: number): SourceLocation {
+function offsetToLoc(index: LineIndex, offset: number): { line: number; column: number } {
   const clamped = Math.max(0, Math.min(offset, index.totalLength));
   let lo = 0;
   let hi = index.lineStarts.length - 1;
@@ -39,6 +39,7 @@ function offsetToLoc(index: LineIndex, offset: number): SourceLocation {
 }
 
 interface WalkCtx {
+  doc: Document;
   index: LineIndex;
   file: string;
   locs: Map<string, SourceLocation>;
@@ -66,14 +67,17 @@ function walkNode(node: Node | null, path: string, ctx: WalkCtx): unknown {
     }
     ctx.aliases.add(node);
     try {
-      return walkNode(node.resolved ?? null, path, ctx);
+      const target = node.resolve(ctx.doc) as Node | undefined;
+      return walkNode(target ?? null, path, ctx);
     } finally {
       ctx.aliases.delete(node);
     }
   }
   if (isScalar(node)) return node.value;
   if (isSeq(node)) {
-    return node.items.map((item, i) => walkNode(item, `${path === "" ? "" : path + "."}${i}`, ctx));
+    return node.items.map(
+      (item, i) => walkNode(item as Node | null, `${path === "" ? "" : path + "."}${i}`, ctx),
+    );
   }
   if (isMap(node)) {
     const obj: Record<string, unknown> = {};
@@ -164,7 +168,7 @@ export function compileSpecSource(source: string, file: string): SpecCompileResu
     return { ok: false, ir: null, diagnostics };
   }
 
-  const ctx: WalkCtx = { index, file, locs: new Map(), diagnostics: [], aliases: new Set() };
+  const ctx: WalkCtx = { doc, index, file, locs: new Map(), diagnostics: [], aliases: new Set() };
   const data = walkNode(doc.contents ?? null, "", ctx);
   diagnostics.push(...ctx.diagnostics);
   if (diagnostics.some((d) => d.code === "SPC0001")) {

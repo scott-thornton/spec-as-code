@@ -22,6 +22,7 @@ function toProperty(
   kind: "requirement" | "constraint",
   source: Requirement | Constraint,
 ): DesiredProperty {
+  const scope = "scope" in source ? source.scope : undefined;
   return {
     kind,
     id: source.id,
@@ -29,7 +30,7 @@ function toProperty(
     priority: source.priority ?? "must",
     dependsOn: sortUnique(source.dependsOn ?? []),
     acceptance: (source.acceptance ?? []).map(normalizeCriterion),
-    ...(source.scope ? { scope: source.scope } : {}),
+    ...(scope ? { scope } : {}),
     ...(source.metadata ? { metadata: source.metadata } : {}),
   };
 }

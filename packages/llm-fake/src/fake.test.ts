@@ -10,6 +10,8 @@ planner:
 executor:
   T001:
     status: completed
+  T002:
+    status: completed
   "T002@1":
     status: failed
     failure:
