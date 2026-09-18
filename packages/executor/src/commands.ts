@@ -179,6 +179,7 @@ export function runCommand(command: string, opts: CommandRunOptions): Promise<Co
     // leaves the spawned command holding the stdio pipe open on Linux, so
     // "close" would not fire until the command itself finishes.
     child.on("exit", (code) => {
+      clearTimeout(timer);
       const endTime = new Date().toISOString();
       const env = opts.env ?? process.env;
       const cleanOut = redactSecrets(truncate(stdout, opts.maxOutputBytes), env);
