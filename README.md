@@ -1,9 +1,37 @@
-# spec-as-code (`spc`)
+# spec-as-code
 
-A local developer tool that treats software requirements as **declarative
-desired state**, produces **validated execution plans**, executes them through
-**bounded** coding agents, and establishes requirement satisfaction through
-**collected evidence** rather than agent self-reporting.
+Requirements are authored as declarative YAML specs. A spec compiles to a
+canonical IR whose SHA-256 digest is the specification's identity. Plans
+are generated and deterministically validated before anything executes.
+Coding agents execute with bounded, per-task write scopes in an isolated
+Git worktree. Requirement satisfaction is established only by recorded
+evidence the runtime collected itself.
+
+> An agent saying "done" is never sufficient evidence that a requirement
+> is satisfied.
+
+## What spc is
+
+A v0.1 vertical slice of a requirements-as-state workflow:
+
+- **Author** requirements, constraints and acceptance criteria in YAML.
+  Four criterion types carry different evidence strength: command, file,
+  agent, human. Shared invariants compose via `imports:`.
+- **Compile** to canonical SpecIR; the digest is the spec's identity.
+  Unknown fields, ID collisions and dependency cycles are compile errors
+  with file:line:column diagnostics and stable `SPC*` codes.
+- **Plan** through any provider - OpenAI-compatible, Anthropic-compatible,
+  a coding harness, or a deterministic fake. The plan is validated
+  deterministically (must-coverage, cycles, verification paths, write
+  conflicts) and repaired from diagnostics at most twice.
+- **Execute** in a dedicated Git worktree, one branch per run. Write scopes
+  are enforced against the actual Git diff, not agent claims. Sequential
+  or parallel (disjoint write sets merge deterministically).
+- **Verify** by running acceptance criteria and deriving requirement status
+  from append-only evidence. Uncertainty blocks as structured follow-ups
+  instead of being guessed through.
+
+## Architecture
 
 ```
 Spec (desired) ─► Plan (validated transition) ─► Execute (bounded, isolated)
@@ -12,233 +40,178 @@ Spec (desired) ─► Plan (validated transition) ─► Execute (bounded, isola
    status/diff ◄──── Verification (independent) ◄─────────────────┘
 ```
 
-The critical invariant: **an agent saying "done" is never sufficient evidence
-that a requirement is satisfied.**
+Packages: `@spc/schema` (persisted schemas), `@spc/core` (compiler,
+canonical hashing, validation), `@spc/repo` (Git, observation, worktrees),
+`@spc/llm` (+`fake`/`openai`/`anthropic`/`harness` adapters),
+`@spc/planner`, `@spc/executor`, `@spc/verifier`, `@spc/runtime`,
+`@spc/renderer`, `@spc/cli`.
 
-**Status: experimental (v0.1.0).** The workflow runs end to end, and the
-tool verifies its own requirements in its own CI. It guarantees: agents
-execute with bounded write scopes, requirement status comes only from
-recorded evidence, runs are isolated in their own worktrees and fully
-replayable, and uncertainty blocks honestly instead of being guessed
-through. Comparative benchmark results (one flash-tier model, small tasks)
-are published unaltered in [evals/baselines](evals/baselines/); where the
-structured approach pays off most - larger repositories, stronger models -
-is not yet measured. A complete worked example lives in
-[examples/bookmark-service](examples/bookmark-service/README.md).
+## Requirements
 
-## Documentation
+- Node.js 22+ and pnpm 9+ (not yet published to npm - use it from a clone)
+- Git (execution isolation uses worktrees; nothing is merged or pushed
+  automatically)
+- A model provider for planning and agent execution - or none:
+  `spec validate`, `verify` with command/file criteria, `status`, `diff`
+  and `followups` all run without one
 
-- [Why spc](docs/why-spc.md) - what it gives you, what it does not, and when to skip it
-- [Getting started](docs/usage/getting-started.md) - from zero to a verified run
-- [Spec authoring reference](docs/usage/spec-authoring.md) - every field, criterion type and identifier rule
-- [CLI reference](docs/usage/cli-reference.md) - every command, flag and exit code
-- [Configuration reference](docs/usage/configuration.md) - every `.spc/config.yaml` option
-- [Workflows](docs/usage/workflows.md) - recipes: features, drift, invariants, parallelism, CI
-- [Agent harnesses](docs/usage/agent-harnesses.md) - running spc through ZCode and friends: JSON output, the harness provider, and the bundled `.agents/skills/spc` skill
-- [Follow-ups and approvals](docs/usage/followups-and-approvals.md) - the human loop, gates and waivers
-- [Diagnostics reference](docs/usage/diagnostics.md) - every SPC code and runtime error
-- [Architecture](docs/architecture.md) and [ADRs](docs/adr/) - the decisions and their reasons
-- [CI integration](docs/ci-integration.md) - requirement status on pull requests
-- [Benchmark harness](evals/README.md) and [baselines](evals/baselines/)
-
-## Quick start
-
-Built from this repository for now (npm packaging is planned):
+## Install
 
 ```bash
 git clone https://github.com/scott-thornton/spec-as-code
 cd spec-as-code
 pnpm install --frozen-lockfile
 pnpm build
-pnpm typecheck
-pnpm test
 alias spc='node "$PWD/packages/cli/dist/main.js"'
 ```
 
-Try the vertical slice against a fixture (deterministic - no live model):
+Every command below assumes that alias.
 
-```bash
-tmp=$(mktemp -d) && cp -R fixtures/simple-node-service/. "$tmp"/ && cd "$tmp"
-git init -b main && git add -A && git commit -m init
-node <this-repo>/packages/cli/dist/main.js init          # or configure manually
-node <this-repo>/packages/cli/dist/main.js spec validate specs/greeting.yaml
-node <this-repo>/packages/cli/dist/main.js plan specs/greeting.yaml
-node <this-repo>/packages/cli/dist/main.js apply
-node <this-repo>/packages/cli/dist/main.js status
-node <this-repo>/packages/cli/dist/main.js diff
-node <this-repo>/packages/cli/dist/main.js followups
-```
-
-The fixtures use the deterministic **fake provider** (scripted responses in
-`.spc/fake-script.yaml`), so everything above runs offline. For real
-repositories, configure an OpenAI-compatible provider in `.spc/config.yaml`:
-
-```yaml
-provider:
-  name: openai
-  model: gpt-4.1          # any chat-completions model
-  # baseURL: https://your-gateway/v1   # optional
-  # apiKeyEnv: OPENAI_API_KEY          # default
-```
-
-## Commands
-
-```
-spc init                          create specs/, .spc/, default config; report (never persist) detected commands
-spc spec validate <file>          compiler diagnostics + spec digest
-spc spec show <file> [--format]   generated Markdown/text view
-spc plan <specFile>               observe repo, generate plan, validate (repair ≤2), persist
-spc plan validate [file]          validate a persisted plan against its spec
-spc plan show [file]              render the plan
-spc plan approve <planId>         approval marker for requirePlanApproval
-spc apply [planFile]              preflight → isolated worktree → sequential DAG execution →
-                                  write-scope enforcement → verification → summary
-                                  (--resume <runId> recovers interrupted runs)
-spc verify [specFile]             run acceptance criteria against the current tree (drift detection)
-                                  --format github emits CI annotations + a step summary
-spc reconcile [specFile]          verify; when drifted, plan the next transition (--apply to execute)
-spc run pr <runId>                generate a PR title/body from run records (§82)
-spc status [specFile]             requirement-oriented status with evidence provenance
-spc diff [specFile]               desired vs observed
-spc followups                     structured queue (blocking / non-blocking)
-spc followup resolve <id>         --option/--run/--note; produces human evidence when criterion-linked
-spc run show <runId>              full run summary from persisted records
-```
-
-## Writing a spec
+## Author a specification
 
 ```yaml
 apiVersion: spc.dev/v1alpha1
 kind: Spec
 metadata:
-  id: oauth-login
-  title: GitHub OAuth Authentication
-goal: >
-  Users can authenticate using GitHub OAuth without breaking existing
-  password authentication.
+  id: greeting-api
+  title: Greeting API
+goal: Expose a greeting function that returns "hello".
 requirements:
-  - id: AUTH-001
-    statement: Users can authenticate using GitHub OAuth.
-    priority: must                      # must | should | may
+  - id: GREETING-001
+    statement: Calling greeting returns "hello".
+    priority: must
     acceptance:
-      - id: AUTH-001-A
-        type: command                   # deterministic evidence
+      - id: GREETING-001-A
+        type: command
         command: node --test "tests/*.test.mjs"
-        expect: { exitCode: 0 }
-      - id: AUTH-001-B
-        type: file
-        path: src/auth/github.ts
-        assert: { exists: true, contains: "passport-github" }
-constraints:
-  - id: AUTH-C01
-    statement: OAuth access tokens must not be stored in plaintext.
-    acceptance:
-      - id: AUTH-C01-A
-        type: agent                     # model-derived evidence (flagged)
-        instruction: Inspect token persistence.
-      - id: AUTH-C01-B
-        type: human                     # indeterminate until resolved
-        instruction: Review the consent screen UX.
-outOfScope: [Google OAuth, enterprise SSO]
+        expect:
+          exitCode: 0
+outOfScope:
+  - multilingual greetings
 ```
 
-Requirement states are qualitative: `unknown`, `in_progress`, `satisfied`,
-`unsatisfied`, `indeterminate`, `waived` - never percentages.
+The acceptance command is what spc itself executes and records; it is the
+requirement's proof obligations, not prose.
 
-## Repository layout (operating inside a project)
+## Validate it
 
-```
-specs/*.yaml               desired state (committed)
-.spc/config.yaml           provider + policy (committed)
-.spc/plans/                generated plans (ignored)
-.spc/worktrees/<runId>/    execution isolation, branch spc/<specId>/<runId>
-.spc/runs/<runId>/         events.jsonl / evidence.jsonl / observations.jsonl
-                           (append-only), state.json (projection), followups.json,
-                           summary.md, amendments/, plan-vN.json
+```bash
+spc spec validate specs/greeting.yaml
 ```
 
-## Packages
+Prints the property count, a checklist and the digest. Recompiling a
+semantically identical specification always produces the identical digest;
+key order and formatting do not matter. Errors print as compiler
+diagnostics with source excerpts.
 
-`@spc/schema` → `@spc/core` → `@spc/repo` / `@spc/llm(+fake/openai)` →
-`@spc/planner` / `@spc/executor` / `@spc/verifier` → `@spc/runtime` →
-`@spc/cli`, plus `@spc/renderer` for one-directional human views. See
-[docs/architecture.md](docs/architecture.md) and the ADRs in `docs/adr/`.
+## Plan
 
-## Safety model
-
-- Execution happens in a dedicated Git worktree; dirty repositories are
-  refused at preflight; nothing is merged or pushed automatically.
-- Per-task write scopes are enforced against the **actual git delta**, not
-  agent claims (`OUT_OF_SCOPE_WRITE`).
-- Commands are classified (test/build/lint/inspect allowed; network, push,
-  publish, destructive denied by default; installs/migrations gated) with
-  timeouts and secret redaction before persistence.
-- Repository content is treated as untrusted data; permission checks live in
-  code, never in prompts.
-
-## Spec composition (imports)
-**Also in the run loop:** requirement `category` tags (§80) with the SPC1009
-high-assurance warning; approval-gated acceptance commands (§52) - approval-class
-commands produce an approval follow-up and only run after
-`spc followup resolve <id> --option approve`; `environment.requiredSecrets`
-(§53) presence-checked at apply preflight (values never read); tiered
-amendment approval (§31, `execution.amendmentApproval: tiered`) where
-high-risk amendments (lockfiles, migrations, deploy config) are gated behind
-a blocking follow-up with the amendment preserved for review; and
-`spc run cancel <id>` for interrupted runs.
-
-
-Shared invariants live once and compose into feature specs (ADR-0014):
-
-```yaml
-imports:
-  - ./_invariants.yaml   # org-wide SEC-*/policy properties
+```bash
+spc plan specs/greeting.yaml
 ```
 
-The composed graph compiles as one spec: cross-file `dependsOn` resolves, the
-digest covers every file in the graph (plan staleness works across imports),
-ID collisions across files are rejected rather than rewritten, and import
-cycles are compile errors.
+Observes the repository (bounded snapshot: languages, manifests, tests,
+likely relevant files), generates a task graph with explicit read/write
+targets per task, validates it deterministically, and persists it under
+`.spc/plans/`. The plan records the spec digest; change the spec and the
+old plan is refused.
 
-## Self-hosting
+## Apply
 
-The tool verifies itself: `specs/self-hosting.yaml` (SELF-001 through SELF-008 from §90)
-states the tool's own requirements, `.spc/config.yaml` is committed, and CI
-runs `spc verify --format github` on every PR (see
-[.github/workflows/spc-verify.yml](.github/workflows/spc-verify.yml)) - the
-tool proves itself on itself, with requirement-oriented PR annotations.
+```bash
+spc apply
+```
 
-## Fixtures
+Preflight refuses dirty repositories and stale plans. Execution happens in
+a fresh worktree on branch `spc/<specId>/<runId>`; the working tree is
+never touched. Each task may only write inside its declared targets -
+checked against the real Git diff, so an out-of-scope edit fails the task
+(`OUT_OF_SCOPE_WRITE`) instead of shipping. The run finishes `succeeded`
+only when every must requirement is satisfied or waived by recorded
+evidence; a run that cannot proceed blocks on a structured follow-up
+rather than improvising.
 
-- `fixtures/simple-node-service` - failing requirement → plan → bounded
-  execution → verification → `GREETING-001 satisfied` with deterministic
-  test evidence.
-- `fixtures/plan-replan-service` - planner targets the wrong path; the
-  executor records an observation, the task moves to `needs_replan`, a plan
-  amendment replaces it with the correct target, execution resumes and
-  succeeds with the original plan preserved in the run directory.
+## Check status
 
-## Status of the project
+```bash
+spc status
+spc diff
+```
 
-Experimental V0, complete and self-verifying. The benchmark harness
-([evals/README.md](evals/README.md)) compares this workflow against a plain
-Markdown-plan baseline on 30 tasks with withheld grading, and every result -
-scripted, real-model and adversarial-gate runs - is committed unaltered under
-[evals/baselines](evals/baselines/), including what the tool lost and the
-fixes that followed. Parallel execution (§78, ADR-0012) is implemented:
-`execution.parallelism` runs ready tasks with disjoint write sets
-concurrently in per-task worktrees, merged deterministically. CI reporting
-(`spc verify --format github`, see
-[docs/ci-integration.md](docs/ci-integration.md)) and drift reconciliation
-(`spc reconcile`) are available now. What is not yet measured: real-sized
-repositories - that is the open question.
+Status is requirement-oriented: per-property state with the reason and the
+evidence provenance behind it (deterministic-test, static-file,
+agent-review, human-review). Diff is desired versus observed. Both accept
+`--format json`.
 
-## Contributing
+## Resolve follow-ups
 
-See [CONTRIBUTING.md](CONTRIBUTING.md); day-to-day contributor rules (for
-agents and humans) live in [AGENTS.md](AGENTS.md). CI verifies the tool's
-own spec on every pull request.
+```bash
+spc followups
+spc followup resolve F-001 --option confirm
+```
 
-## License
+Missing spec detail, approvals, manual verification and waivers are data,
+not prose in logs. Criterion-linked resolutions become human evidence and
+re-derive the property status immediately.
 
-[MIT](LICENSE) - Copyright (c) 2026 Scott Thornton.
+## Semantics and guarantees
+
+- The digest covers the composed import graph: editing any imported file
+  invalidates plans built against the old spec.
+- Property IDs are stable identity, never rewritten; cross-file collisions
+  are compile errors, not namespaces.
+- Evidence is append-only. Contradictory evidence is retained forever;
+  requirement status is derived from it per criterion (newest wins).
+- Write scopes are enforced against the actual Git delta. Merge conflicts
+  during parallel execution fail the task (`EXECUTION_CONFLICT`); nothing
+  is resolved silently.
+- Runs are replayable from `events.jsonl`; `state.json` is a projection.
+  Interrupted runs resume (`spc apply --resume`) without re-executing
+  completed work.
+- Secrets are presence-checked names only; values are never read into
+  specs, plans, prompts or persisted records. Command output is redacted
+  before persistence.
+- Commands are policy-classified (network, push, publish, destructive
+  denied by default; installs and migrations approval-gated); permission
+  checks live in code, never in prompts.
+
+## Run records contract
+
+- Commit `specs/` and `.spc/config.yaml`; `.spc/runs/`, `worktrees/` and
+  `plans/` are generated state and ignored.
+- Never hand-edit run records; status comes from evidence, and hand edits
+  desynchronize the projection from the event log.
+- The run branch is yours to review and merge; spc never merges or pushes.
+
+## Current v0.1 limitations
+
+Single repository, single spec per plan. Planning and agent execution need
+a provider (API key, or an agent answering harness requests through
+files). Agent-verified requirements are flagged and stay indeterminate
+unless explicitly allowed. The benchmark corpus measures small-task
+behavior; real-repository behavior is unmeasured. No npm package yet.
+
+## Documentation
+
+- `docs/why-spc.md` - what it gives you, what it does not, when to skip it
+- `docs/usage/getting-started.md` - zero to a verified run
+- `docs/usage/spec-authoring.md` - every field, criterion type and rule
+- `docs/usage/cli-reference.md` - every command, flag and exit code
+- `docs/usage/configuration.md` - every `.spc/config.yaml` option
+- `docs/usage/workflows.md` - features, drift, invariants, parallelism, CI
+- `docs/usage/agent-harnesses.md` - running spc through a coding harness
+- `docs/usage/followups-and-approvals.md` - the human loop, gates, waivers
+- `docs/usage/diagnostics.md` - every error and warning code
+- `docs/architecture.md` and `docs/adr/` - decisions and their reasons
+- `evals/README.md` - benchmark harness; results in `evals/baselines/`
+- `CONTRIBUTING.md` and `AGENTS.md` - how to change this repository
+
+## Repository development commands
+
+```bash
+pnpm install --frozen-lockfile
+pnpm build            # all packages, topological
+pnpm typecheck        # strict tsc across workspaces
+pnpm test             # deterministic suite, no network, no live model
+node packages/cli/dist/main.js verify   # the tool's own spec, in CI
+```

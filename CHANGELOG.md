@@ -29,6 +29,10 @@ uses semantic versioning.
   an external coding agent answers every model request through files
   (zero API spend), including the fast adversarial gate
   (`evals/tools/harness-gate.sh` and `flash-gate.sh`).
+- Post-fix full harness rerun (answering agent as model, both arms):
+  30/30 tasks succeeded in both arms, zero blocked runs, zero false-done,
+  regressions or forbidden changes - parity at ceiling; the pre-fix
+  blocked-run residue is gone ([baselines](evals/baselines/real-glm-5.3-flash-2026-09-17.md)).
 - Committed fast-adversarial gate results
   ([evals/baselines/fast-adversarial-2026-09-17.md](evals/baselines/fast-adversarial-2026-09-17.md)):
   full-tier run completed both arms 12/12 with zero friction; flash subset

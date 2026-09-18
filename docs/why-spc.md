@@ -63,18 +63,13 @@ worked).
 
 Honesty section, not a disclaimer section:
 
-- **Speed.** There is more ceremony than "agent, go". Measured rather than
-  assumed: an early flash-tier run showed the workflow completing fewer
-  requirements than a plain Markdown-plan baseline - traced to two bugs
-  (executor re-blocking on already-demoted clarifications, plus one
-  under-specified benchmark task), both fixed. The post-fix full rerun
-  shows parity at ceiling: 30/30 both arms, zero blocked runs, zero bad
-  outcomes either way ([raw numbers](../evals/baselines/)). At this task
-  size the baseline has no room to fail, so what that run really certifies
-  is that the machinery costs a competent agent nothing. Where the fence
-  and the receipts pay off - larger repositories, real drift risk,
-  constrained changes, audit requirements - remains unmeasured, and is the
-  open question this project exists to answer.
+- **Speed.** There is more ceremony than "agent, go". On the benchmark
+  corpus (30 small tasks) a competent agent completes everything through
+  either workflow, so the ceremony buys nothing measurable there and costs
+  nothing measurable either. Where the fence and the receipts should pay
+  off - larger repositories, real drift risk, constrained changes, audit
+  requirements - remains unmeasured, and is the open question this project
+  exists to answer.
 - **A better model.** spc is not smarter than the agent you already use.
   It is the same intelligence with boundaries and receipts.
 - **Autonomy without you.** Approvals, waivers, merges and ambiguous calls
