@@ -7,13 +7,16 @@
 
 ## What code this measures
 
-All numbers in this document describe the tool **as it existed when the runs
-executed** (2026-09-17, pre-fix). The executor-side clarification-demotion
-fix (ADR-0013 addendum) and the api-version-header corpus fix postdate these
-trials: that task now completes 3/3 on the same model where it blocked 3/3
-here. The full-trial aggregate has not been re-run with the fixed code, so
-treat these figures as the pre-fix record, not the current tool's expected
-performance.
+All numbers in the trial sections below describe the tool **as it existed
+when the runs executed** (2026-09-17, pre-fix). The executor-side
+clarification-demotion fix (ADR-0013 addendum) and the api-version-header
+corpus fix postdate those trials: that task now completes on the same model
+where it blocked 3/3 there. **The current record is
+[Post-fix rerun (fixed code)](#post-fix-rerun-fixed-code) at the bottom of
+this document** - the full 30-task API re-run on commit abc9c31, same
+conditions as the pre-fix record. (The harness-mode rerun is a
+gating/plumbing check, not a model-quality measurement.) Treat the pre-fix
+figures as historical, not the current tool's expected performance.
 
 ## Verdict
 
@@ -220,3 +223,71 @@ What changed, plainly:
    plain engineer arm" needs the API rerun with independent models per arm;
    this run only certifies that the failure modes measured above no longer
    fire.
+
+---
+
+# Post-fix rerun (fixed code)
+
+The API rerun the harness section called for: same conditions as the
+pre-fix API record - glm-5.3-flash answering both arms independently via
+the Anthropic-compatible endpoint, 30 tasks × both arms, withheld-test
+grading, no tool access - on the **fixed** code (commit abc9c31:
+executor-side clarification demotion + api-version-header corpus fix).
+1 trial, run 2026-09-17 23:58 → 2026-09-18 01:23 (~85 min; endpoint rate
+limiting made it slower than planned). All 30 tasks returned results
+(0 errors): 21 tasks hit rate limits in the concurrent wave and all 21
+recovered in the runner's sequential retry wave, so unlike the pre-fix
+trials this record is fully covered - no errored rows excluded.
+Raw data: `evals/results/full-flash-fixed-merged/results.json`
+(merged from `evals/results/full-flash-fixed/<task>/results.json`),
+aggregate via `node evals/tools/aggregate-real.mjs evals/results/full-flash-fixed-merged`.
+
+| Metric | Pre-fix API record (addendum above) | Post-fix rerun (fixed code) |
+| --- | --- | --- |
+| Requirement completion | spc 87%, Markdown baseline 93% - spc 6 points behind | spc 97% (29/30), Markdown baseline 97% (29/30) - parity, 0.0 pp |
+| spc blocked runs | 5 / 30 | 1 / 30 (and that one still graded 100%) |
+| False completion declarations | spc 2, baseline 2 (parity) | spc 1, baseline 1 (parity) |
+| Regressions / forbidden changes (both arms) | 0 / 0 | 0 / 0 |
+| Model calls | not recorded | spc 61, baseline 60 |
+| spc token overhead vs baseline | 2.95x | 2.98x |
+
+Follow-ups raised (recorded, non-gating under the fixed policy): 51 across
+20 of 30 spc runs, 0 replans.
+
+## Where the paired losses sit (same trial, per task)
+
+| Task | Markdown baseline | spc | Note |
+| --- | --- | --- | --- |
+| schema-rename-field | 100% | 0% | spc's only loss: declared success (false-done) on a 10-line patch vs the baseline's 44 - the rename did not cover every call site |
+| config-gitignore-dist | 100% | 100% | spc's only blocked run: 3 follow-ups raised and the run gated, yet withheld grading passed both requirements - a block with zero completion cost |
+| config-env-port | 0% | 100% | the baseline's only loss (false-done); the spc arm was clean here |
+
+On `feat-log-levels` (the designed under-specification trap): the spc run
+no longer halts - demotion turned the blocking follow-up into 5 recorded,
+non-gating follow-ups, execution proceeded, and withheld grading passed
+100%. That is the same posture change the harness rerun observed: the trap
+now surfaces under-specification as recorded observations instead of a
+run-gating halt. Nothing adverse materialised under grading this run, but
+"blocking there is correct behaviour" (the pre-fix analysis) no longer
+describes the tool.
+
+## Verdict on the rerun
+
+**The gap closed - to parity.** spc 97% vs Markdown baseline 97% (0.0 pp,
+from -6 pp pre-fix and -21.4 pp in the original trials); blocked runs
+5 → 1; every safety metric held (0 regressions, 0 forbidden changes on
+both arms, false-done parity at 1 vs 1). The fix did what the failure
+analysis predicted: runs that used to die in planner follow-ups now
+execute.
+
+Caveats, honestly: this is one trial per arm - pre-fix trials varied ±2 pp
+trial-to-trial, and the baseline also moved (93 → 97), so some of the
+swing is run noise - but a 6-point move in exactly the direction the fix
+targets, with blocks collapsing 5 → 1, is consistent with cause rather
+than luck. The residual spc loss changed shape rather than disappearing:
+it is now a false-done (schema-rename-field over-claiming) instead of a
+block. Token overhead is unchanged at ~3x. Per the §68 gates the +5 pp
+completion gate is still not met (parity, not dominance), but the
+"do not proceed" reading no longer follows from blocked-run losses: on
+this corpus the workflow now executes wherever it used to stall, and loses
+only where it over-claims.
