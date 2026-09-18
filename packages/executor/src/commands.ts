@@ -175,25 +175,10 @@ export function runCommand(command: string, opts: CommandRunOptions): Promise<Co
     child.stderr.on("data", (d: Buffer) => {
       if (stderr.length < cap) stderr += d.toString("utf8");
     });
-    child.on("error", (e) => {
-      clearTimeout(timer);
-      const endTime = new Date().toISOString();
-      const env = opts.env ?? process.env;
-      resolve({
-        ...base,
-        exitCode: null,
-        stdout: redactSecrets(truncate(stdout, opts.maxOutputBytes), env),
-        stderr: redactSecrets(e.message, env),
-        stdoutDigest: digestOf(stdout),
-        stderrDigest: digestOf(e.message),
-        startTime,
-        endTime,
-        durationMs: Date.now() - start,
-        timedOut,
-      });
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
+    // Resolve on exit, not close: with shell: true a SIGKILL to the shell
+    // leaves the spawned command holding the stdio pipe open on Linux, so
+    // "close" would not fire until the command itself finishes.
+    child.on("exit", (code) => {
       const endTime = new Date().toISOString();
       const env = opts.env ?? process.env;
       const cleanOut = redactSecrets(truncate(stdout, opts.maxOutputBytes), env);
@@ -205,6 +190,23 @@ export function runCommand(command: string, opts: CommandRunOptions): Promise<Co
         stderr: cleanErr,
         stdoutDigest: digestOf(stdout),
         stderrDigest: digestOf(stderr),
+        startTime,
+        endTime,
+        durationMs: Date.now() - start,
+        timedOut,
+      });
+    });
+    child.on("error", (e) => {
+      clearTimeout(timer);
+      const endTime = new Date().toISOString();
+      const env = opts.env ?? process.env;
+      resolve({
+        ...base,
+        exitCode: null,
+        stdout: redactSecrets(truncate(stdout, opts.maxOutputBytes), env),
+        stderr: redactSecrets(e.message, env),
+        stdoutDigest: digestOf(stdout),
+        stderrDigest: digestOf(e.message),
         startTime,
         endTime,
         durationMs: Date.now() - start,
