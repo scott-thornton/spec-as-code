@@ -21,7 +21,7 @@ A v0.1 vertical slice of a requirements-as-state workflow:
   Unknown fields, ID collisions and dependency cycles are compile errors
   with file:line:column diagnostics and stable `SPC*` codes.
 - **Plan** through any provider - OpenAI-compatible, Anthropic-compatible,
-  a coding harness, or a deterministic fake. The plan is validated
+  a coding agent in your harness, or a deterministic fake. The plan is validated
   deterministically (must-coverage, cycles, verification paths, write
   conflicts) and repaired from diagnostics at most twice.
 - **Execute** in a dedicated Git worktree, one branch per run. Write scopes
@@ -199,7 +199,7 @@ behavior; real-repository behavior is unmeasured. No npm package yet.
 - `docs/usage/cli-reference.md` - every command, flag and exit code
 - `docs/usage/configuration.md` - every `.spc/config.yaml` option
 - `docs/usage/workflows.md` - features, drift, invariants, parallelism, CI
-- `docs/usage/agent-harnesses.md` - running spc through a coding harness
+- `docs/usage/agent-harnesses.md` - running spc through a coding harness (any provider)
 - `docs/usage/followups-and-approvals.md` - the human loop, gates, waivers
 - `docs/usage/diagnostics.md` - every error and warning code
 - `docs/architecture.md` and `docs/adr/` - decisions and their reasons
