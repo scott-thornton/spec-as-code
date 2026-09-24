@@ -52,6 +52,12 @@ execution:
   # branch; a merge conflict fails the task with EXECUTION_CONFLICT.
   parallelism: 1
 
+  # Commit the run branch after each task passes its write-scope check
+  # (message: "spc: task <id> (run <runId>)"), recording the revision on
+  # the task state and in TASK_COMMITTED events. Default false: one result
+  # revision per run; the per-task journey lives in events.jsonl.
+  commitPerTask: false
+
   # §31 iteration: demote blocking spec_clarification follow-ups drafted by
   # the planner to non-blocking and proceed. The follow-ups are still
   # recorded and visible after the run. Measured to recover most of the

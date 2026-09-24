@@ -77,6 +77,14 @@ requirements:
         type: command
         command: pnpm --filter @spc/runtime exec vitest run src/apply.test.ts
 
+  - id: SELF-009
+    statement: With execution.commitPerTask enabled, each task's changes land as their own revision on the run branch, recorded on task state.
+    priority: must
+    acceptance:
+      - id: SELF-009-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/commits-per-task.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services

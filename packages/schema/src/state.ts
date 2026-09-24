@@ -46,6 +46,8 @@ export const taskStateSchema = z.strictObject({
   attempt: z.number().int().nonnegative(),
   startedAt: z.string().optional(),
   completedAt: z.string().optional(),
+  /** Revision this task's changes were committed in (commit-per-task). */
+  revision: z.string().optional(),
   failure: taskFailureSchema.optional(),
 });
 

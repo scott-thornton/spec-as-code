@@ -402,6 +402,7 @@ async function driveRun(ctx: RunContext): Promise<ApplyReport> {
   let schedulerOutcome: "done" | "deadlocked" | "replan_failed" = "done";
 
   const transition = (taskId: string, next: TaskState): void => {
+    const previous = ctx.state.tasks[taskId];
     ctx.state = { ...ctx.state, tasks: { ...ctx.state.tasks, [taskId]: next } };
     const p: Record<string, unknown> = { taskId, attempt: next.attempt };
     switch (next.status) {
@@ -412,9 +413,17 @@ async function driveRun(ctx: RunContext): Promise<ApplyReport> {
         ctx.events.append("TASK_READY", p);
         ctx.events.append("TASK_STARTED", p);
         break;
-      case "completed":
+      case "completed": {
+        ctx.state = {
+          ...ctx.state,
+          tasks: {
+            ...ctx.state.tasks,
+            [taskId]: { ...next, ...(previous?.revision ? { revision: previous.revision } : {}) },
+          },
+        };
         ctx.events.append("TASK_COMPLETED", { ...p, summary: "task completed" });
         break;
+      }
       case "failed":
         ctx.events.append("TASK_FAILED", { ...p, error: next.failure ?? { code: "TASK_FAILED", message: "failed" } });
         break;
@@ -560,10 +569,13 @@ async function finishRun(
   ctx.state = { ...ctx.state, tasks: { ...ctx.state.tasks } };
   persistState(ctx.paths.stateFile(ctx.meta.runId), ctx.state);
 
-  // Commit worktree changes (if any) so the branch holds the result revision.
-  const baseRev = currentRevision(worktree);
+  // Commit any remaining changes so the branch holds the result revision,
+  // then diff against the run's base revision (task commits may already be
+  // on the branch under commitPerTask or parallel execution).
+  const baseRev = ctx.meta.baseRevision ?? currentRevision(worktree);
   const resultRevision =
-    commitAll(worktree, `spc: apply plan ${currentPlan.metadata.id} for ${ctx.meta.specId} (run ${ctx.meta.runId})`) ?? baseRev;
+    commitAll(worktree, `spc: apply plan ${currentPlan.metadata.id} for ${ctx.meta.specId} (run ${ctx.meta.runId})`) ??
+    currentRevision(worktree);
   const stat = diffStat(worktree, baseRev, resultRevision);
   const changedFileCount = countChanged(worktree, baseRev, resultRevision);
 
@@ -821,6 +833,27 @@ export async function executeTaskInRun(
       repositoryRevision: ctx.snapshotRevision,
       payload: { changedPaths: Object.fromEntries(delta) },
     });
+    // Commit-per-task: once the task's actual delta has passed the write
+    // scope check, land it on the run branch as its own revision.
+    if (
+      ctx.config.execution.commitPerTask &&
+      outcome.status === "completed" &&
+      delta.size > 0 &&
+      worktreeRoot === ctx.worktreePath
+    ) {
+      const revision = commitAll(worktreeRoot, `spc: task ${task.id} (run ${ctx.meta.runId})`);
+      if (revision) {
+        const prior = ctx.state.tasks[task.id];
+        ctx.state = {
+          ...ctx.state,
+          tasks: {
+            ...ctx.state.tasks,
+            [task.id]: { ...(prior ?? { taskId: task.id, status: "running", attempt }), revision },
+          },
+        };
+        ctx.events.append("TASK_COMMITTED", { taskId: task.id, revision, attempt });
+      }
+    }
   }
   return outcome;
 }
@@ -847,12 +880,20 @@ async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
     ctx.events.append("USAGE_RECORDED", { role: record.role, requestId: record.requestId, model: record.model });
   };
   const transition = (taskId: string, next: TaskState): void => {
+    const previous = ctx.state.tasks[taskId];
     ctx.state = { ...ctx.state, tasks: { ...ctx.state.tasks, [taskId]: next } };
     const p: Record<string, unknown> = { taskId, attempt: next.attempt };
     if (next.status === "running") {
       ctx.events.append("TASK_READY", p);
       ctx.events.append("TASK_STARTED", p);
     } else if (next.status === "completed") {
+      ctx.state = {
+        ...ctx.state,
+        tasks: {
+          ...ctx.state.tasks,
+          [taskId]: { ...next, ...(previous?.revision ? { revision: previous.revision } : {}) },
+        },
+      };
       ctx.events.append("TASK_COMPLETED", { ...p, summary: "task completed" });
     } else if (next.status === "failed") {
       ctx.events.append("TASK_FAILED", { ...p, error: next.failure ?? { code: "TASK_FAILED", message: "failed" } });
@@ -991,7 +1032,16 @@ async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
             });
             outcome = failedOutcome(task, "EXECUTION_CONFLICT", "task patch conflicted during deterministic merge");
           } else {
+            const prior = ctx.state.tasks[task.id];
+            ctx.state = {
+              ...ctx.state,
+              tasks: {
+                ...ctx.state.tasks,
+                [task.id]: { ...(prior ?? { taskId: task.id, status: "running", attempt }), revision: sha },
+              },
+            };
             ctx.events.append("PATCH_MERGED", { taskId: task.id, revision: sha });
+            ctx.events.append("TASK_COMMITTED", { taskId: task.id, revision: sha, attempt });
           }
         }
       } finally {

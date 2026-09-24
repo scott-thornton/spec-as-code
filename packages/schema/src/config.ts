@@ -31,6 +31,12 @@ export const executionConfigSchema = z.strictObject({
    * requires human approval (blocking follow-up) for high-risk ones.
    */
   amendmentApproval: z.enum(["auto", "tiered"]).default("auto"),
+  /**
+   * Commit the run branch after each task passes its write-scope check
+   * (message: "spc: task <id> (run <runId>)"), recording the revision on
+   * the task state. Default false: one result revision per run.
+   */
+  commitPerTask: z.boolean().default(false),
   /** Harness provider: how long to wait for an external agent's answer per request. */
   harnessResponseTimeoutMs: z.number().int().positive().default(900_000),
   /** Extra high-risk write patterns for tiered amendment approval. */

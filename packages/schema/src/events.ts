@@ -18,6 +18,7 @@ export const eventTypeSchema = z.enum([
   "COMMAND_EXECUTED",
   "OBSERVATION_RECORDED",
   "TASK_COMPLETED",
+  "TASK_COMMITTED",
   "TASK_FAILED",
   "TASK_BLOCKED",
   "TASK_NEEDS_REPLAN",

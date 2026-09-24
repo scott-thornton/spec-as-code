@@ -6,6 +6,15 @@ uses semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Commit-per-task (`execution.commitPerTask`): each task's changes land on
+  the run branch as their own revision once its write-scope check passes,
+  with the revision recorded on task state and in `TASK_COMMITTED` events.
+  Default remains one result revision per run. Run summaries now diff
+  against the run's base revision, so runs with per-task (or parallel)
+  commits report the full transition diff.
+
 ### Fixed
 
 - Executor-side clarification demotion (ADR-0013 addendum): a task that

@@ -76,6 +76,18 @@ export function applyEvent(state: RunState, event: Event): RunState {
       }
       break;
     }
+    case "TASK_COMMITTED": {
+      if (taskId) {
+        const prior = s.tasks[taskId];
+        if (prior) {
+          s.tasks[taskId] = {
+            ...prior,
+            ...(typeof p.revision === "string" ? { revision: p.revision } : {}),
+          };
+        }
+      }
+      break;
+    }
     case "TASK_COMPLETED": {
       if (taskId) {
         const prior = s.tasks[taskId];
@@ -85,6 +97,7 @@ export function applyEvent(state: RunState, event: Event): RunState {
           attempt: typeof p.attempt === "number" ? p.attempt : prior?.attempt ?? 0,
           ...(prior?.startedAt ? { startedAt: prior.startedAt } : {}),
           completedAt: event.timestamp,
+          ...(prior?.revision ? { revision: prior.revision } : {}),
         };
       }
       break;
