@@ -93,6 +93,14 @@ requirements:
         type: command
         command: pnpm --filter @spc/verifier exec vitest run src/criteria.test.ts
 
+  - id: SELF-011
+    statement: With execution.inPlace, runs execute in the repository checkout on the run branch instead of an isolated worktree, and the original branch is restored afterwards.
+    priority: must
+    acceptance:
+      - id: SELF-011-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/inplace.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services

@@ -37,6 +37,15 @@ export const executionConfigSchema = z.strictObject({
    * the task state. Default false: one result revision per run.
    */
   commitPerTask: z.boolean().default(false),
+  /**
+   * Execute in the repository checkout itself, on the run branch
+   * (spc/<spec-id>/<run-id>), instead of an isolated git worktree. The
+   * checkout switches to the run branch for the duration of the run and is
+   * restored to the original branch afterwards; the run branch keeps the
+   * result commits. Requires execution.parallelism 1 (parallel execution
+   * writes through per-task worktrees).
+   */
+  inPlace: z.boolean().default(false),
   /** Harness provider: how long to wait for an external agent's answer per request. */
   harnessResponseTimeoutMs: z.number().int().positive().default(900_000),
   /** Extra high-risk write patterns for tiered amendment approval. */

@@ -113,10 +113,22 @@ export function diffPatch(cwd: string, from: string, to: string, maxBytes: numbe
   return Buffer.from(r.stdout, "utf8").subarray(0, maxBytes).toString("utf8");
 }
 
+/** spc-owned state directories; they never belong in result commits. */
+const SPC_STATE_PATHS = [".spc/runs", ".spc/plans", ".spc/worktrees", ".spc/cache", ".spc/harness"];
+
 export function commitAll(cwd: string, message: string): string | null {
   const status = statusPorcelain(cwd);
   if (!status.dirty) return null;
   gitOk(cwd, ["add", "-A"], { identity: true });
+  // In-place execution commits inside a checkout that contains spc-owned
+  // state (run logs, plans, worktrees, harness queues); unstage it. In
+  // worktree mode the state lives outside the tree, so this is a no-op.
+  // reset rather than an add exclude pathspec: naming an existing ignored
+  // path in `git add` pathspecs makes git exit non-zero even though the
+  // files stage correctly.
+  gitOk(cwd, ["reset", "-q", "--", ...SPC_STATE_PATHS], { identity: true });
+  // Only spc state was dirty: nothing staged, nothing to commit.
+  if (git(cwd, ["diff", "--cached", "--quiet"]).ok) return null;
   gitOk(cwd, ["commit", "-m", message], { identity: true });
   return currentRevision(cwd);
 }

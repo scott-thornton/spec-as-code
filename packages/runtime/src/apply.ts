@@ -13,8 +13,8 @@ import type { FollowUp, Observation, Plan, RequirementState, RunState, RunStatus
 import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { executeTask, enforceWriteScope, runScheduler, type ExecutionOutcome } from "@spc/executor";
 import { classifyAmendmentRisk, generateAmendment } from "@spc/planner";
-import { commitAll, compileSpecFile, currentRevision, diffStat, git, statusDelta, statusPorcelain } from "@spc/repo";
-import { createWorktree, removeWorktree } from "@spc/repo";
+import { commitAll, compileSpecFile, currentRevision, diffStat, git, statusDelta, statusPorcelain, type WorktreeStatus } from "@spc/repo";
+import { checkoutBranch, checkoutRunBranch, createWorktree, removeWorktree } from "@spc/repo";
 import { observeRepository } from "@spc/repo";
 import { renderRunSummary } from "@spc/renderer";
 import { mustPropertiesSatisfied } from "@spc/verifier";
@@ -276,14 +276,34 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
   }
 
   // Execution isolation: one worktree per run (plus per-task worktrees when
-  // execution.parallelism > 1).
-  const wt = createWorktree(options.repoRoot, meta.specId, runId, paths.worktreesDir);
-  ctx.worktreePath = wt.path;
-  ctx.worktreeBranch = wt.branch;
-  ctx.meta = { ...meta, branch: wt.branch, worktree: wt.path };
+  // execution.parallelism > 1), or - with execution.inPlace - the repository
+  // checkout itself on the run branch.
+  assertInPlaceRunnable(ctx.config);
+  if (ctx.config.execution.inPlace) {
+    const run = checkoutRunBranch(options.repoRoot, meta.specId, runId);
+    ctx.worktreePath = options.repoRoot;
+    ctx.worktreeBranch = run.branch;
+    ctx.meta = { ...meta, branch: run.branch, worktree: options.repoRoot, originalBranch: run.previousBranch };
+    ctx.log(`In-place run: ${options.repoRoot} switched to ${run.branch}`);
+  } else {
+    const wt = createWorktree(options.repoRoot, meta.specId, runId, paths.worktreesDir);
+    ctx.worktreePath = wt.path;
+    ctx.worktreeBranch = wt.branch;
+    ctx.meta = { ...meta, branch: wt.branch, worktree: wt.path };
+  }
   writeFileSync(paths.metadataFile(runId), JSON.stringify(ctx.meta, null, 2), "utf8");
 
   return ctx.config.execution.parallelism > 1 ? driveRunParallel(ctx) : driveRun(ctx);
+}
+
+/** In-place execution writes in the shared checkout; parallel tasks cannot. */
+function assertInPlaceRunnable(config: RunContext["config"]): void {
+  if (config.execution.inPlace && config.execution.parallelism > 1) {
+    throw new SpcError(
+      RUNTIME_ERROR,
+      "execution.inPlace requires execution.parallelism 1; parallel execution writes through per-task worktrees",
+    );
+  }
 }
 
 /** Entry point for `spc apply --resume <runId>`. */
@@ -314,6 +334,11 @@ export async function resumeRun(options: ApplyOptions & { resumeRunId: string },
   }
   if (!meta.worktree || !existsSync(meta.worktree)) {
     throw new SpcError(RUNTIME_ERROR, `worktree for run ${runId} is gone (${meta.worktree ?? "none"}); cannot resume safely`);
+  }
+  // In-place run: the checkout may have moved on since the interruption;
+  // return to the run branch WITHOUT resetting it (mid-run commits survive).
+  if (meta.branch && meta.worktree && path.resolve(meta.worktree) === path.resolve(paths.repoRoot)) {
+    checkoutBranch(paths.repoRoot, meta.branch);
   }
 
   const snapshotFile = paths.snapshotFile(runId);
@@ -350,6 +375,7 @@ export async function resumeRun(options: ApplyOptions & { resumeRunId: string },
     log: deps.log ?? (() => {}),
   };
   ctx.log(`Resuming run ${runId} (replayed ${events.length} events, ${Object.keys(state.tasks).length} tasks)`);
+  assertInPlaceRunnable(ctx.config);
   return ctx.config.execution.parallelism > 1 ? driveRunParallel(ctx) : driveRun(ctx);
 }
 
@@ -612,11 +638,47 @@ async function finishRun(
   } else {
     status = "partially_satisfied";
   }
-  return finalize(ctx, status, sweep.states, {
+  const report = await finalize(ctx, status, sweep.states, {
     resultRevision,
     diffStat: stat || undefined,
     changedFileCount,
   });
+  // In-place runs leave the checkout where they found it; the run branch
+  // keeps the result commits. Detached-HEAD checkouts (previousBranch
+  // "HEAD") stay on the run branch - there is no branch to restore.
+  if (
+    ctx.meta.worktree &&
+    path.resolve(ctx.meta.worktree) === path.resolve(ctx.paths.repoRoot) &&
+    ctx.meta.originalBranch &&
+    ctx.meta.originalBranch !== "HEAD"
+  ) {
+    try {
+      checkoutBranch(ctx.paths.repoRoot, ctx.meta.originalBranch);
+    } catch (e) {
+      ctx.log(`warning: could not restore branch ${ctx.meta.originalBranch}: ${(e as Error).message}`);
+    }
+  }
+  return report;
+}
+
+/**
+ * Task write delta between two status snapshots, with spc-owned state
+ * paths removed. In worktree mode the state lives outside the tree; in
+ * in-place runs the runtime itself writes it mid-task, and it must never
+ * count as a task write (write scope) or land in a task commit.
+ */
+function taskScopeDelta(before: WorktreeStatus, worktreeRoot: string) {
+  const delta = statusDelta(before, statusPorcelain(worktreeRoot));
+  const spcState = (p: string) =>
+    p.startsWith(".spc/runs/") ||
+    p.startsWith(".spc/plans/") ||
+    p.startsWith(".spc/worktrees/") ||
+    p.startsWith(".spc/cache/") ||
+    p.startsWith(".spc/harness/");
+  for (const p of [...delta.keys()]) {
+    if (spcState(p)) delta.delete(p);
+  }
+  return delta;
 }
 
 /**
@@ -665,7 +727,7 @@ export async function executeTaskInRun(
       ...ctx.state,
       requirements: { ...ctx.state.requirements, ...Object.fromEntries(sweep.states.map((s) => [s.propertyId, s])) },
     };
-    const delta = statusDelta(before, statusPorcelain(worktreeRoot));
+    const delta = taskScopeDelta(before, worktreeRoot);
     const violations = enforceWriteScope(task.targets?.write ?? [], [...delta.keys()]);
     if (violations.length > 0) {
       return failedOutcome(task, violations[0]!.code, `${violations[0]!.code}: ${violations[0]!.reason}`);
@@ -800,7 +862,7 @@ export async function executeTaskInRun(
   }
 
   // Re-check the ACTUAL diff against the declared write scope.
-  const delta = statusDelta(before, statusPorcelain(worktreeRoot));
+  const delta = taskScopeDelta(before, worktreeRoot);
   for (const [p, change] of delta) {
     ctx.events.append("FILE_CHANGED", { taskId: task.id, path: p, change });
   }

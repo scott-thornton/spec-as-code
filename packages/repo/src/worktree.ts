@@ -55,3 +55,33 @@ export function worktreeExists(wtPath: string): boolean {
 export function removeWorktree(repoRoot: string, wtPath: string): void {
   git(repoRoot, ["worktree", "remove", "--force", wtPath]);
 }
+
+export interface RunBranch {
+  branch: string;
+  /** Ref HEAD was on before the checkout; "HEAD" when detached. */
+  previousBranch: string;
+}
+
+/**
+ * execution.inPlace isolation: run in the repository checkout itself, on
+ * the run branch (same naming as worktrees) instead of a separate
+ * worktree. -B reuses a branch left by an aborted attempt, resetting it
+ * to the current HEAD.
+ */
+export function checkoutRunBranch(repoRoot: string, specId: string, runId: string): RunBranch {
+  const previousBranch = gitOk(repoRoot, ["rev-parse", "--abbrev-ref", "HEAD"]).trim();
+  const branch = `spc/${specId}/${runId}`;
+  const r = git(repoRoot, ["checkout", "-B", branch]);
+  if (!r.ok) {
+    throw new SpcError(WORKTREE_ERROR, `failed to check out run branch ${branch}: ${r.stderr.trim()}`);
+  }
+  return { branch, previousBranch };
+}
+
+/** Switch the checkout to `branch` without resetting it (resume, restore). */
+export function checkoutBranch(repoRoot: string, branch: string): void {
+  const r = git(repoRoot, ["checkout", branch]);
+  if (!r.ok) {
+    throw new SpcError(WORKTREE_ERROR, `failed to check out ${branch}: ${r.stderr.trim()}`);
+  }
+}

@@ -58,6 +58,18 @@ execution:
   # revision per run; the per-task journey lives in events.jsonl.
   commitPerTask: false
 
+  # Execute in the repository checkout itself, on the run branch
+  # (spc/<spec-id>/<run-id>), instead of an isolated git worktree under
+  # .spc/worktrees/. The checkout switches to the run branch for the
+  # duration of the run and is restored to the original branch afterwards;
+  # the run branch keeps the result commits (merge or PR it as usual).
+  # Requires a clean tree (as always) and execution.parallelism 1.
+  # spc-owned state (.spc/runs, .spc/plans, .spc/worktrees, .spc/cache,
+  # .spc/harness) is never committed. A cancelled or interrupted run
+  # leaves the checkout on the run branch; `spc apply --resume <runId>`
+  # returns to it, or check out your branch manually.
+  inPlace: false
+
   # §31 iteration: demote blocking spec_clarification follow-ups drafted by
   # the planner to non-blocking and proceed. The follow-ups are still
   # recorded and visible after the run. Measured to recover most of the

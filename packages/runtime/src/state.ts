@@ -17,6 +17,8 @@ export interface RunMeta {
   baseRevision?: string;
   branch?: string;
   worktree?: string;
+  /** In-place runs: branch the checkout was on before the run switched it. */
+  originalBranch?: string;
   createdAt: string;
 }
 

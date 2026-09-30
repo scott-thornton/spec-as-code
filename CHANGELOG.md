@@ -8,6 +8,15 @@ uses semantic versioning.
 
 ### Added
 
+- In-place execution (`execution.inPlace`): runs execute in the repository
+  checkout itself, on the run branch (`spc/<spec-id>/<run-id>`), instead
+  of an isolated git worktree. The checkout switches to the run branch for
+  the run and is restored to the original branch afterwards; the run
+  branch keeps the result commits. Requires `execution.parallelism` 1.
+  spc-owned state (`.spc/runs`, `.spc/plans`, `.spc/worktrees`,
+  `.spc/cache`, `.spc/harness`) is now excluded from every result commit
+  and from task write-scope deltas (a no-op in worktree mode, where the
+  state lives outside the tree).
 - Commit-per-task (`execution.commitPerTask`): each task's changes land on
   the run branch as their own revision once its write-scope check passes,
   with the revision recorded on task state and in `TASK_COMMITTED` events.
