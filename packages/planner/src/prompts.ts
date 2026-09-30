@@ -19,6 +19,16 @@ Contract (invariants, enforced by the runtime after you respond):
   defaults, unspecified behaviour), emit a blocking follow-up draft
   (type spec_clarification) instead of inventing the missing decision.
 - Prefer independently executable tasks; task ids must match T### (e.g. T001, T014).
+- Plan the MINIMUM task set that satisfies the properties. Do not add tasks for
+  refactors, cleanups, hardening, or improvements no property requires; every
+  task must trace to a property it satisfies, verifies, or inspects for.
+- Verification cost discipline: the runtime ALWAYS runs a final verification
+  sweep over every property at run end, and every verify task re-runs the
+  acceptance criteria of its properties. Do NOT schedule per-task verify tasks
+  whose criteria are expensive global commands (full test suite, typecheck,
+  build) - they re-run the same command once per verify task and again in the
+  final sweep. Attach such criteria to at most one terminal verify task; use
+  mid-run verify tasks only where a property needs cheap, targeted proof.
 
 Respond with a single JSON object matching the provided schema.`;
 

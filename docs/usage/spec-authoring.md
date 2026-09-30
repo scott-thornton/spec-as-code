@@ -95,6 +95,15 @@ both need coverage and verification when priority is `must`.
 Four types, in decreasing order of evidence strength. Mix freely; the
 satisfaction evaluator handles each type with its own epistemic rules.
 
+Cost model: criteria execute on every verification sweep - once per verify
+task that includes their property, and once in the run's final sweep over
+all properties. Prefer `file` assertions and targeted commands (one test
+file, one CLI invocation) over broad ones, and let an expensive global
+command such as the full test suite or a typecheck back only a small
+number of properties, because every sweep re-runs it. Identical commands
+within a single sweep (same command, expected exit code and timeout) are
+executed once and shared as evidence across the criteria that name them.
+
 ### command - deterministic execution (strongest)
 
 ```yaml

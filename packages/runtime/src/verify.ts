@@ -1,5 +1,6 @@
 import type { Config, DesiredProperty, Evidence, FollowUp, RequirementState, SpecIR } from "@spc/schema";
 import type { LLMProvider, UsageRecord } from "@spc/llm";
+import type { CommandRunResult } from "@spc/executor";
 import { evaluateProperty, verifyCriterion } from "@spc/verifier";
 import type { EventStore } from "./events.js";
 import type { EvidenceStore, FollowupStore } from "./stores.js";
@@ -42,6 +43,10 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
     }
   }
 
+  // One run per distinct command per sweep: the tree is fixed within a sweep,
+  // so repeated criteria share the execution instead of re-running it.
+  const commandRuns = new Map<string, CommandRunResult>();
+
   for (const property of input.properties) {
     for (const criterion of property.acceptance) {
       // Human follow-ups are created once per criterion, not on every sweep.
@@ -57,6 +62,7 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
         ...(input.taskId ? { taskId: input.taskId } : {}),
         ...(input.onUsage ? { onUsage: input.onUsage } : {}),
         ...(approvedCommands.size > 0 ? { approvedCommands } : {}),
+        commandRuns,
         now,
       });
       const evidence = input.evidence.add({

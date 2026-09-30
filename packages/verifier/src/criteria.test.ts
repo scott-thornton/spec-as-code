@@ -1,9 +1,10 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DEFAULT_CONFIG, type DesiredProperty, type Evidence } from "@spc/schema";
 import type { LLMProvider, StructuredRequest, StructuredResponse } from "@spc/llm";
+import type { CommandRunResult } from "@spc/executor";
 import { verifyCriterion } from "./criteria.js";
 import { evaluateProperty } from "./evaluate.js";
 
@@ -80,6 +81,51 @@ describe("command criterion", () => {
     );
     expect(r.evidence.outcome).toBe("inconclusive");
     expect(r.followUp?.type).toBe("investigation");
+  });
+});
+
+describe("sweep command dedup", () => {
+  const marker = path.join(cwd, "dedup-marker.txt");
+  const append = (file: string, ch: string) =>
+    `node -e "require('fs').appendFileSync('${file}', '${ch}')"`;
+
+  it("identical commands execute once per sweep, evidence per criterion", async () => {
+    rmSync(marker, { force: true });
+    const command = append(marker, "x");
+    const commandRuns = new Map<string, CommandRunResult>();
+    const r1 = await verifyCriterion(
+      { id: "P1-A", type: "command", command },
+      property,
+      ctx({ commandRuns }),
+    );
+    const r2 = await verifyCriterion(
+      { id: "P2-A", type: "command", command },
+      property,
+      ctx({ commandRuns }),
+    );
+    expect(r1.evidence.outcome).toBe("supports");
+    expect(r2.evidence.outcome).toBe("supports");
+    expect(r1.evidence.criterionId).toBe("P1-A");
+    expect(r2.evidence.criterionId).toBe("P2-A");
+    expect(readFileSync(marker, "utf8")).toBe("x");
+    expect(commandRuns.size).toBe(1);
+  });
+
+  it("distinct commands run separately within one sweep", async () => {
+    rmSync(marker, { force: true });
+    const commandRuns = new Map<string, CommandRunResult>();
+    await verifyCriterion({ id: "P1-A", type: "command", command: append(marker, "a") }, property, ctx({ commandRuns }));
+    await verifyCriterion({ id: "P2-A", type: "command", command: append(marker, "b") }, property, ctx({ commandRuns }));
+    expect(readFileSync(marker, "utf8")).toBe("ab");
+    expect(commandRuns.size).toBe(2);
+  });
+
+  it("without a sweep cache each criterion executes its own run", async () => {
+    rmSync(marker, { force: true });
+    const command = append(marker, "y");
+    await verifyCriterion({ id: "P1-A", type: "command", command }, property, ctx());
+    await verifyCriterion({ id: "P2-A", type: "command", command }, property, ctx());
+    expect(readFileSync(marker, "utf8")).toBe("yy");
   });
 });
 

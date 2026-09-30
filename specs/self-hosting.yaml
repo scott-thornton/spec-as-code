@@ -85,6 +85,14 @@ requirements:
         type: command
         command: pnpm --filter @spc/runtime exec vitest run src/commits-per-task.test.ts
 
+  - id: SELF-010
+    statement: A verification sweep executes each distinct command at most once, sharing the run as evidence across identical criteria.
+    priority: must
+    acceptance:
+      - id: SELF-010-A
+        type: command
+        command: pnpm --filter @spc/verifier exec vitest run src/criteria.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services

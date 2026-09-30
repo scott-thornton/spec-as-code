@@ -15,6 +15,19 @@ uses semantic versioning.
   against the run's base revision, so runs with per-task (or parallel)
   commits report the full transition diff.
 
+### Changed
+
+- Verification sweeps execute each distinct command at most once:
+  identical acceptance commands (same command, expected exit code and
+  timeout) share a single execution per sweep, recorded as evidence for
+  every criterion that names them. Specs that attach one global command
+  (full test suite, typecheck) to several properties now pay for it once
+  per sweep instead of once per criterion.
+- Planner contract now states verification cost discipline (the final
+  sweep always re-verifies every property, so mid-run verify tasks should
+  not repeat expensive global criteria) and requires a minimum task set
+  traceable to properties, to curb gold-plated plans.
+
 ### Fixed
 
 - Executor-side clarification demotion (ADR-0013 addendum): a task that
