@@ -32,6 +32,13 @@ export function renderRunSummary(input: SummaryInput): string {
   for (const [status, n] of [...counts.entries()].sort()) {
     lines.push(`- ${n} ${status}`);
   }
+  const redStates = specIr.properties
+    .map((p) => runState.requirements[p.id]?.redPhase)
+    .filter((r): r is NonNullable<typeof r> => r !== undefined);
+  if (redStates.length > 0) {
+    const flipped = redStates.filter((r) => r === "flipped").length;
+    lines.push(`- Red phase: ${flipped}/${redStates.length} discriminating properties flipped red -> green`);
+  }
   lines.push("");
 
   lines.push("## Requirement evidence", "");
@@ -69,9 +76,21 @@ export function renderRunSummary(input: SummaryInput): string {
   lines.push("");
 
   const weak = specIr.properties.filter((p) => runState.requirements[p.id]?.weakEvidence);
-  if (weak.length > 0) {
+  const notFlipped = specIr.properties.filter((p) => {
+    const r = runState.requirements[p.id]?.redPhase;
+    return r === "passed_at_base" || r === "no_red_evidence";
+  });
+  if (weak.length > 0 || notFlipped.length > 0) {
     lines.push("## Remaining risk", "");
     for (const p of weak) lines.push(`- ${p.id} verified by non-deterministic evidence only`);
+    for (const p of notFlipped) {
+      const r = runState.requirements[p.id]?.redPhase;
+      lines.push(
+        r === "passed_at_base"
+          ? `- ${p.id} has a discriminating criterion that already passed at the base revision; it does not test this change`
+          : `- ${p.id} has discriminating criteria without red-phase evidence; the red -> green flip is not established`,
+      );
+    }
     lines.push("");
   }
   return lines.join("\n");

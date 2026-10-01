@@ -38,6 +38,8 @@ export interface CriterionContext {
    * every criterion that names it. Created by the sweep, not per criterion.
    */
   commandRuns?: Map<string, CommandRunResult>;
+  /** "red" marks the base-revision sweep of discriminating criteria. */
+  phase?: "red";
 }
 
 export interface CriterionResult {
@@ -142,6 +144,7 @@ async function verifyCommand(
       producer: { type: "runtime" },
       timestamp: (ctx.now ?? (() => new Date().toISOString()))(),
       repositoryRevision: ctx.repositoryRevision,
+      ...(ctx.phase ? { phase: ctx.phase } : {}),
       payload: {
         command: criterion.command,
         expectedExitCode: expected,
@@ -205,6 +208,7 @@ function verifyFile(
       producer: { type: "runtime" },
       timestamp: (ctx.now ?? (() => new Date().toISOString()))(),
       repositoryRevision: ctx.repositoryRevision,
+      ...(ctx.phase ? { phase: ctx.phase } : {}),
       payload: {
         path: criterion.path,
         assert: a,

@@ -293,7 +293,63 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
   }
   writeFileSync(paths.metadataFile(runId), JSON.stringify(ctx.meta, null, 2), "utf8");
 
+  if (ctx.config.verification.requireRedPhase) {
+    await runRedPhaseSweep(ctx);
+  }
+
   return ctx.config.execution.parallelism > 1 ? driveRunParallel(ctx) : driveRun(ctx);
+}
+
+/**
+ * Red-phase sweep (verification.requireRedPhase): before any task runs,
+ * execute the criteria the author marked discriminating against the
+ * base-revision tree. Their expected state here is failure; the evaluator
+ * only accepts them later when they demonstrably flip red -> green.
+ * Runs at most once per run: the RED_PHASE_RECORDED event guards re-runs
+ * on resume, and a resume of a run that never recorded one (feature
+ * enabled mid-run) skips the sweep rather than fake base-revision
+ * evidence against a tree tasks already changed.
+ */
+async function runRedPhaseSweep(ctx: RunContext): Promise<void> {
+  const discriminating = ctx.specIr.properties
+    .map((p) => ({
+      property: p,
+      criteria: p.acceptance.filter(
+        (c) => (c.type === "command" || c.type === "file") && c.discriminating === true,
+      ),
+    }))
+    .filter((x) => x.criteria.length > 0);
+  if (discriminating.length === 0) return;
+  if (ctx.events.all().some((e) => e.type === "RED_PHASE_RECORDED")) return;
+  const anyTaskRan = Object.values(ctx.state.tasks).some((t) => t.status !== "pending" && t.status !== "ready");
+  if (anyTaskRan) {
+    ctx.log("Red phase skipped: tasks already ran before it was recorded; discriminating criteria will surface as no_red_evidence.");
+    return;
+  }
+  const worktree = ctx.worktreePath!;
+  const criteriaCount = discriminating.reduce((n, x) => n + x.criteria.length, 0);
+  ctx.log(`Red phase: ${criteriaCount} discriminating criteria at base revision (expected to fail)`);
+  const sweep = await verifyProperties({
+    properties: discriminating.map((x) => ({ ...x.property, acceptance: x.criteria })),
+    runId: ctx.meta.runId,
+    cwd: worktree,
+    revision: currentRevision(worktree),
+    config: ctx.config,
+    provider: ctx.provider,
+    evidence: ctx.evidence,
+    followups: ctx.followups,
+    events: ctx.events,
+    phase: "red",
+    now: ctx.now,
+  });
+  ctx.state = {
+    ...ctx.state,
+    requirements: { ...ctx.state.requirements, ...Object.fromEntries(sweep.states.map((s) => [s.propertyId, s])) },
+  };
+  ctx.events.append("RED_PHASE_RECORDED", {
+    criteriaCount,
+    outcomes: Object.fromEntries(sweep.states.map((s) => [s.propertyId, s.status])),
+  });
 }
 
 /** In-place execution writes in the shared checkout; parallel tasks cannot. */
@@ -376,6 +432,9 @@ export async function resumeRun(options: ApplyOptions & { resumeRunId: string },
   };
   ctx.log(`Resuming run ${runId} (replayed ${events.length} events, ${Object.keys(state.tasks).length} tasks)`);
   assertInPlaceRunnable(ctx.config);
+  if (ctx.config.verification.requireRedPhase) {
+    await runRedPhaseSweep(ctx);
+  }
   return ctx.config.execution.parallelism > 1 ? driveRunParallel(ctx) : driveRun(ctx);
 }
 

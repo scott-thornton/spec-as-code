@@ -219,6 +219,7 @@ function evidence(
   kind: Evidence["kind"] = "command",
   timestamp = "2026-09-17T00:00:00.000Z",
   payload: unknown = {},
+  phase?: "red",
 ): Evidence {
   return {
     id,
@@ -230,6 +231,7 @@ function evidence(
     producer: { type: "runtime" },
     timestamp,
     repositoryRevision: "rev1",
+    ...(phase ? { phase } : {}),
     payload,
     digest: `sha256:${id.padEnd(64, "0").slice(0, 64)}`,
   };
@@ -316,6 +318,71 @@ describe("requirement satisfaction evaluator", () => {
       { allowAgentOnly: false },
     );
     expect(s.status).toBe("waived");
+  });
+});
+
+describe("red-phase flip rule (requireRedPhase)", () => {
+  const discriminating: DesiredProperty = {
+    ...property,
+    acceptance: [{ id: "P-A", type: "command", command: "node --test", discriminating: true }],
+  };
+
+  it("flip: contradicted at base, supports at result -> satisfied", () => {
+    const s = evaluateProperty(
+      discriminating,
+      [
+        evidence("e-red", "P-A", "contradicts", "command", "2026-09-17T00:00:00.000Z", {}, "red"),
+        evidence("e-green", "P-A", "supports", "command", "2026-09-17T01:00:00.000Z"),
+      ],
+      { allowAgentOnly: false, requireRedPhase: true },
+    );
+    expect(s.status).toBe("satisfied");
+    expect(s.redPhase).toBe("flipped");
+  });
+
+  it("passed at base -> indeterminate (decorative criterion exposed)", () => {
+    const s = evaluateProperty(
+      discriminating,
+      [
+        evidence("e-red", "P-A", "supports", "command", "2026-09-17T00:00:00.000Z", {}, "red"),
+        evidence("e-green", "P-A", "supports", "command", "2026-09-17T01:00:00.000Z"),
+      ],
+      { allowAgentOnly: false, requireRedPhase: true },
+    );
+    expect(s.status).toBe("indeterminate");
+    expect(s.redPhase).toBe("passed_at_base");
+    expect(s.reason).toContain("base revision");
+  });
+
+  it("no red evidence with the flag on -> indeterminate", () => {
+    const s = evaluateProperty(discriminating, [evidence("e-green", "P-A", "supports")], {
+      allowAgentOnly: false,
+      requireRedPhase: true,
+    });
+    expect(s.status).toBe("indeterminate");
+    expect(s.redPhase).toBe("no_red_evidence");
+  });
+
+  it("flag off -> satisfied regardless of red records", () => {
+    const s = evaluateProperty(
+      discriminating,
+      [
+        evidence("e-red", "P-A", "supports", "command", "2026-09-17T00:00:00.000Z", {}, "red"),
+        evidence("e-green", "P-A", "supports", "command", "2026-09-17T01:00:00.000Z"),
+      ],
+      { allowAgentOnly: false },
+    );
+    expect(s.status).toBe("satisfied");
+    expect(s.redPhase).toBeUndefined();
+  });
+
+  it("red evidence alone (mid-run) is never judged as the result-tree state", () => {
+    const s = evaluateProperty(
+      discriminating,
+      [evidence("e-red", "P-A", "contradicts", "command", "2026-09-17T00:00:00.000Z", {}, "red")],
+      { allowAgentOnly: false, requireRedPhase: true },
+    );
+    expect(s.status).toBe("unknown");
   });
 });
 

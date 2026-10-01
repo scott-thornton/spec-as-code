@@ -113,6 +113,15 @@ verification:
   # stays indeterminate: model-derived support is never silently promoted
   # to established fact. Enable only with eyes open.
   allowAgentOnlyMustRequirements: false
+
+  # Red-phase verification: execute criteria marked `discriminating: true`
+  # (see Spec authoring) once at the run's base revision, before any task,
+  # and accept them only when they flip red -> green. A discriminating
+  # criterion that already passes at base leaves its property
+  # indeterminate - it does not test the change. Apply runs only: standalone
+  # `spc verify` runs after the fact and cannot establish the flip, so with
+  # this enabled its discriminating criteria report no_red_evidence.
+  requireRedPhase: false
 ```
 
 ## Secrets

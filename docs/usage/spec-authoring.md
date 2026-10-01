@@ -165,6 +165,44 @@ Produces a non-blocking `manual_verification` follow-up and leaves the
 property `indeterminate` until a human resolves it. Resolution becomes
 human evidence.
 
+### discriminating - requiring a red phase
+
+Command and file criteria can be marked `discriminating: true`. The mark
+is a claim by you, the author: this criterion must FAIL on the current
+tree, because it tests the change your spec describes, not pre-existing
+behaviour.
+
+```yaml
+- id: AUTH-004-A
+  type: command
+  command: node --test tests/token-refresh.test.mjs
+  discriminating: true
+```
+
+With `verification.requireRedPhase` enabled (see
+[Configuration](configuration.md)), apply runs execute discriminating
+criteria once at the run's base revision, before any task, and record the
+outcome as red-phase evidence. The evaluator then accepts such a criterion
+only when it demonstrably flips: contradicted or inconclusive at base,
+supporting at the result revision. The chronology of who typed what when
+is never checked - discrimination is.
+
+Two outcomes surface as `indeterminate` on the property, which blocks a
+`succeeded` run status:
+
+- the criterion already passed at the base revision: it does not
+  discriminate this change and is exposed as decorative
+- no red-phase evidence exists (for example standalone `spc verify`,
+  which cannot establish the flip after the fact)
+
+Do not mark regression criteria - constraints on behaviour that must keep
+holding ("the old API still responds", "the existing suite still passes").
+Those legitimately pass at base; they verify preservation, not change.
+Marking them discriminating turns a correct gate into a permanent
+`indeterminate`. A criterion that cannot fail cannot prove anything; if
+you cannot write a failing-at-base criterion for a behaviour claim, that
+is a signal about the claim, not the mechanism.
+
 ## Identifier rules (why they are strict)
 
 Identity and presentation order are separate concerns. Ids appear in plan

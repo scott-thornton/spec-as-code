@@ -167,6 +167,7 @@ export function applyEvent(state: RunState, event: Event): RunState {
           updatedAt: event.timestamp,
           ...(typeof p.reason === "string" ? { reason: p.reason } : {}),
           ...(p.weakEvidence === true ? { weakEvidence: true } : {}),
+          ...(typeof p.redPhase === "string" ? { redPhase: p.redPhase as RequirementState["redPhase"] } : {}),
         };
         s.requirements[propertyId] = rs;
       }

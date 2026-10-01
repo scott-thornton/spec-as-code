@@ -28,22 +28,37 @@ export const acceptanceCriterionSchema = z.discriminatedUnion("type", [
     command: z.string().min(1),
     expect: commandExpectSchema.optional(),
     timeoutMs: z.number().int().positive().optional(),
+    /**
+     * Author declares this criterion must FAIL on the current tree (it
+     * tests the change, not pre-existing behaviour). With
+     * verification.requireRedPhase the runtime executes discriminating
+     * criteria at the run's base revision and the evaluator only accepts
+     * them when they flip red -> green. Regression criteria (constraints
+     * on existing behaviour) must NOT set this.
+     */
+    discriminating: z.boolean().optional(),
   }),
   z.strictObject({
     id: propertyIdSchema,
     type: z.literal("file"),
     path: z.string().min(1),
     assert: fileAssertSchema,
+    /** See the command variant; identical semantics for file assertions. */
+    discriminating: z.boolean().optional(),
   }),
   z.strictObject({
     id: propertyIdSchema,
     type: z.literal("agent"),
     instruction: z.string().min(1),
+    /** Rejected by SPC1010; declared so the diagnostic explains why. */
+    discriminating: z.boolean().optional(),
   }),
   z.strictObject({
     id: propertyIdSchema,
     type: z.literal("human"),
     instruction: z.string().min(1),
+    /** Rejected by SPC1010; declared so the diagnostic explains why. */
+    discriminating: z.boolean().optional(),
   }),
 ]);
 

@@ -25,6 +25,12 @@ export const evidenceSchema = z.strictObject({
   producer: evidenceProducerSchema,
   timestamp: z.string().min(1),
   repositoryRevision: z.string(),
+  /**
+   * "red" marks evidence recorded at the run's base revision, before any
+   * task executed (red-phase sweep of discriminating criteria). Absent
+   * means evidence against the current/result tree.
+   */
+  phase: z.literal("red").optional(),
   payload: z.unknown(),
   digest: z.string().min(1),
 });

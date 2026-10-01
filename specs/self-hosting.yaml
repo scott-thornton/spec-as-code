@@ -101,6 +101,14 @@ requirements:
         type: command
         command: pnpm --filter @spc/runtime exec vitest run src/inplace.test.ts
 
+  - id: SELF-012
+    statement: With verification.requireRedPhase, criteria marked discriminating are executed at the run's base revision and only count as satisfied when they flip red to green.
+    priority: must
+    acceptance:
+      - id: SELF-012-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/red-phase.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services

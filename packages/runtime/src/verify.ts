@@ -21,6 +21,8 @@ export interface VerifySweepInput {
   followups: FollowupStore;
   events: EventStore;
   taskId?: string;
+  /** "red" runs the sweep at the base revision, before any task executes. */
+  phase?: "red";
   now?: () => string;
   onUsage?: (record: UsageRecord) => void;
 }
@@ -62,6 +64,7 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
         ...(input.taskId ? { taskId: input.taskId } : {}),
         ...(input.onUsage ? { onUsage: input.onUsage } : {}),
         ...(approvedCommands.size > 0 ? { approvedCommands } : {}),
+        ...(input.phase ? { phase: input.phase } : {}),
         commandRuns,
         now,
       });
@@ -76,6 +79,7 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
         kind: evidence.kind,
         outcome: evidence.outcome,
         ...(input.taskId ? { taskId: input.taskId } : {}),
+        ...(input.phase ? { phase: input.phase } : {}),
       });
       if (result.commandRun && result.commandRun.allowed) {
         input.events.append("COMMAND_EXECUTED", {
@@ -87,6 +91,7 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
           stderrDigest: result.commandRun.stderrDigest,
           timedOut: result.commandRun.timedOut,
           ...(input.taskId ? { taskId: input.taskId } : {}),
+          ...(input.phase ? { phase: input.phase } : {}),
         });
       }
       if (result.followUp) {
@@ -109,6 +114,7 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
   const states = input.properties.map((p) => {
     const state = evaluateProperty(p, input.evidence.all(), {
       allowAgentOnly: input.config.verification.allowAgentOnlyMustRequirements,
+      ...(input.config.verification.requireRedPhase ? { requireRedPhase: true } : {}),
       now,
     });
     input.events.append("PROPERTY_VERIFIED", {
@@ -117,6 +123,8 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
       evidenceIds: state.evidenceIds,
       ...(state.reason ? { reason: state.reason } : {}),
       ...(state.weakEvidence ? { weakEvidence: true } : {}),
+      ...(state.redPhase ? { redPhase: state.redPhase } : {}),
+      ...(input.phase ? { phase: input.phase } : {}),
     });
     return state;
   });

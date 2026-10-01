@@ -11,6 +11,8 @@ export interface EvaluationOptions {
   allowAgentOnly: boolean;
   inProgressPropertyIds?: ReadonlySet<string>;
   now?: () => string;
+  /** Enforce the red -> green flip for criteria marked discriminating. */
+  requireRedPhase?: boolean;
 }
 
 interface CriterionVerdict {
@@ -20,6 +22,7 @@ interface CriterionVerdict {
   evidenceId?: string;
   detail: string;
   deterministic: boolean;
+  redPhase?: "flipped" | "passed_at_base" | "no_red_evidence";
 }
 
 function latestByCriterion(evidence: readonly Evidence[]): Map<string, Evidence> {
@@ -30,6 +33,10 @@ function latestByCriterion(evidence: readonly Evidence[]): Map<string, Evidence>
     if (!current || e.timestamp >= current.timestamp) latest.set(e.criterionId, e);
   }
   return latest;
+}
+
+function isDiscriminating(c: DesiredProperty["acceptance"][number]): boolean {
+  return (c.type === "command" || c.type === "file") && c.discriminating === true;
 }
 
 export function evaluateProperty(
@@ -55,51 +62,91 @@ export function evaluateProperty(
     };
   }
 
-  const latest = latestByCriterion(relevant);
+  // Result-tree evidence only: red-phase records describe the base
+  // revision and must never stand in for the current state.
+  const latest = latestByCriterion(relevant.filter((e) => e.phase !== "red"));
+  const latestRed = options.requireRedPhase
+    ? latestByCriterion(relevant.filter((e) => e.phase === "red"))
+    : new Map<string, Evidence>();
   const verdicts: CriterionVerdict[] = [];
 
   for (const criterion of property.acceptance) {
     const e = latest.get(criterion.id);
+    let verdict: CriterionVerdict;
     if (!e) {
-      verdicts.push({
+      verdict = {
         criterionId: criterion.id,
         type: criterion.type,
         status: "unevaluated",
         detail: "no evidence recorded",
         deterministic: isDeterministicCriterion(criterion),
-      });
-      continue;
-    }
-    used.push(e.id);
-    if (e.outcome === "supports") {
-      verdicts.push({
+      };
+    } else if (e.outcome === "supports") {
+      verdict = {
         criterionId: criterion.id,
         type: criterion.type,
         status: "pass",
         evidenceId: e.id,
         detail: `${e.kind} evidence supports`,
         deterministic: isDeterministicCriterion(criterion),
-      });
+      };
     } else if (e.outcome === "contradicts") {
-      verdicts.push({
+      verdict = {
         criterionId: criterion.id,
         type: criterion.type,
         status: "fail",
         evidenceId: e.id,
         detail: `${e.kind} evidence contradicts`,
         deterministic: isDeterministicCriterion(criterion),
-      });
+      };
     } else {
-      verdicts.push({
+      verdict = {
         criterionId: criterion.id,
         type: criterion.type,
         status: "indeterminate",
         evidenceId: e.id,
         detail: `${e.kind} evidence inconclusive`,
         deterministic: isDeterministicCriterion(criterion),
-      });
+      };
     }
+    if (e) used.push(e.id);
+    // Red-phase flip rule: a discriminating criterion's pass is earned
+    // only by a demonstrated red -> green flip. A criterion that already
+    // supported at the base revision tests nothing about this change.
+    if (options.requireRedPhase && isDiscriminating(criterion) && verdict.status === "pass") {
+      const red = latestRed.get(criterion.id);
+      if (!red) {
+        verdict = {
+          ...verdict,
+          status: "indeterminate",
+          detail: "no red-phase evidence recorded; the criterion must fail at the run's base revision",
+          redPhase: "no_red_evidence",
+        };
+      } else if (red.outcome === "supports") {
+        verdict = {
+          ...verdict,
+          status: "indeterminate",
+          detail: "criterion passed at base revision; it does not discriminate this change",
+          redPhase: "passed_at_base",
+        };
+      } else {
+        verdict = { ...verdict, redPhase: "flipped" };
+      }
+    }
+    verdicts.push(verdict);
   }
+
+  // Property-level red-phase summary: the worst per-criterion state wins,
+  // so decorative criteria surface even when others flipped cleanly.
+  let redPhase: CriterionVerdict["redPhase"];
+  if (options.requireRedPhase && property.acceptance.some(isDiscriminating)) {
+    redPhase = verdicts.some((v) => v.redPhase === "passed_at_base")
+      ? "passed_at_base"
+      : verdicts.some((v) => v.redPhase === "no_red_evidence")
+        ? "no_red_evidence"
+        : "flipped";
+  }
+  const redPhaseField = redPhase ? { redPhase } : {};
 
   const fail = verdicts.find((v) => v.status === "fail");
   if (fail) {
@@ -109,6 +156,7 @@ export function evaluateProperty(
       evidenceIds: used,
       updatedAt: now,
       reason: `criterion ${fail.criterionId} contradicted (${fail.detail})`,
+      ...redPhaseField,
     };
   }
 
@@ -120,6 +168,7 @@ export function evaluateProperty(
       evidenceIds: used,
       updatedAt: now,
       reason: `criterion ${indeterminate.criterionId} inconclusive (${indeterminate.detail})`,
+      ...redPhaseField,
     };
   }
 
@@ -132,6 +181,7 @@ export function evaluateProperty(
       evidenceIds: used,
       updatedAt: now,
       reason: `criterion ${unevaluated.criterionId} not yet evaluated`,
+      ...redPhaseField,
     };
   }
 
@@ -146,6 +196,7 @@ export function evaluateProperty(
       updatedAt: now,
       reason: "verified only by agent evaluation; set verification.allowAgentOnlyMustRequirements to accept agent-only evidence",
       weakEvidence: true,
+      ...redPhaseField,
     };
   }
   return {
@@ -154,6 +205,7 @@ export function evaluateProperty(
     evidenceIds: used,
     updatedAt: now,
     ...(anyDeterministicPass ? {} : { weakEvidence: true }),
+    ...redPhaseField,
   };
 }
 

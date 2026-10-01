@@ -8,6 +8,17 @@ uses semantic versioning.
 
 ### Added
 
+- Red-phase verification (`verification.requireRedPhase` + `discriminating:
+  true` on command/file acceptance criteria): apply runs execute
+  discriminating criteria once at the base revision before any task and
+  record red-phase evidence; the evaluator accepts them only when they
+  demonstrably flip red -> green. A criterion that already passes at base
+  leaves its property indeterminate (decorative criterion exposed) and
+  blocks a succeeded status. Resume never re-runs the sweep; enabling the
+  flag mid-run surfaces no_red_evidence rather than faking base-revision
+  evidence against a tree tasks already changed. New SPC1010 rejects the
+  flag on agent/human criteria. Run summaries report flipped counts and
+  non-flipped criteria under Remaining risk.
 - In-place execution (`execution.inPlace`): runs execute in the repository
   checkout itself, on the run branch (`spc/<spec-id>/<run-id>`), instead
   of an isolated git worktree. The checkout switches to the run branch for

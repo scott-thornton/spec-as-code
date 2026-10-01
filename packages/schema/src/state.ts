@@ -58,6 +58,8 @@ export const requirementStateSchema = z.strictObject({
   updatedAt: z.string(),
   reason: z.string().optional(),
   weakEvidence: z.boolean().optional(),
+  /** Set for properties with discriminating criteria under requireRedPhase. */
+  redPhase: z.enum(["flipped", "passed_at_base", "no_red_evidence"]).optional(),
 });
 
 export const runStateSchema = z.strictObject({

@@ -139,6 +139,26 @@ export function validateSpecLocal(spec: Spec, locs: Locs): Diagnostic[] {
     }
   }
 
+  // SPC1010 - `discriminating` (red-phase) is only meaningful on criteria
+  // the runtime can execute deterministically at the base revision.
+  for (const p of props) {
+    const list =
+      p.base === "requirements"
+        ? spec.requirements[p.index]?.acceptance
+        : spec.constraints?.[p.index]?.acceptance;
+    (list ?? []).forEach((c, ci) => {
+      if ((c.type === "agent" || c.type === "human") && (c as { discriminating?: boolean }).discriminating) {
+        diags.push(
+          error(
+            "SPC1010",
+            `acceptance criterion ${c.id} on ${p.kind} ${p.id} is "${c.type}" and cannot be discriminating; only command/file criteria can require a red phase.`,
+            locs.get(`${p.base}.${p.index}.acceptance.${ci}.type`),
+          ),
+        );
+      }
+    });
+  }
+
   return diags;
 }
 
