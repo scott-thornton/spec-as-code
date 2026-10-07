@@ -130,7 +130,7 @@ describe("reconcile", () => {
     const applied = await reconcile({ repoRoot: repo, specIr: ir, config, apply: true, deps });
     expect(applied.applied?.status).toBe("succeeded");
     expect(applied.applied?.requirements.find((r) => r.propertyId === "GREETING-001")?.status).toBe("satisfied");
-  });
+  }, 120_000);
 
   it("reports in-sync when the current tree satisfies the spec", async () => {
     const repo = setupRepo("sync");

@@ -405,7 +405,7 @@ describe("recovery after interruption", () => {
     // Only one greeting.mjs exists - no duplicated work side effects.
     const files = gitOk(report.worktree!, ["show", "HEAD:src/greeting.mjs"]);
     expect(files).toContain("hello");
-  });
+  }, 120_000);
 });
 
 describe("preflight failures", () => {

@@ -117,6 +117,14 @@ requirements:
         type: command
         command: pnpm --filter @spc/runtime exec vitest run src/inplace.test.ts
 
+  - id: SELF-014
+    statement: Run commits defer to the repository's configured git identity, falling back to the spc identity only when none can be resolved.
+    priority: must
+    acceptance:
+      - id: SELF-014-A
+        type: command
+        command: pnpm --filter @spc/repo exec vitest run src/git.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services

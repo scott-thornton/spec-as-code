@@ -1292,16 +1292,9 @@ export { failedOutcome };
  * racing modifies) and never resolves conflicts silently.
  */
 export function mergeTaskPatch(integrationWorktree: string, sha: string): { ok: boolean } {
-  // Cherry-pick creates a commit; bare CI runners have no git identity, so
-  // pass one explicitly the way commitAll does.
-  const pick = git(integrationWorktree, [
-    "-c",
-    "user.name=spc",
-    "-c",
-    "user.email=spc@local",
-    "cherry-pick",
-    sha,
-  ]);
+  // Cherry-pick creates a commit; identity resolves like commitAll does
+  // (configured identity, spc fallback on identity-less runners).
+  const pick = git(integrationWorktree, ["cherry-pick", sha], { identity: true });
   if (pick.ok) return { ok: true };
   git(integrationWorktree, ["cherry-pick", "--abort"]);
   git(integrationWorktree, ["reset", "--hard", "HEAD"]);

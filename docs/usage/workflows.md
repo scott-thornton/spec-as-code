@@ -203,3 +203,9 @@ evidence counts. Full recipe in
 - Do not treat `succeeded` as "tests probably pass"; it already means every
   must property is satisfied or waived with recorded evidence. The
   distinction you actually want is in `spc status`'s provenance lines.
+- Do not stamp a bot identity over your own attribution. Run commits
+  (task commits, result commits, parallel merges) defer to the
+  repository's configured git identity - author and committer are you.
+  The fixed `spc <spc@local>` identity exists only as a fallback for
+  environments where git cannot resolve one at all (bare CI runners),
+  where the commit would otherwise fail outright.

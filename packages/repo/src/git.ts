@@ -12,14 +12,32 @@ export interface GitResult {
   exitCode: number | null;
 }
 
-const IDENTITY_ARGS = ["-c", "user.name=spc", "-c", "user.email=spc@local"];
+const SPC_IDENTITY_ARGS = ["-c", "user.name=spc", "-c", "user.email=spc@local"];
+
+/**
+ * spc-made commits defer to the repository's configured git identity -
+ * the human whose contract is running - so attribution, blame and history
+ * stay with the user. The fixed spc identity is only a fallback for
+ * environments where git cannot resolve one at all (bare CI runners),
+ * where the commit would otherwise fail outright. Resolved once per repo
+ * per process: the probe is a full spawnSync and commit-heavy paths call
+ * this for every commit.
+ */
+const identityCache = new Map<string, string[]>();
+function commitIdentityArgs(cwd: string): string[] {
+  const cached = identityCache.get(cwd);
+  if (cached !== undefined) return cached;
+  const args = git(cwd, ["var", "GIT_AUTHOR_IDENT"]).ok ? [] : SPC_IDENTITY_ARGS;
+  identityCache.set(cwd, args);
+  return args;
+}
 
 /**
  * Thin, synchronous Git adapter. All commands are explicit and captured;
  * nothing is shell-interpolated from untrusted input.
  */
 export function git(cwd: string, args: string[], options: { identity?: boolean; input?: string } = {}): GitResult {
-  const finalArgs = options.identity ? [...IDENTITY_ARGS, ...args] : args;
+  const finalArgs = options.identity ? [...commitIdentityArgs(cwd), ...args] : args;
   const r = spawnSync("git", finalArgs, {
     cwd,
     encoding: "utf8",
@@ -119,14 +137,16 @@ const SPC_STATE_PATHS = [".spc/runs", ".spc/plans", ".spc/worktrees", ".spc/cach
 export function commitAll(cwd: string, message: string): string | null {
   const status = statusPorcelain(cwd);
   if (!status.dirty) return null;
-  gitOk(cwd, ["add", "-A"], { identity: true });
+  // Identity matters only for operations that create commits; add/reset
+  // never do.
+  gitOk(cwd, ["add", "-A"]);
   // In-place execution commits inside a checkout that contains spc-owned
   // state (run logs, plans, worktrees, harness queues); unstage it. In
   // worktree mode the state lives outside the tree, so this is a no-op.
   // reset rather than an add exclude pathspec: naming an existing ignored
   // path in `git add` pathspecs makes git exit non-zero even though the
   // files stage correctly.
-  gitOk(cwd, ["reset", "-q", "--", ...SPC_STATE_PATHS], { identity: true });
+  gitOk(cwd, ["reset", "-q", "--", ...SPC_STATE_PATHS]);
   // Only spc state was dirty: nothing staged, nothing to commit.
   if (git(cwd, ["diff", "--cached", "--quiet"]).ok) return null;
   gitOk(cwd, ["commit", "-m", message], { identity: true });

@@ -43,6 +43,12 @@ uses semantic versioning.
 
 ### Changed
 
+- Run commits attribute to you: task commits, result commits and parallel
+  cherry-picks defer to the repository's configured git identity (author
+  and committer), so attribution, blame and history stay with the human
+  whose contract ran. The fixed `spc <spc@local>` identity remains only
+  as a fallback for environments where git cannot resolve an identity at
+  all (bare CI runners), where the commit would otherwise fail.
 - Verification sweeps execute each distinct command at most once:
   identical acceptance commands (same command, expected exit code and
   timeout) share a single execution per sweep, recorded as evidence for
