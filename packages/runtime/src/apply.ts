@@ -13,7 +13,7 @@ import type { FollowUp, Observation, Plan, RequirementState, RunState, RunStatus
 import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { executeTask, enforceWriteScope, runScheduler, type ExecutionOutcome } from "@spc/executor";
 import { classifyAmendmentRisk, generateAmendment } from "@spc/planner";
-import { commitAll, compileSpecFile, currentRevision, diffStat, git, statusDelta, statusPorcelain, type WorktreeStatus } from "@spc/repo";
+import { commitAll, compileSpecFile, currentBranch, currentRevision, diffStat, git, statusDelta, statusPorcelain, type WorktreeStatus } from "@spc/repo";
 import { checkoutBranch, checkoutRunBranch, createWorktree, removeWorktree } from "@spc/repo";
 import { observeRepository } from "@spc/repo";
 import { renderRunSummary } from "@spc/renderer";
@@ -277,9 +277,23 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
 
   // Execution isolation: one worktree per run (plus per-task worktrees when
   // execution.parallelism > 1), or - with execution.inPlace - the repository
-  // checkout itself on the run branch.
+  // checkout itself, either on the dedicated run branch (inPlaceBranch
+  // "run", restored at run end) or on the branch that is already checked
+  // out (inPlaceBranch "current", no branch switching at all).
   assertInPlaceRunnable(ctx.config);
-  if (ctx.config.execution.inPlace) {
+  if (ctx.config.execution.inPlace && ctx.config.execution.inPlaceBranch === "current") {
+    const branch = currentBranch(options.repoRoot);
+    if (branch === "HEAD") {
+      throw new SpcError(
+        RUNTIME_ERROR,
+        'execution.inPlaceBranch "current" requires a checked-out branch; HEAD is detached and run commits would dangle. Check out a branch or use inPlaceBranch "run".',
+      );
+    }
+    ctx.worktreePath = options.repoRoot;
+    ctx.worktreeBranch = branch;
+    ctx.meta = { ...meta, branch, worktree: options.repoRoot };
+    ctx.log(`In-place run on current branch ${branch}: no branch switching, commits land here`);
+  } else if (ctx.config.execution.inPlace) {
     const run = checkoutRunBranch(options.repoRoot, meta.specId, runId);
     ctx.worktreePath = options.repoRoot;
     ctx.worktreeBranch = run.branch;
@@ -391,10 +405,19 @@ export async function resumeRun(options: ApplyOptions & { resumeRunId: string },
   if (!meta.worktree || !existsSync(meta.worktree)) {
     throw new SpcError(RUNTIME_ERROR, `worktree for run ${runId} is gone (${meta.worktree ?? "none"}); cannot resume safely`);
   }
-  // In-place run: the checkout may have moved on since the interruption;
-  // return to the run branch WITHOUT resetting it (mid-run commits survive).
+  // In-place run: the checkout may have moved on since the interruption.
+  // Run-branch mode (originalBranch recorded) returns to the run branch
+  // WITHOUT resetting it (mid-run commits survive). Current-branch mode
+  // never switches branches, so resuming on anything else is a mistake.
   if (meta.branch && meta.worktree && path.resolve(meta.worktree) === path.resolve(paths.repoRoot)) {
-    checkoutBranch(paths.repoRoot, meta.branch);
+    if (meta.originalBranch) {
+      checkoutBranch(paths.repoRoot, meta.branch);
+    } else if (currentBranch(paths.repoRoot) !== meta.branch) {
+      throw new SpcError(
+        RUNTIME_ERROR,
+        `run ${runId} executed in place on branch ${meta.branch}; check that branch out before resuming (inPlaceBranch "current" never switches branches for you)`,
+      );
+    }
   }
 
   const snapshotFile = paths.snapshotFile(runId);

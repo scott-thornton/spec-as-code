@@ -109,6 +109,14 @@ requirements:
         type: command
         command: pnpm --filter @spc/runtime exec vitest run src/red-phase.test.ts
 
+  - id: SELF-013
+    statement: With execution.inPlaceBranch set to current, runs execute and commit on the checked-out branch without creating or switching to any run branch.
+    priority: must
+    acceptance:
+      - id: SELF-013-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/inplace.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services

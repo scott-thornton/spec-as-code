@@ -125,4 +125,46 @@ describe("execution.inPlace", () => {
     // Nothing was checked out or left behind.
     expect(gitOk(repo, ["rev-parse", "--abbrev-ref", "HEAD"]).trim()).toBe("main");
   }, 120_000);
+
+  it("inPlaceBranch current: executes and commits on the checked-out branch, no branch switching", async () => {
+    const repo = setupRepo("current", ["execution:", "  inPlace: true", "  inPlaceBranch: current"]);
+    const paths = spcPaths(repo);
+    mkdirSync(paths.plansDir, { recursive: true });
+    writeFileSync(paths.planFile("plan-inplace"), JSON.stringify(planFor()));
+
+    const report = await applyPlan({ repoRoot: repo }, { providerFactory: async () => provider(), log: () => {} });
+    expect(report.status).toBe("succeeded");
+
+    // Never left the branch; no run branch was created; nothing restored.
+    expect(report.worktree).toBe(repo);
+    expect(report.branch).toBe("main");
+    expect(gitOk(repo, ["rev-parse", "--abbrev-ref", "HEAD"]).trim()).toBe("main");
+    expect(gitOk(repo, ["branch", "--list", "spc/*"]).trim()).toBe("");
+
+    // Result commits landed directly on main; the task file is present.
+    const subjects = gitOk(repo, ["log", "--format=%s", `${report.baseRevision}..HEAD`]);
+    expect(subjects).toContain("spc: apply plan plan-inplace for one-file");
+    expect(existsSync(path.join(repo, "src", "a.mjs"))).toBe(true);
+    const changed = gitOk(repo, ["diff", "--name-only", `${report.baseRevision}..HEAD`])
+      .trim()
+      .split("\n")
+      .filter((l) => l.trim() !== "");
+    expect(changed).toEqual(["src/a.mjs"]);
+
+    // No originalBranch recorded: nothing to restore, resume never switches.
+    const meta = JSON.parse(readFileSync(paths.metadataFile(report.runId), "utf8")) as { originalBranch?: string };
+    expect(meta.originalBranch).toBeUndefined();
+  }, 120_000);
+
+  it("inPlaceBranch current refuses detached HEAD", async () => {
+    const repo = setupRepo("detached", ["execution:", "  inPlace: true", "  inPlaceBranch: current"]);
+    const paths = spcPaths(repo);
+    mkdirSync(paths.plansDir, { recursive: true });
+    writeFileSync(paths.planFile("plan-inplace"), JSON.stringify(planFor()));
+    gitOk(repo, ["checkout", "--detach"]);
+
+    await expect(
+      applyPlan({ repoRoot: repo }, { providerFactory: async () => provider(), log: () => {} }),
+    ).rejects.toThrow(/requires a checked-out branch/);
+  }, 120_000);
 });

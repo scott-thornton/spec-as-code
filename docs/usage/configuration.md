@@ -70,6 +70,18 @@ execution:
   # returns to it, or check out your branch manually.
   inPlace: false
 
+  # Where in-place runs commit. Only meaningful with execution.inPlace.
+  #   run    - (default) the dedicated run branch spc/<spec-id>/<run-id>,
+  #            original branch restored at run end; the run stays one
+  #            reviewable git range
+  #   current - whatever branch is checked out: no branch switching at
+  #            all, result commits land directly on it. The base revision
+  #            is still recorded, so diffs and reports work; a failed or
+  #            partial run leaves its commits on YOUR branch. Detached
+  #            HEAD is refused. Resuming requires being on the same
+  #            branch; current mode never switches branches for you.
+  inPlaceBranch: run
+
   # §31 iteration: demote blocking spec_clarification follow-ups drafted by
   # the planner to non-blocking and proceed. The follow-ups are still
   # recorded and visible after the run. Measured to recover most of the

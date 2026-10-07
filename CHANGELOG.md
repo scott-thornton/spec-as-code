@@ -8,6 +8,12 @@ uses semantic versioning.
 
 ### Added
 
+- In-place execution on the current branch (`execution.inPlaceBranch:
+  "current"`): with `execution.inPlace`, runs can execute and commit on
+  whatever branch is checked out - no branch switching at all, base
+  revision still recorded. Detached HEAD is refused; resuming requires
+  being on the run's branch. Default remains the dedicated run branch
+  (`"run"`), which keeps a run one reviewable git range.
 - Red-phase verification (`verification.requireRedPhase` + `discriminating:
   true` on command/file acceptance criteria): apply runs execute
   discriminating criteria once at the base revision before any task and

@@ -46,6 +46,15 @@ export const executionConfigSchema = z.strictObject({
    * writes through per-task worktrees).
    */
   inPlace: z.boolean().default(false),
+  /**
+   * Where in-place runs commit. "run" (default): the dedicated run branch,
+   * original branch restored at run end. "current": whatever branch is
+   * checked out - no branch switching at all, result commits land directly
+   * on it (base revision still recorded, so diffs and reports work).
+   * Detached HEAD is refused in "current" mode. Inert without
+   * execution.inPlace.
+   */
+  inPlaceBranch: z.enum(["run", "current"]).default("run"),
   /** Harness provider: how long to wait for an external agent's answer per request. */
   harnessResponseTimeoutMs: z.number().int().positive().default(900_000),
   /** Extra high-risk write patterns for tiered amendment approval. */
