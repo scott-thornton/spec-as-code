@@ -125,6 +125,20 @@ describe("commit-per-task", () => {
     const events = readFileSync(paths.eventsFile(report.runId), "utf8");
     expect((events.match(/"type":"TASK_COMMITTED"/g) ?? []).length).toBe(2);
 
+    // Persisted projection reports model calls: usage records, USAGE_RECORDED
+    // events and state.json must agree (live runs used to persist 0).
+    const usageRecords = readFileSync(paths.usageFile(report.runId), "utf8")
+      .trim()
+      .split("\n")
+      .filter((l) => l.trim() !== "");
+    const usageEvents = (events.match(/"type":"USAGE_RECORDED"/g) ?? []).length;
+    expect(usageRecords.length).toBe(usageEvents);
+    expect(usageRecords.length).toBeGreaterThan(0);
+    const fullState = JSON.parse(readFileSync(paths.stateFile(report.runId), "utf8")) as {
+      modelCalls: number;
+    };
+    expect(fullState.modelCalls).toBe(usageEvents);
+
     // Run-level diff still covers the whole transition.
     expect(report.changedFileCount).toBe(2);
   }, 120_000);

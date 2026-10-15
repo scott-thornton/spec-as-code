@@ -501,6 +501,10 @@ async function driveRun(ctx: RunContext): Promise<ApplyReport> {
   const worktree = ctx.worktreePath!;
   const usageSink = (record: UsageRecord): void => {
     ctx.modelCalls += 1;
+    // Keep the persisted projection in sync; the event log is truth, but
+    // state.json and the summary must not report 0 for live runs (found
+    // against real usage data: every state.json said modelCalls 0).
+    ctx.state = { ...ctx.state, modelCalls: ctx.modelCalls };
     appendUsageRecord(ctx.paths.usageFile(ctx.meta.runId), record);
     ctx.events.append("USAGE_RECORDED", { role: record.role, requestId: record.requestId, model: record.model });
   };
@@ -1020,6 +1024,7 @@ async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
   const maxParallel = Math.max(1, ctx.config.execution.parallelism);
   const usageSink = (record: UsageRecord): void => {
     ctx.modelCalls += 1;
+    ctx.state = { ...ctx.state, modelCalls: ctx.modelCalls };
     appendUsageRecord(ctx.paths.usageFile(ctx.meta.runId), record);
     ctx.events.append("USAGE_RECORDED", { role: record.role, requestId: record.requestId, model: record.model });
   };
