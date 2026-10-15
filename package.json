@@ -1,6 +1,6 @@
 {
   "name": "spec-as-code",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Spec-as-Code: declarative requirements, validated plans, bounded agent execution, and requirement status that comes from actually running the verification.",
   "packageManager": "pnpm@12.4.2",

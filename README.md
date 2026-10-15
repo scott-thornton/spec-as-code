@@ -48,7 +48,7 @@ canonical hashing, validation), `@spc/repo` (Git, observation, worktrees),
 
 ## Requirements
 
-- Node.js 22+ and pnpm 9+ (not yet published to npm - use it from a clone)
+- Node.js 22+ and pnpm 9+
 - Git (execution isolation uses worktrees; nothing is merged or pushed
   automatically)
 - A model provider for planning and agent execution - or none:
@@ -58,6 +58,12 @@ canonical hashing, validation), `@spc/repo` (Git, observation, worktrees),
 ## Install
 
 ```bash
+npm install -g @spc/cli
+```
+
+Or run it once with `npx @spc/cli`. From a clone instead:
+
+```bash
 git clone https://github.com/scott-thornton/spec-as-code
 cd spec-as-code
 pnpm install --frozen-lockfile
@@ -65,7 +71,7 @@ pnpm build
 alias spc='node "$PWD/packages/cli/dist/main.js"'
 ```
 
-Every command below assumes that alias.
+Every command below assumes the `spc` command.
 
 ## Author a specification
 
