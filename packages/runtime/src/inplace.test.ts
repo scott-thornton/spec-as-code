@@ -119,7 +119,7 @@ describe("execution.inPlace", () => {
     const warning = inPlaceHandoffWarning(paths.runsDir, "one-file", repo);
     expect(warning).toContain(`spc/one-file/${report.runId}`);
     expect(warning).toContain("drift");
-    gitOk(repo, ["merge", report.branch]);
+    gitOk(repo, ["merge", report.branch!]);
     expect(inPlaceHandoffWarning(paths.runsDir, "one-file", repo)).toBeNull();
   }, 120_000);
 
