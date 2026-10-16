@@ -182,26 +182,32 @@ behaviour.
 With `verification.requireRedPhase` enabled (see
 [Configuration](configuration.md)), apply runs execute discriminating
 criteria once at the run's base revision, before any task, and record the
-outcome as red-phase evidence. The evaluator then accepts such a criterion
-only when it demonstrably flips: contradicted or inconclusive at base,
-supporting at the result revision. The chronology of who typed what when
-is never checked - discrimination is.
+outcome as red-phase evidence. Within apply runs - where the flip is
+observable - the evaluator accepts such a criterion only when it
+demonstrably flips: contradicted or inconclusive at base, supporting at
+the result revision. The chronology of who typed what when is never
+checked - discrimination is.
 
-Two outcomes surface as `indeterminate` on the property, which blocks a
-`succeeded` run status:
+Two outcomes surface as `indeterminate` on the property, blocking a
+`succeeded` apply run:
 
 - the criterion already passed at the base revision: it does not
   discriminate this change and is exposed as decorative
-- no red-phase evidence exists (for example standalone `spc verify`,
-  which cannot establish the flip after the fact)
+- no red-phase evidence exists in the run (for example the feature was
+  enabled mid-run, after tasks had already executed)
+
+Standalone `spc verify` never demands red evidence. The flip is a
+property of introduction, enforced by apply runs; after the fact, verify
+answers only "does the tree satisfy the criteria now" - so a spec
+satisfied through a proper run keeps verifying green, including in CI.
 
 Do not mark regression criteria - constraints on behaviour that must keep
 holding ("the old API still responds", "the existing suite still passes").
 Those legitimately pass at base; they verify preservation, not change.
 Marking them discriminating turns a correct gate into a permanent
-`indeterminate`. A criterion that cannot fail cannot prove anything; if
-you cannot write a failing-at-base criterion for a behaviour claim, that
-is a signal about the claim, not the mechanism.
+`indeterminate` inside apply runs. A criterion that cannot fail cannot
+prove anything; if you cannot write a failing-at-base criterion for a
+behaviour claim, that is a signal about the claim, not the mechanism.
 
 ## Identifier rules (why they are strict)
 

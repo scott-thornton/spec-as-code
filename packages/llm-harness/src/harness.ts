@@ -7,6 +7,10 @@ export const HARNESS_RESPONSE_TIMEOUT = "LLM_HARNESS_RESPONSE_TIMEOUT";
 
 const POLL_INTERVAL_MS = 1_000;
 
+/** Deadline refreshes stop after this many invalid answers, so a loop of
+ * garbage submissions cannot keep a request pending forever. */
+const MAX_REQUEUE_REFRESHES = 5;
+
 const HARNESS_INSTRUCTIONS = `You are the model backend for an spc run. Read the system and prompt, inspect the repository as needed, and produce a single JSON value satisfying jsonSchema exactly. Save your answer with: spc agent respond <id> --file <answer.json> (the file must contain the JSON value itself, not a wrapper). Then the run continues automatically.`;
 
 /**
@@ -27,10 +31,16 @@ export class HarnessProvider implements LLMProvider {
     private readonly store: HarnessStore,
     private readonly timeoutMs = 900_000,
     private readonly sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+    private readonly now: () => number = () => Date.now(),
   ) {}
 
   async generateStructured<T>(request: StructuredRequest<T>): Promise<StructuredResponse<T>> {
-    const started = Date.now();
+    // Window anchor: moved forward on each invalid answer (bounded by
+    // MAX_REQUEUE_REFRESHES), because feedback rounds burn wall clock the
+    // answering agent is spending on real work. The window exists to
+    // catch abandonment, not to starve active iteration.
+    let windowStart = this.now();
+    let invalidAnswers = 0;
     const invocation = this.store.nextInvocation(request.role, request.key ?? "default");
     const id = this.store.requestId(request.role, request.key ?? "default", invocation);
 
@@ -52,7 +62,7 @@ export class HarnessProvider implements LLMProvider {
       createdAt: new Date().toISOString(),
     });
 
-    while (Date.now() - started < this.timeoutMs) {
+    while (this.now() < windowStart + this.timeoutMs) {
       await this.sleep(POLL_INTERVAL_MS);
       if (!this.store.hasAnswer(id)) continue;
 
@@ -61,15 +71,21 @@ export class HarnessProvider implements LLMProvider {
       const validation = validateStructured(request.schema, answer.value);
       if (validation.ok) {
         this.store.clearPending(id);
-        const usage: Usage = { model: this.model, durationMs: Date.now() - started };
+        const usage: Usage = { model: this.model, durationMs: this.now() - windowStart };
         return { value: validation.value, usage };
       }
       // Invalid answer: keep the request pending with feedback so the
-      // answering agent can retry within the same timeout window.
+      // answering agent can retry; refresh the window so the retry is not
+      // starved by the rounds already spent (capped: garbage loops must
+      // still time out).
       this.store.requeueWithFeedback(
         id,
         validation.issues.slice(0, 8).map((i) => `${i.path || "<root>"}: ${i.message}`).join("; "),
       );
+      invalidAnswers += 1;
+      if (invalidAnswers <= MAX_REQUEUE_REFRESHES) {
+        windowStart = this.now();
+      }
     }
     throw new LLMError(
       HARNESS_RESPONSE_TIMEOUT,

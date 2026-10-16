@@ -30,6 +30,13 @@ export function printReport(report: ApplyReport): void {
   if (report.baseRevision) console.log(`Base:      ${report.baseRevision.slice(0, 12)}`);
   if (report.resultRevision) console.log(`Result:    ${report.resultRevision.slice(0, 12)}`);
   if (report.worktree) console.log(`Worktree:  ${path.relative(process.cwd(), report.worktree)}`);
+  if (report.restoredBranch) {
+    console.log("");
+    console.log(`Checkout restored to: ${report.restoredBranch}`);
+    console.log(`Results live on:      ${report.branch} (unmerged)`);
+    console.log(`spc verify/reconcile inspect the CURRENT tree - merge or check out`);
+    console.log(`${report.branch} first, or they will report the run's changes as drift.`);
+  }
   console.log(`Model calls: ${report.modelCalls}, replans: ${report.replans}`);
   console.log("");
   console.log("Requirements:");

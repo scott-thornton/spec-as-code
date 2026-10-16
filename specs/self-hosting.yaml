@@ -125,6 +125,41 @@ requirements:
         type: command
         command: pnpm --filter @spc/repo exec vitest run src/git.test.ts
 
+  - id: SELF-015
+    statement: spc skills lists the shipped process skills and spc use-skill prints one, with repo-local .agents/skills overriding bundled copies.
+    priority: must
+    acceptance:
+      - id: SELF-015-A
+        type: command
+        command: pnpm --filter @spc/cli exec vitest run src/integration.test.ts
+
+  - id: SELF-016
+    statement: Harness answers can be preflight-checked locally with spc agent validate, and the response timeout refreshes while the agent is actively iterating on requeued feedback.
+    priority: must
+    acceptance:
+      - id: SELF-016-A
+        type: command
+        command: pnpm --filter @spc/llm-harness exec vitest run src/harness.test.ts
+      - id: SELF-016-B
+        type: command
+        command: pnpm --filter @spc/cli exec vitest run src/integration.test.ts
+
+  - id: SELF-017
+    statement: After an in-place run-branch run, verify and reconcile warn when the results branch is unmerged, so the run is not reported as phantom drift.
+    priority: must
+    acceptance:
+      - id: SELF-017-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/inplace.test.ts
+
+  - id: SELF-018
+    statement: Flip enforcement for discriminating criteria applies inside apply runs; standalone spc verify never demands red-phase evidence, so satisfied specs keep verifying green after the fact.
+    priority: must
+    acceptance:
+      - id: SELF-018-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/red-phase.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services

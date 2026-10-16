@@ -10,14 +10,15 @@ import { runReconcile } from "./commands/reconcile.js";
 import { runDiff, runStatus } from "./commands/status.js";
 import { runFollowupResolve, runFollowups } from "./commands/followups.js";
 import { runCancel, runPr, runShow } from "./commands/run.js";
-import { runAgentList, runAgentRespond, runAgentShow } from "./commands/agent.js";
+import { runAgentList, runAgentRespond, runAgentShow, runAgentValidate } from "./commands/agent.js";
+import { runSkills, runUseSkill } from "./commands/skills.js";
 
 const program = new Command();
 
 program
   .name("spc")
   .description("Spec-as-Code: declarative requirements, validated plans, bounded agent execution, and status proven by running the verification")
-  .version("0.1.0");
+  .version("0.2.0");
 
 program
   .command("init")
@@ -25,6 +26,22 @@ program
   .option("--cwd <dir>", "target directory", process.cwd())
   .action((opts: { cwd: string }) => {
     runInit(opts.cwd);
+  });
+
+program
+  .command("skills")
+  .description("list available process skills (repo-local .agents/skills override bundled copies)")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action((opts: { cwd: string }) => {
+    process.exitCode = runSkills(opts.cwd);
+  });
+
+program
+  .command("use-skill <name>")
+  .description("print a skill's instructions for the current agent to follow")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action((name: string, opts: { cwd: string }) => {
+    process.exitCode = runUseSkill(name, opts.cwd);
   });
 
 const spec = program.command("spec").description("specification compilation");
@@ -159,6 +176,14 @@ agent
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action((id: string, opts: { file?: string; stdin?: boolean; by?: string; cwd: string }) => {
     process.exitCode = runAgentRespond({ id, file: opts.file, stdin: opts.stdin, by: opts.by, cwd: opts.cwd });
+  });
+agent
+  .command("validate <id>")
+  .description("preflight-check a draft answer against the request's schema before submitting")
+  .requiredOption("--file <path>", "file containing the draft JSON value")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action((id: string, opts: { file: string; cwd: string }) => {
+    process.exitCode = runAgentValidate({ id, file: opts.file, cwd: opts.cwd });
   });
 
 const followup = program.command("followup").description("follow-up operations");

@@ -104,3 +104,9 @@ properties drifted, `spc reconcile` plans the next transition for review.
 - `fake`: scripted responses; only for tests and rehearsal.
 
 Full documentation lives in the spc repository under docs/usage/.
+
+## Companion skills
+
+spc ships process skills next to this one. `spc skills` lists them,
+`spc use-skill <name>` prints one. Repo-local `.agents/skills/`
+overrides the bundled copies.

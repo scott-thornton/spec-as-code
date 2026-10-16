@@ -1,5 +1,5 @@
 import path from "node:path";
-import { reconcile } from "@spc/runtime";
+import { inPlaceHandoffWarning, reconcile } from "@spc/runtime";
 import { createProvider, loadRepoConfig, resolveRepoRoot, resolveSpec } from "../context.js";
 
 /** `spc reconcile [specFile] [--apply]`: verify, then plan the next transition. */
@@ -7,6 +7,9 @@ export async function runReconcile(specFile: string | undefined, options: { appl
   const repoRoot = resolveRepoRoot(options.cwd);
   const config = loadRepoConfig(repoRoot);
   const { ir } = resolveSpec(path.join(repoRoot, "specs"), specFile ?? undefined);
+
+  const handoff = inPlaceHandoffWarning(path.join(repoRoot, ".spc", "runs"), ir.spec.metadata.id, repoRoot);
+  if (handoff) console.log(handoff);
 
   const result = await reconcile({
     repoRoot,

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { LLM_TIMEOUT } from "@spc/llm";
 import { HarnessProvider } from "./harness.js";
 import { HarnessStore } from "./store.js";
+import { checkJsonSchema } from "./schema-check.js";
 
 const schema = z.strictObject({ answer: z.string() });
 
@@ -101,10 +102,78 @@ describe("harness provider", () => {
     ).rejects.toMatchObject({ code: "LLM_HARNESS_RESPONSE_TIMEOUT" });
   });
 
+  it("an actively-iterating agent outlives the original window (refresh on requeue)", async () => {
+    // Deterministic virtual clock: the fake sleep advances time and plays
+    // the answering agent. Original deadline is 1000; the invalid answer
+    // lands at 500 (refreshing the window to 1500) and the valid one at
+    // 1200 - past the ORIGINAL deadline, inside the refreshed one.
+    const root = mkdtempSync(path.join(tmpdir(), "spc-harness-"));
+    const store = new HarnessStore(root);
+    let clock = 0;
+    let phase = 0;
+    const sleep = async (): Promise<void> => {
+      clock += 10;
+      const id = "planner-planner@1-1";
+      if (phase === 0 && clock >= 500) {
+        phase = 1;
+        store.answer(id, { answer: 1 }); // wrong type: requeued
+      } else if (phase === 1 && clock >= 1200) {
+        phase = 2;
+        store.answer(id, { answer: "ok" });
+      }
+    };
+    const provider = new HarnessProvider(store, 1_000, sleep, () => clock);
+    const result = await provider.generateStructured({ ...request, requestId: "r5" });
+    expect(result.value).toEqual({ answer: "ok" });
+    expect(clock).toBeGreaterThanOrEqual(1200);
+    rmSync(root, { recursive: true, force: true });
+  });
+
   it("store.answer refuses unknown request ids", () => {
     const root = mkdtempSync(path.join(tmpdir(), "spc-harness-"));
     const store = new HarnessStore(root);
     expect(() => store.answer("nope-1", { answer: "x" })).toThrow(/no pending request/);
     rmSync(root, { recursive: true, force: true });
+  });
+});
+
+describe("checkJsonSchema (preflight validator)", () => {
+  const schema = {
+    type: "object",
+    properties: {
+      status: { type: "string", enum: ["completed", "blocked"] },
+      changes: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { op: { type: "string" }, path: { type: "string", minLength: 1 } },
+          required: ["op", "path"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["status"],
+    additionalProperties: false,
+  };
+
+  it("accepts a conforming value", () => {
+    expect(
+      checkJsonSchema(schema, { status: "completed", changes: [{ op: "create", path: "src/a.ts" }] }),
+    ).toEqual([]);
+  });
+
+  it("reports missing required, wrong enum, unexpected property, minLength", () => {
+    const issues = checkJsonSchema(schema, { status: "nope", extra: 1, changes: [{ op: "create", path: "" }] });
+    const messages = issues.map((i) => `${i.path}: ${i.message}`).join("\n");
+    expect(messages).toContain("expected one of");
+    expect(messages).toContain('unexpected property "extra"');
+    expect(messages).toContain("minLength");
+    expect(issues.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("oneOf passes when any branch matches", () => {
+    const s = { oneOf: [{ type: "string" }, { type: "number" }] };
+    expect(checkJsonSchema(s, "x")).toEqual([]);
+    expect(checkJsonSchema(s, true)).toHaveLength(1);
   });
 });

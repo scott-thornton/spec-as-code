@@ -3,7 +3,7 @@ import path from "node:path";
 import { SpcError } from "@spc/core";
 import type { Config, Event, Evidence, FollowUp, RequirementState, RunState, SpecIR } from "@spc/schema";
 import type { LLMProvider } from "@spc/llm";
-import { currentRevision, statusPorcelain } from "@spc/repo";
+import { currentBranch, currentRevision, git, statusPorcelain } from "@spc/repo";
 import { renderRunSummary } from "@spc/renderer";
 import { evaluateProperty } from "@spc/verifier";
 import { EventStore } from "./events.js";
@@ -44,6 +44,34 @@ export function latestRunViewForSpec(runsDir: string, specId: string): RunView |
   if (views.length === 0) return null;
   views.sort((a, b) => (a.meta.createdAt < b.meta.createdAt ? 1 : -1));
   return views[0]!;
+}
+
+/**
+ * Phantom-drift guard: the latest run for this spec was an in-place
+ * run-branch execution whose results branch is not merged into HEAD, so
+ * verify/reconcile against the CURRENT tree will report the run's own
+ * changes as missing. Returns the warning text, or null when the
+ * situation does not apply (results merged, current-branch mode, or no
+ * such run). A warning, never an error: verifying the base tree is
+ * sometimes exactly what the caller means.
+ */
+export function inPlaceHandoffWarning(runsDir: string, specId: string, repoRoot: string): string | null {
+  const view = latestRunViewForSpec(runsDir, specId);
+  if (!view?.meta.branch || !view.meta.worktree || !view.meta.originalBranch) return null;
+  try {
+    if (path.resolve(view.meta.worktree) !== path.resolve(repoRoot)) return null;
+    const head = currentBranch(repoRoot);
+    if (head === view.meta.branch) return null;
+    const merged = git(repoRoot, ["merge-base", "--is-ancestor", view.meta.branch, "HEAD"]).ok;
+    if (merged) return null;
+    return (
+      `note: latest in-place run ${view.meta.runId} left its results on branch ${view.meta.branch} ` +
+      `(unmerged); this command inspects the CURRENT tree (${head}), so the run's own changes may ` +
+      `report as drift. Merge or check out ${view.meta.branch} first if that is what you meant to verify.`
+    );
+  } catch {
+    return null;
+  }
 }
 
 export function allOpenFollowups(runsDir: string): { runId: string; followup: FollowUp }[] {

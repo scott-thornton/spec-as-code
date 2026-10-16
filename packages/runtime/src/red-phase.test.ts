@@ -6,6 +6,8 @@ import { compileSpecSource } from "@spc/core";
 import { FakeProvider, parseFakeScript } from "@spc/llm-fake";
 import { commitAll, gitOk } from "@spc/repo";
 import { applyPlan } from "./apply.js";
+import { createVerifyRun } from "./queries.js";
+import { loadConfig } from "./run.js";
 import { spcPaths } from "./paths.js";
 
 const root = mkdtempSync(path.join(tmpdir(), "spc-red-"));
@@ -200,5 +202,41 @@ describe("red-phase verification (verification.requireRedPhase)", () => {
       requirements: Record<string, { redPhase?: string }>;
     };
     expect(state.requirements["FEAT-A"]?.redPhase).toBeUndefined();
+  }, 120_000);
+
+  it("standalone verify never demands red-phase evidence: satisfied specs keep verifying green", async () => {
+    // The CHK3650 shape: a spec satisfied through a proper apply run, with
+    // the feature enabled. A later after-the-fact verify must not report
+    // indeterminate on the discriminating criterion - the flip was a
+    // property of introduction, enforced by the apply run; verify answers
+    // only "does the tree satisfy the criteria now".
+    const repo = setupRepo(
+      "standalone",
+      ["verification:", "  requireRedPhase: true", "execution:", "  inPlace: true", "  inPlaceBranch: current"],
+      greetSpec,
+    );
+    const paths = spcPaths(repo);
+    mkdirSync(paths.plansDir, { recursive: true });
+    writeFileSync(
+      paths.planFile("plan-red"),
+      JSON.stringify(
+        planFor("greet", greetIr.digest, [
+          { id: "T001", title: "Write greet", kind: "modify", intent: "create src/greet.cjs", dependsOn: [], satisfies: ["FEAT-A"], targets: { write: ["src/greet.cjs"] } },
+          { id: "T002", title: "Verify", kind: "verify", intent: "verify", dependsOn: ["T001"], verifies: ["FEAT-A"] },
+        ]),
+      ),
+    );
+    const applied = await applyPlan({ repoRoot: repo }, { providerFactory: async () => provider(greetScript), log: () => {} });
+    expect(applied.status).toBe("succeeded");
+
+    const standalone = await createVerifyRun({
+      repoRoot: repo,
+      specIr: greetIr,
+      config: loadConfig(path.join(repo, ".spc", "config.yaml")),
+      provider: null,
+    });
+    const state = standalone.states.find((s) => s.propertyId === "FEAT-A");
+    expect(state?.status).toBe("satisfied");
+    expect(state?.redPhase).toBeUndefined();
   }, 120_000);
 });

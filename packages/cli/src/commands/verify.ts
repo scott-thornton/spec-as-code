@@ -2,7 +2,7 @@ import path from "node:path";
 import { appendFileSync } from "node:fs";
 import { statusPorcelain } from "@spc/repo";
 import { renderGithubAnnotations, renderGithubSummary } from "@spc/renderer";
-import { createVerifyRun } from "@spc/runtime";
+import { createVerifyRun, inPlaceHandoffWarning } from "@spc/runtime";
 import { createProvider, loadRepoConfig, resolveRepoRoot, resolveSpec } from "../context.js";
 
 /** `spc verify [specFile]`: verify desired state against the current tree. */
@@ -18,6 +18,8 @@ export async function runVerify(
   if (format === "text" && statusPorcelain(repoRoot).dirty) {
     console.log("note: working tree is dirty; verification runs against the current state as-is");
   }
+  const handoff = inPlaceHandoffWarning(path.join(repoRoot, ".spc", "runs"), ir.spec.metadata.id, repoRoot);
+  if (handoff && format === "text") console.log(handoff);
   const report = await createVerifyRun({ repoRoot, specIr: ir, config, provider });
 
   if (format === "json") {

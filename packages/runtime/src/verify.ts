@@ -23,6 +23,16 @@ export interface VerifySweepInput {
   taskId?: string;
   /** "red" runs the sweep at the base revision, before any task executes. */
   phase?: "red";
+  /**
+   * Marks this sweep as part of an APPLY run (verify tasks, the final
+   * sweep, the red sweep). Combined with verification.requireRedPhase,
+   * such sweeps enforce the red -> green flip for discriminating
+   * criteria: the flip is a property of introduction - observable and
+   * enforced where the change lands. Standalone `spc verify` never sets
+   * this and answers a present-tense question only, so satisfied specs
+   * keep verifying green after the fact.
+   */
+  enforceRedPhase?: boolean;
   now?: () => string;
   onUsage?: (record: UsageRecord) => void;
 }
@@ -114,7 +124,7 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
   const states = input.properties.map((p) => {
     const state = evaluateProperty(p, input.evidence.all(), {
       allowAgentOnly: input.config.verification.allowAgentOnlyMustRequirements,
-      ...(input.config.verification.requireRedPhase ? { requireRedPhase: true } : {}),
+      ...(input.enforceRedPhase && input.config.verification.requireRedPhase ? { requireRedPhase: true } : {}),
       now,
     });
     input.events.append("PROPERTY_VERIFIED", {

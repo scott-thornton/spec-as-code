@@ -8,3 +8,4 @@ coverage/
 /.spc/plans/
 /.spc/cache/
 results/
+packages/cli/skills/

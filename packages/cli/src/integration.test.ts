@@ -293,3 +293,91 @@ describe("spec imports end to end (§79)", () => {
     expect(r.stdout).toContain("b.yaml");
   });
 });
+
+describe("skills", () => {
+  const repo = setupFixture("simple-node-service");
+
+  it("spc skills lists the bundled skills", () => {
+    const r = spc(repo, ["skills"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("adverse-review");
+    expect(r.stdout).toContain("author-spec");
+    expect(r.stdout).not.toContain("(repo-local)");
+  });
+
+  it("spc use-skill prints a skill body without frontmatter", () => {
+    const r = spc(repo, ["use-skill", "adverse-review"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("adversarial review primitive");
+    expect(r.stdout).not.toContain("description:");
+  });
+
+  it("unknown skill errors with SKILL_NOT_FOUND", () => {
+    const r = spc(repo, ["use-skill", "nope"]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("SKILL_NOT_FOUND");
+  });
+
+  it("repo-local .agents/skills override bundled copies", () => {
+    mkdirSync(path.join(repo, ".agents", "skills", "adverse-review"), { recursive: true });
+    writeFileSync(
+      path.join(repo, ".agents", "skills", "adverse-review", "SKILL.md"),
+      "---\nname: adverse-review\ndescription: local variant\n---\n\n# local override body\n",
+    );
+    const list = spc(repo, ["skills"]);
+    expect(list.stdout).toContain("adverse-review (repo-local)");
+    const r = spc(repo, ["use-skill", "adverse-review"]);
+    expect(r.stdout).toContain("local override body");
+    expect(r.stdout).not.toContain("adversarial review primitive");
+  });
+});
+
+describe("spc agent validate (preflight)", () => {
+  const repo = setupFixture("simple-node-service");
+
+  function pendingRequest(): string {
+    // A minimal pending request exactly as the harness provider writes it.
+    mkdirSync(path.join(repo, ".spc", "harness", "pending"), { recursive: true });
+    const id = "executor-T001-1";
+    const request = {
+      id,
+      role: "executor",
+      key: "T001",
+      schemaName: "ExecutorResult",
+      jsonSchema: {
+        type: "object",
+        properties: { status: { type: "string", enum: ["completed", "blocked"] }, summary: { type: "string" } },
+        required: ["status", "summary"],
+        additionalProperties: false,
+      },
+      system: "sys",
+      prompt: "do the thing",
+      createdAt: new Date().toISOString(),
+    };
+    writeFileSync(path.join(repo, ".spc", "harness", "pending", `${id}.json`), JSON.stringify(request));
+    return id;
+  }
+
+  it("accepts a conforming draft and prints the submit command", () => {
+    const id = pendingRequest();
+    const draft = path.join(repo, "good.json");
+    writeFileSync(draft, JSON.stringify({ status: "completed", summary: "did it" }));
+    const r = spc(repo, ["agent", "validate", id, "--file", "good.json"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("OK");
+    expect(r.stdout).toContain(`spc agent respond ${id}`);
+  });
+
+  it("rejects a violating draft with issue paths, without touching the queue", () => {
+    const id = pendingRequest();
+    const draft = path.join(repo, "bad.json");
+    writeFileSync(draft, JSON.stringify({ status: "finished", extra: true }));
+    const r = spc(repo, ["agent", "validate", id, "--file", "bad.json"]);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("expected one of");
+    expect(r.stderr).toContain('unexpected property "extra"');
+    // Preflight leaves no answer behind: the queue is unchanged.
+    const answered = path.join(repo, ".spc", "harness", "answered");
+    expect(existsSync(answered) ? readdirSync(answered).length : 0).toBe(0);
+  });
+});

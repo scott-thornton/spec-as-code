@@ -8,6 +8,24 @@ uses semantic versioning.
 
 ### Added
 
+- Harness answering reliability pass (from three weeks of real
+  usage telemetry): `spc agent validate <id> --file` preflight-checks a
+  draft answer against the request schema before submitting; the
+  harness response timeout now refreshes on each invalid-answer requeue
+  (capped at 5) so an actively-iterating agent is not starved by the
+  rounds it already spent; after an in-place run-branch run the report
+  states where results live, and verify/reconcile warn when the
+  unmerged results branch would report as phantom drift.
+
+- Process skills and the commands to serve them: nine curated skills
+  (core loop, adverse-review primitive, adversarial-pr loop,
+  adversarial-loop for the same choreography without a PR, rectify,
+  author-spec, answer-queue, handle-partial, onboard) shipped under
+  .agents/skills as the source of truth; `spc skills` lists them and
+  `spc use-skill <name>` prints one for the current agent. Repo-local
+  .agents/skills override bundled copies; the CLI bundle is synced at
+  build time so skill content is pinned to the tool version.
+
 - In-place execution on the current branch (`execution.inPlaceBranch:
   "current"`): with `execution.inPlace`, runs can execute and commit on
   whatever branch is checked out - no branch switching at all, base
@@ -20,7 +38,9 @@ uses semantic versioning.
   record red-phase evidence; the evaluator accepts them only when they
   demonstrably flip red -> green. A criterion that already passes at base
   leaves its property indeterminate (decorative criterion exposed) and
-  blocks a succeeded status. Resume never re-runs the sweep; enabling the
+  blocks a succeeded status. Flip enforcement is scoped to apply runs:
+  standalone `spc verify` never demands red evidence, so satisfied specs
+  keep verifying green after the fact, including in CI. Resume never re-runs the sweep; enabling the
   flag mid-run surfaces no_red_evidence rather than faking base-revision
   evidence against a tree tasks already changed. New SPC1010 rejects the
   flag on agent/human criteria. Run summaries report flipped counts and

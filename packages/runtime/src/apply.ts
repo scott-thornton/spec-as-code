@@ -57,6 +57,10 @@ export interface ApplyReport {
   runDir: string;
   worktree?: string;
   branch?: string;
+  /** In-place run-branch mode: the branch the checkout was restored to at
+   * run end; results live on `branch`. Subsequent verify/reconcile inspect
+   * the CURRENT tree, not the results branch. */
+  restoredBranch?: string;
   baseRevision?: string;
   resultRevision?: string;
   requirements: RequirementState[];
@@ -345,6 +349,7 @@ async function runRedPhaseSweep(ctx: RunContext): Promise<void> {
   ctx.log(`Red phase: ${criteriaCount} discriminating criteria at base revision (expected to fail)`);
   const sweep = await verifyProperties({
     properties: discriminating.map((x) => ({ ...x.property, acceptance: x.criteria })),
+    enforceRedPhase: true,
     runId: ctx.meta.runId,
     cwd: worktree,
     revision: currentRevision(worktree),
@@ -694,6 +699,7 @@ async function finishRun(
   // Final verification sweep over every property, in the worktree.
   const sweep = await verifyProperties({
     properties: ctx.specIr.properties,
+    enforceRedPhase: true,
     runId: ctx.meta.runId,
     cwd: worktree,
     revision: currentRevision(worktree),
@@ -740,6 +746,7 @@ async function finishRun(
   ) {
     try {
       checkoutBranch(ctx.paths.repoRoot, ctx.meta.originalBranch);
+      return { ...report, restoredBranch: ctx.meta.originalBranch };
     } catch (e) {
       ctx.log(`warning: could not restore branch ${ctx.meta.originalBranch}: ${(e as Error).message}`);
     }
@@ -797,6 +804,7 @@ export async function executeTaskInRun(
     const subset = ctx.specIr.properties.filter((p) => (task.verifies ?? []).includes(p.id));
     const sweep = await verifyProperties({
       properties: subset,
+      enforceRedPhase: true,
       runId: ctx.meta.runId,
       cwd: worktreeRoot,
       revision: currentRevision(worktreeRoot),

@@ -6,6 +6,7 @@ import { compileSpecSource } from "@spc/core";
 import { FakeProvider, parseFakeScript } from "@spc/llm-fake";
 import { commitAll, gitOk } from "@spc/repo";
 import { applyPlan } from "./apply.js";
+import { inPlaceHandoffWarning } from "./queries.js";
 import { spcPaths } from "./paths.js";
 
 const root = mkdtempSync(path.join(tmpdir(), "spc-inplace-"));
@@ -111,6 +112,15 @@ describe("execution.inPlace", () => {
     // metadata records the original branch for the restore.
     const meta = JSON.parse(readFileSync(paths.metadataFile(report.runId), "utf8")) as { originalBranch?: string };
     expect(meta.originalBranch).toBe("main");
+    // The report tells the caller where the checkout landed and where the
+    // results live, so verify/reconcile after the run are not a trap.
+    expect(report.restoredBranch).toBe("main");
+    // Phantom-drift guard: the unmerged results branch is flagged.
+    const warning = inPlaceHandoffWarning(paths.runsDir, "one-file", repo);
+    expect(warning).toContain(`spc/one-file/${report.runId}`);
+    expect(warning).toContain("drift");
+    gitOk(repo, ["merge", report.branch]);
+    expect(inPlaceHandoffWarning(paths.runsDir, "one-file", repo)).toBeNull();
   }, 120_000);
 
   it("rejects inPlace with parallelism > 1", async () => {
@@ -154,6 +164,8 @@ describe("execution.inPlace", () => {
     // No originalBranch recorded: nothing to restore, resume never switches.
     const meta = JSON.parse(readFileSync(paths.metadataFile(report.runId), "utf8")) as { originalBranch?: string };
     expect(meta.originalBranch).toBeUndefined();
+    // Current-branch mode never moves results off HEAD: no handoff trap.
+    expect(inPlaceHandoffWarning(paths.runsDir, "one-file", repo)).toBeNull();
   }, 120_000);
 
   it("inPlaceBranch current refuses detached HEAD", async () => {

@@ -76,12 +76,13 @@ export const verificationConfigSchema = z.strictObject({
   allowAgentOnlyMustRequirements: z.boolean().default(false),
   /**
    * Execute criteria marked `discriminating: true` once at the run's base
-   * revision (before any task) and only accept them as satisfied when they
-   * flip: contradicted/inconclusive at base, supporting at result. A
+   * revision (before any task) and accept them only when they flip:
+   * contradicted/inconclusive at base, supporting at result. A
    * discriminating criterion that already passes at base leaves the
-   * property indeterminate - it tests nothing about the change. Red-phase
-   * evidence exists only inside apply runs; standalone `spc verify` cannot
-   * establish the flip post-hoc.
+   * property indeterminate - it tests nothing about the change. Flip
+   * enforcement applies inside apply runs; standalone `spc verify` never
+   * demands red evidence, so satisfied specs keep verifying green after
+   * the fact.
    */
   requireRedPhase: z.boolean().default(false),
 });

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { SpcError } from "@spc/core";
-import { HarnessStore } from "@spc/llm-harness";
+import { HarnessStore, checkJsonSchema } from "@spc/llm-harness";
 import { resolveRepoRoot } from "../context.js";
 
 /**
@@ -80,4 +80,36 @@ export function runAgentRespond(options: { id: string; file?: string; stdin?: bo
   console.log(`Answered ${answer.id}. The waiting spc process will pick it up within a second or two.`);
   console.log("If the answer fails schema validation, the request reappears in spc agent list with feedback.");
   return 0;
+}
+
+/**
+ * Preflight: check a draft answer against the pending request's JSON
+ * Schema BEFORE submitting, so schema problems cost a local command
+ * instead of a submit-requeue-regenerate round trip. Advisory - the
+ * authoritative check remains the runtime's zod validation.
+ */
+export function runAgentValidate(options: { id: string; file: string; cwd?: string }): number {
+  const { store } = storeFor(options.cwd);
+  const request = store.getRequest(options.id);
+  if (!request) {
+    throw new SpcError("HARNESS_REQUEST_NOT_FOUND", `no pending harness request with id ${options.id}`);
+  }
+  const raw = readFileSync(path.resolve(process.cwd(), options.file), "utf8");
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch (e) {
+    throw new SpcError("HARNESS_RESPOND_INPUT", `answer is not valid JSON: ${(e as Error).message}`);
+  }
+  const issues = checkJsonSchema(request.jsonSchema, value);
+  if (issues.length === 0) {
+    console.log(`OK: answer satisfies the ${request.schemaName} schema. Submit with:`);
+    console.log(`  spc agent respond ${request.id} --file ${options.file}`);
+    return 0;
+  }
+  console.error(`${issues.length} schema issue(s) - fix before submitting (a submit would requeue with the same errors):`);
+  for (const issue of issues.slice(0, 20)) {
+    console.error(`  ${issue.path}: ${issue.message}`);
+  }
+  return 1;
 }

@@ -271,3 +271,31 @@ while requests are pending. See
 
 Part of the evals toolchain rather than the product CLI; see
 [evals/README.md](../../evals/README.md).
+
+## spc skills
+
+```bash
+spc skills [--cwd <dir>]
+spc use-skill <name> [--cwd <dir>]
+```
+
+Lists the process skills shipped with spc (loop skills, the
+adverse-review primitive, choreographies like the adversarial PR loop,
+and knowledge skills like criteria authoring and run triage), and
+prints one skill's instructions for the current agent to follow.
+A repository's own `.agents/skills/<name>/SKILL.md` overrides the
+bundled copy of the same name, so teams can fork shipped skills without
+touching the tool. Outside a repository, only the bundled copies are
+available.
+
+## spc agent validate
+
+```bash
+spc agent validate <id> --file <answer.json> [--cwd <dir>]
+```
+
+Preflight for harness answers: checks a draft JSON value against the
+pending request's embedded schema BEFORE submitting, printing the exact
+issues a submission would be requeued for. Advisory - the authoritative
+check remains the runtime's validation - but it turns a schema mistake
+from a submit-requeue-regenerate round trip into a local command.

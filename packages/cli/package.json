@@ -14,7 +14,7 @@
     "spc": "./dist/main.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node build-skills.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "clean": "rm -rf dist"
@@ -55,7 +55,9 @@
   },
   "files": [
     "dist",
+    "skills",
     "README.md",
     "LICENSE"
-  ]
+  ],
+  "build": "tsc -p tsconfig.build.json && node -e \"require('fs').cpSync('../../.agents/skills','skills',{recursive:true})\""
 }
