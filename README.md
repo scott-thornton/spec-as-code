@@ -229,9 +229,9 @@ malicious ones.
   accidental high-risk operations, not adversarial containment
   ([threat model](docs/threat-model.md)).
 - The benchmark corpus measures small-task behavior; real-repository
-  field data exists but is unpublished (see
-  [docs/field-report-2026-10.md](docs/field-report-2026-10.md) when it
-  lands).
+  field data covers one repository and one operator so far - read
+  [docs/field-report-2026-10.md](docs/field-report-2026-10.md) for
+  what three weeks of production use did and did not establish.
 - Not yet on npm: install from a clone.
 
 ## Documentation
