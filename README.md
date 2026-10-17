@@ -73,6 +73,28 @@ alias spc='node "$PWD/packages/cli/dist/main.js"'
 
 Every command below assumes the `spc` command.
 
+## The short path
+
+Not every change warrants the full ceremony, and it never has to bypass
+safety to skip it:
+
+```bash
+spc quick "fix the empty-cart crash on checkout" --verify "pnpm test cart"
+```
+
+That is a compressed SPC transaction, not a weaker one: the intent
+becomes an ephemeral spec (committed with provenance), the `--verify`
+command is the gate you authored, the planner derives the task and its
+write scope, and execution runs through the identical machinery -
+command policy, actual-diff write scope, violation revert, evidence,
+chained events, attestation. If the change outgrows quick shape, it
+fails closed and asks for a full spec; nothing is silently absorbed.
+
+## The full loop
+
+For changes that warrant specification and orchestration - multiple
+requirements, dependencies, replanning, adversarial review:
+
 ## Author a specification
 
 ```yaml
