@@ -326,3 +326,18 @@ before the classification becomes consequential. Unknown-class commands
 print the guardrail note: classification catches accidental high-risk
 operations and does not resist adversarial construction
 (see [Threat model](../threat-model.md)).
+
+## spc run replay
+
+```bash
+spc run replay <runId> [--cwd <dir>]
+```
+
+Verifies a finished run end to end: strict load of the event and
+evidence logs (corrupted interior lines, digest mismatches and broken
+chain pointers are loud failures), hash-chain verification, projection
+of `state.json` from the event stream (divergences are listed field by
+field), and prefix-attestation checking (recomputed heads vs the
+recorded commitment; post-attestation events are reported as legitimate
+extension). Exit 0 when the run replays clean, 1 on any divergence.
+Logs written before chaining replay as `legacy` (unchained but strict).

@@ -8,6 +8,22 @@ uses semantic versioning.
 
 ### Added
 
+- The audit spine. Events are hash-chained: each event carries the
+  digest of its predecessor, so editing, inserting, deleting or
+  reordering any event breaks the next pointer on load (legacy logs
+  replay as unchained-but-strict; partially-chained logs are rejected;
+  resumed legacy runs stay legacy). Every run completion writes a
+  prefix attestation (attestation.json + RUN_ATTESTED) committing to
+  { event count, event chain head, evidence head, result revision,
+  status } - later legitimate events extend the chain without
+  invalidating it. verification.attestInGit (opt-in) anchors the
+  commitment as an empty commit with SPC-Attestation-* trailers on the
+  run branch. New `spc run replay <runId>` verifies the whole spine:
+  strict loads, chain, state.json projection (field-level divergence
+  reporting) and attestation. Verified against the real production
+  corpus (51 historical event logs, 2,063 evidence records, zero false
+  positives); SELF-023.
+
 - Trust and integrity pass. docs/threat-model.md states the boundary
   plainly: write scopes are not an OS sandbox, command policy is a
   guardrail against accidents, specs are executable configuration -

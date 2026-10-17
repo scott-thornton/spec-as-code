@@ -9,7 +9,7 @@ import { runVerify } from "./commands/verify.js";
 import { runReconcile } from "./commands/reconcile.js";
 import { runDiff, runStatus } from "./commands/status.js";
 import { runFollowupResolve, runFollowups } from "./commands/followups.js";
-import { runCancel, runExport, runPr, runShow } from "./commands/run.js";
+import { runCancel, runExport, runPr, runReplay, runShow } from "./commands/run.js";
 import { runAgentList, runAgentRespond, runAgentShow, runAgentValidate } from "./commands/agent.js";
 import { runSkills, runUseSkill } from "./commands/skills.js";
 import { runPolicyExplain } from "./commands/policy.js";
@@ -235,6 +235,13 @@ run
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action((runId: string, opts: { cwd: string; out?: string }) => {
     process.exitCode = runPr(runId, opts);
+  });
+run
+  .command("replay <runId>")
+  .description("verify the event log, chain, projection and attestation of a finished run")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action((runId: string, opts: { cwd: string }) => {
+    process.exitCode = runReplay(runId, opts.cwd);
   });
 run
   .command("export <runId>")

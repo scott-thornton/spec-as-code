@@ -42,12 +42,18 @@ interpreters, encoding, and unrecognized commands can bypass it.
 An agent that works to bypass classification makes itself conspicuous
 in the command log; that conspicuousness is a feature, not a failure.
 
-**The audit trail detects corruption, not forgery.** Evidence records
-carry content digests and loads verify them; a malformed line is a loud
-error, not a silent omission. But digests are computed by the same
-process that writes them: an attacker with write access to the log can
-recompute coherently. Anchoring run evidence in Git history is the
-planned answer to that class.
+**The audit trail detects corruption; git-anchored attestations resist
+log-only forgery.** Evidence records carry content digests and loads
+verify them; a malformed line is a loud error, not a silent omission;
+events are hash-chained, so editing, inserting, deleting or reordering
+any event breaks the next event's pointer; and every run completion
+writes a prefix attestation (`spc run replay` verifies all of it).
+Digests and chains are computed by the same process that writes them,
+so an attacker with write access to the log can recompute coherently -
+the answer to that class is anchoring the chain heads in Git history
+(`verification.attestInGit`), which an attacker who cannot rewrite git
+history cannot forge. Protection against an attacker who CAN rewrite
+git history is signatures/transparency, deliberately not built.
 
 **Specs are executable configuration.** An acceptance criterion of type
 `command` is a shell command the verifier will run. Trusting a spec

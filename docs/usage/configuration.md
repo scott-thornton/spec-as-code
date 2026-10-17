@@ -126,6 +126,14 @@ verification:
   # to established fact. Enable only with eyes open.
   allowAgentOnlyMustRequirements: false
 
+  # Anchor the run-completion attestation in Git: an empty commit on
+  # the run branch carrying the event/evidence chain heads as trailers,
+  # making post-run log tampering detectable against git history. The
+  # attestation file and RUN_ATTESTED event are always written; this
+  # gates only the git anchor. Skipped in inPlaceBranch current mode to
+  # avoid surprise empty commits on your own branch.
+  attestInGit: false
+
   # Glob patterns for verification assets (tests, oracles, gates) that
   # NO task may change, regardless of its declared write targets. An
   # agent that can modify its own oracle can manufacture green; a task

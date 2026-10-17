@@ -10,3 +10,5 @@ export * from "./reconcile.js";
 export * from "./cancel.js";
 export { resumeRun } from "./apply.js";
 export * from "./export.js";
+export * from "./attestation.js";
+export * from "./replay.js";

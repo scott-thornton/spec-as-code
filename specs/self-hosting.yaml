@@ -195,6 +195,14 @@ requirements:
         type: command
         command: pnpm --filter @spc/cli exec vitest run src/integration.test.ts
 
+  - id: SELF-023
+    statement: Events are hash-chained, every run completion writes a prefix attestation, and spc run replay verifies chain, projection and attestation, failing loudly on tampering.
+    priority: must
+    acceptance:
+      - id: SELF-023-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/audit-spine.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services

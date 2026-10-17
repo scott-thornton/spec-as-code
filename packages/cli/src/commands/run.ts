@@ -3,7 +3,8 @@ import path from "node:path";
 import { SpcError } from "@spc/core";
 import { compileSpecFile, diffStat } from "@spc/repo";
 import { renderPrDraft } from "@spc/renderer";
-import { cancelRun, exportRun, loadRunView } from "@spc/runtime";
+import { cancelRun, exportRun, loadRunView, replayRun } from "@spc/runtime";
+import { loadRunMeta as loadRunMetaFromRuntime } from "@spc/runtime";
 import { resolveRepoRoot } from "../context.js";
 
 /** `spc run show <runId>` - reconstruct what happened, without chat logs. */
@@ -89,4 +90,23 @@ export function runExport(runId: string, options: { out?: string; cwd?: string }
   console.log("The bundle is self-contained (spec, plan, events, evidence, diff, hashes);");
   console.log("verify integrity by checking component sha256 values against manifest.json.");
   return 0;
+}
+
+/** `spc run replay <runId>`: verify the log, chain, projection and attestation. */
+export function runReplay(runId: string, cwd?: string): number {
+  const repoRoot = resolveRepoRoot(cwd);
+  const runsDir = path.join(repoRoot, ".spc", "runs");
+  const meta = loadRunMetaFromRuntime(runsDir, runId);
+  let plan: import("@spc/schema").Plan | null = null;
+  if (meta?.planId) {
+    const planFile = path.join(repoRoot, ".spc", "plans", `${meta.planId}.json`);
+    if (existsSync(planFile)) plan = JSON.parse(readFileSync(planFile, "utf8"));
+  }
+  const report = replayRun(runsDir, runId, plan);
+  console.log(`Run ${report.runId}: ${report.ok ? "replay OK" : "REPLAY FAILED"}`);
+  console.log(`Events: ${report.eventCount} (${report.chainStatus}), evidence: ${report.evidenceCount}`);
+  console.log(`Projection: ${report.projectionMatches ? "state.json follows from the event log" : "DIVERGED"}`);
+  for (const d of report.projectionDiffs) console.log(`  - ${d}`);
+  console.log(`Attestation: ${report.attestation}${report.attestationDetail ? ` (${report.attestationDetail})` : ""}`);
+  return report.ok ? 0 : 1;
 }
