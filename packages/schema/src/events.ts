@@ -34,6 +34,7 @@ export const eventTypeSchema = z.enum([
   "USAGE_RECORDED",
   "RUN_COMPLETED",
   "RUN_FAILED",
+  "RUN_ATTESTED",
 ]);
 
 export const eventSchema = z.strictObject({
@@ -42,8 +43,19 @@ export const eventSchema = z.strictObject({
   type: eventTypeSchema,
   runId: z.string(),
   timestamp: z.string().min(1),
+  /**
+   * Chain pointer: the chain digest of the PREVIOUS event (the digest of
+   * that event as stored, including its own chain field). Any edit,
+   * deletion, insertion or reorder of an earlier event breaks the next
+   * event's pointer. Absent on all events of legacy logs written before
+   * chaining; a log that is partially chained is treated as corrupted.
+   */
+  chain: z.string().optional(),
   payload: z.record(z.string(), z.unknown()),
 });
+
+/** Genesis chain value for the first event of a chained log. */
+export const EVENT_CHAIN_GENESIS = `sha256:${"0".repeat(64)}`;
 
 export type EventType = z.infer<typeof eventTypeSchema>;
 export type Event = z.infer<typeof eventSchema>;
