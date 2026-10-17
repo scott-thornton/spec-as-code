@@ -126,6 +126,14 @@ verification:
   # to established fact. Enable only with eyes open.
   allowAgentOnlyMustRequirements: false
 
+  # Glob patterns for verification assets (tests, oracles, gates) that
+  # NO task may change, regardless of its declared write targets. An
+  # agent that can modify its own oracle can manufacture green; a task
+  # touching a protected path fails with PROTECTED_PATH_WRITE and the
+  # write is reverted before the retry. Changes to protected paths
+  # happen deliberately, outside runs, as human edits.
+  protectedPaths: []
+
   # Red-phase verification: execute criteria marked `discriminating: true`
   # (see Spec authoring) once at the run's base revision, before any task,
   # and accept them only when they flip red -> green. A discriminating

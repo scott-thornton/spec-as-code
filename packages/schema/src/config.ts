@@ -85,6 +85,14 @@ export const verificationConfigSchema = z.strictObject({
    * the fact.
    */
   requireRedPhase: z.boolean().default(false),
+  /**
+   * Glob patterns for verification assets (tests, oracles, gates) that no
+   * task may change, regardless of its declared write targets. An agent
+   * that can modify its own oracle can manufacture green; a task touching
+   * a protected path fails with PROTECTED_PATH_WRITE. Changes to
+   * protected paths happen deliberately, outside runs, as human edits.
+   */
+  protectedPaths: z.array(z.string().min(1)).default([]),
 });
 
 export const configSchema = z.strictObject({

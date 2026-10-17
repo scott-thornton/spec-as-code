@@ -8,6 +8,31 @@ uses semantic versioning.
 
 ### Added
 
+- Protected verification assets (`verification.protectedPaths`): glob
+  patterns no task may change regardless of declared write targets -
+  an agent that can modify its own oracle can manufacture green, so a
+  task touching a protected path fails with PROTECTED_PATH_WRITE and
+  the write is reverted before the retry (without the revert, the
+  retry inherited the file, its delta came back empty, and the task
+  completed with the forbidden change in the tree). The revert is
+  generalized to ALL delta-level violations, including out-of-scope
+  writes from criterion commands (executor-proposed writes were already
+  blocked by the pre-flight before touching the tree). Authoring
+  guidance documents the oracle provenance ladder (mutable, protected,
+  external, withheld) and the gates-read-not-write rule.
+
+- `spc run export <runId>`: a self-contained evidence bundle - run
+  directory verbatim, spec file with import closure, plan, full
+  base..result diff, config as of export, and a manifest.json hashing
+  every component (sha256) for standalone audit; warns loudly when the
+  spec changed since the run. Evidence now survives the workstation
+  and the CI job.
+- Machine-provenance commit trailers: task and result commits carry
+  SPC-Run-Id, SPC-Task-Id and SPC-Spec-Digest in the message body
+  (git interpret-trailers format) alongside the human author, so the
+  repo stays self-describing without .spc. Parallel cherry-picks
+  preserve trailers.
+
 - Harness answering reliability pass (from three weeks of real
   usage telemetry): `spc agent validate <id> --file` preflight-checks a
   draft answer against the request schema before submitting; the

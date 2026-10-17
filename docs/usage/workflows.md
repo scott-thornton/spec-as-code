@@ -209,3 +209,12 @@ evidence counts. Full recipe in
   The fixed `spc <spc@local>` identity exists only as a fallback for
   environments where git cannot resolve one at all (bare CI runners),
   where the commit would otherwise fail outright.
+
+## Commit provenance
+
+Run commits (task commits, result commits) carry machine-provenance
+trailers in the message body - `SPC-Run-Id`, `SPC-Task-Id`,
+`SPC-Spec-Digest` - alongside your own authorship. `git
+interpret-trailers --parse` extracts them, so tooling can join commits
+to runs without `.spc` present. Parallel cherry-picks preserve the
+original trailers.

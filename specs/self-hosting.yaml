@@ -160,6 +160,30 @@ requirements:
         type: command
         command: pnpm --filter @spc/runtime exec vitest run src/red-phase.test.ts
 
+  - id: SELF-019
+    statement: spc run export emits a self-contained bundle with a manifest hashing every component, and warns when the spec changed since the run.
+    priority: must
+    acceptance:
+      - id: SELF-019-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/run-export.test.ts
+
+  - id: SELF-020
+    statement: Run commits carry machine-provenance trailers (SPC-Run-Id, SPC-Task-Id, SPC-Spec-Digest) alongside the human author.
+    priority: must
+    acceptance:
+      - id: SELF-020-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/commits-per-task.test.ts
+
+  - id: SELF-021
+    statement: A task touching a verification.protectedPaths glob fails with PROTECTED_PATH_WRITE and the write is reverted, so the violation survives the retry.
+    priority: must
+    acceptance:
+      - id: SELF-021-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/protected-paths.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services

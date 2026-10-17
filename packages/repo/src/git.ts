@@ -134,7 +134,20 @@ export function diffPatch(cwd: string, from: string, to: string, maxBytes: numbe
 /** spc-owned state directories; they never belong in result commits. */
 const SPC_STATE_PATHS = [".spc/runs", ".spc/plans", ".spc/worktrees", ".spc/cache", ".spc/harness"];
 
-export function commitAll(cwd: string, message: string): string | null {
+/**
+ * Commit message with machine-provenance trailers (git interpret-trailers
+ * format): the subject stays human-readable, the trailer block carries the
+ * run/task linkage so the repo remains self-describing without .spc.
+ */
+function commitMessage(message: string, trailers?: Record<string, string>): string {
+  if (!trailers || Object.keys(trailers).length === 0) return message;
+  const block = Object.entries(trailers)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join("\n");
+  return `${message}\n\n${block}\n`;
+}
+
+export function commitAll(cwd: string, message: string, trailers?: Record<string, string>): string | null {
   const status = statusPorcelain(cwd);
   if (!status.dirty) return null;
   // Identity matters only for operations that create commits; add/reset
@@ -149,6 +162,6 @@ export function commitAll(cwd: string, message: string): string | null {
   gitOk(cwd, ["reset", "-q", "--", ...SPC_STATE_PATHS]);
   // Only spc state was dirty: nothing staged, nothing to commit.
   if (git(cwd, ["diff", "--cached", "--quiet"]).ok) return null;
-  gitOk(cwd, ["commit", "-m", message], { identity: true });
+  gitOk(cwd, ["commit", "-m", commitMessage(message, trailers)], { identity: true });
   return currentRevision(cwd);
 }

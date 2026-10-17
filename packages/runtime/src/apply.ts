@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
   compileSpecSource,
+  isSafeRelativePath,
   formatDiagnostics,
   hasErrors,
   patternsOverlap,
@@ -11,9 +12,9 @@ import {
 } from "@spc/core";
 import type { FollowUp, Observation, Plan, RequirementState, RunState, RunStatus, SpecIR, Task, TaskState } from "@spc/schema";
 import type { LLMProvider, UsageRecord } from "@spc/llm";
-import { executeTask, enforceWriteScope, runScheduler, type ExecutionOutcome } from "@spc/executor";
+import { enforceProtectedPaths, executeTask, enforceWriteScope, runScheduler, type ExecutionOutcome } from "@spc/executor";
 import { classifyAmendmentRisk, generateAmendment } from "@spc/planner";
-import { commitAll, compileSpecFile, currentBranch, currentRevision, diffStat, git, statusDelta, statusPorcelain, type WorktreeStatus } from "@spc/repo";
+import { commitAll, compileSpecFile, currentBranch, currentRevision, diffStat, git, gitOk, statusDelta, statusPorcelain, type WorktreeStatus } from "@spc/repo";
 import { checkoutBranch, checkoutRunBranch, createWorktree, removeWorktree } from "@spc/repo";
 import { observeRepository } from "@spc/repo";
 import { renderRunSummary } from "@spc/renderer";
@@ -691,7 +692,11 @@ async function finishRun(
   // on the branch under commitPerTask or parallel execution).
   const baseRev = ctx.meta.baseRevision ?? currentRevision(worktree);
   const resultRevision =
-    commitAll(worktree, `spc: apply plan ${currentPlan.metadata.id} for ${ctx.meta.specId} (run ${ctx.meta.runId})`) ??
+    commitAll(worktree, `spc: apply plan ${currentPlan.metadata.id} for ${ctx.meta.specId} (run ${ctx.meta.runId})`, {
+      "SPC-Run-Id": ctx.meta.runId,
+      "SPC-Plan-Id": currentPlan.metadata.id,
+      "SPC-Spec-Digest": ctx.specIr.digest,
+    }) ??
     currentRevision(worktree);
   const stat = diffStat(worktree, baseRev, resultRevision);
   const changedFileCount = countChanged(worktree, baseRev, resultRevision);
@@ -760,6 +765,28 @@ async function finishRun(
  * in-place runs the runtime itself writes it mid-task, and it must never
  * count as a task write (write scope) or land in a task commit.
  */
+/**
+ * Revert the paths a task had no right to touch, so the violation STICKS:
+ * without this, a retry inherits the already-written file, its delta comes
+ * back empty, and the retry completes with the forbidden change still in
+ * the tree. Tracked paths restore from the index; untracked files are
+ * removed. Scoped to the violating paths only - never a hard reset, which
+ * in in-place mode would destroy .spc state.
+ */
+function revertPaths(worktreeRoot: string, paths: readonly string[]): void {
+  for (const p of paths) {
+    // Unsafe relative paths (../ and friends) escape the worktree; they
+    // are already flagged UNSAFE_PATH - never act on them with rm.
+    if (!isSafeRelativePath(p)) continue;
+    const tracked = git(worktreeRoot, ["ls-files", "--error-unmatch", p]).ok;
+    if (tracked) {
+      gitOk(worktreeRoot, ["checkout", "--", p]);
+    } else {
+      rmSync(path.join(worktreeRoot, p), { force: true });
+    }
+  }
+}
+
 function taskScopeDelta(before: WorktreeStatus, worktreeRoot: string) {
   const delta = statusDelta(before, statusPorcelain(worktreeRoot));
   const spcState = (p: string) =>
@@ -822,7 +849,15 @@ export async function executeTaskInRun(
       requirements: { ...ctx.state.requirements, ...Object.fromEntries(sweep.states.map((s) => [s.propertyId, s])) },
     };
     const delta = taskScopeDelta(before, worktreeRoot);
-    const violations = enforceWriteScope(task.targets?.write ?? [], [...delta.keys()]);
+    const violations = [
+      ...enforceProtectedPaths(ctx.config.verification.protectedPaths, [...delta.keys()]),
+      ...enforceWriteScope(task.targets?.write ?? [], [...delta.keys()]),
+    ];
+    // Delta-level violations revert before failing so they cannot be
+    // laundered by a retry (verify-task commands can write files; the
+    // retry's empty delta would otherwise complete the task with the
+    // forbidden change in the tree).
+    if (violations.length > 0) revertPaths(worktreeRoot, violations.map((v) => v.path));
     if (violations.length > 0) {
       return failedOutcome(task, violations[0]!.code, `${violations[0]!.code}: ${violations[0]!.reason}`);
     }
@@ -960,7 +995,19 @@ export async function executeTaskInRun(
   for (const [p, change] of delta) {
     ctx.events.append("FILE_CHANGED", { taskId: task.id, path: p, change });
   }
-  const violations = enforceWriteScope(task.targets?.write ?? [], [...delta.keys()]);
+  const violations = [
+    ...enforceProtectedPaths(ctx.config.verification.protectedPaths, [...delta.keys()]),
+    ...enforceWriteScope(task.targets?.write ?? [], [...delta.keys()]),
+  ];
+  // Revert delta-level violations even when the task is not completing:
+  // the write happened regardless of the reported status, and an
+  // unreverted violation lets a retry's empty delta complete the task
+  // with the forbidden change still in the tree (write-scope proposals
+  // are already blocked by the executor's pre-flight; this is the
+  // second line for command-mediated and protected-path writes).
+  if (violations.length > 0) {
+    revertPaths(worktreeRoot, violations.map((v) => v.path));
+  }
   if (violations.length > 0 && outcome.status === "completed") {
     ctx.evidence.add({
       id: `EV-${String(ctx.evidence.all().length + 1).padStart(4, "0")}`,
@@ -997,7 +1044,11 @@ export async function executeTaskInRun(
       delta.size > 0 &&
       worktreeRoot === ctx.worktreePath
     ) {
-      const revision = commitAll(worktreeRoot, `spc: task ${task.id} (run ${ctx.meta.runId})`);
+      const revision = commitAll(worktreeRoot, `spc: task ${task.id} (run ${ctx.meta.runId})`, {
+        "SPC-Run-Id": ctx.meta.runId,
+        "SPC-Task-Id": task.id,
+        "SPC-Spec-Digest": ctx.specIr.digest,
+      });
       if (revision) {
         const prior = ctx.state.tasks[task.id];
         ctx.state = {

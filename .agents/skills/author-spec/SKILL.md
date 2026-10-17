@@ -33,11 +33,34 @@ spec pain is not bad code - it is criteria that test the wrong thing.
   that a person can execute them and record the outcome. Writing a
   device-shaped check as a `command` criterion manufactures a
   permanently unsatisfied requirement.
+- Gates read, they do not write: a criterion command must be
+  side-effect-free (grep, test, lint against the tree). Anything that
+  writes files is a task, not a gate - sweeps run commands without
+  fencing the tree, so a side-effectful gate can write wherever it
+  likes, after enforcement has already passed.
 - Cost model: every criterion executes on every verification sweep.
   Targeted checks (one test file, one command) per requirement; the full
   suite backs at most one terminal criterion. One command per test FILE,
   not per test name - every command pays full tool boot (a spec file run
   as five `-t <name>` invocations pays five bootups, every sweep).
+
+## Oracle provenance
+
+An agent that can modify its own oracle can manufacture green. The
+ladder, strongest last:
+
+- **mutable**: everything a task may legitimately write (default).
+- **protected**: fence it with `verification.protectedPaths` in config -
+  no task may touch those globs, violations revert and fail the task.
+  Fence the suites your criteria execute.
+- **external**: oracles that live outside the repo entirely - a CI-held
+  script, a pinned fixture service - invoked as command criteria.
+- **withheld**: values the agent never sees (secrets; presence-checked,
+  never read).
+
+When a task's write scope legitimately includes test files (TDD), make
+sure the suites its own criteria execute are protected or external -
+otherwise the same context writes the code and grades it.
 
 ## Statements
 

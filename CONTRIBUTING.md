@@ -37,3 +37,13 @@ decisions). The summary:
 Include: what you ran, the exit code, the diagnostic code (SPC* or named
 runtime code), and for runs the `.spc/runs/<id>/summary.md` if one exists.
 Never paste secret values.
+
+## The deletion test
+
+Delete `.agents/skills/` entirely: every safety property of spc must
+still hold. Skills are advice to agents; guarantees live in
+deterministic runtime code - write-scope enforcement, acceptance
+criteria, model-call budgets, schema gates. If a change would weaken a
+guarantee when the skills are absent, the change belongs in the runtime,
+not in a skill; and if something only holds because a skill asks nicely,
+it is not a guarantee and must not be described as one.

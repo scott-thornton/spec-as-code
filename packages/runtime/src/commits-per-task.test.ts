@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { compileSpecSource } from "@spc/core";
 import { FakeProvider, parseFakeScript } from "@spc/llm-fake";
-import { commitAll, gitOk } from "@spc/repo";
+import { commitAll, git, gitOk } from "@spc/repo";
 import { applyPlan } from "./apply.js";
 import { spcPaths } from "./paths.js";
 
@@ -112,6 +112,15 @@ describe("commit-per-task", () => {
     // git log lists newest first; assert membership, not order.
     expect(taskCommits.join("\n")).toContain("task T001");
     expect(taskCommits.join("\n")).toContain("task T002");
+
+    // Machine provenance rides in commit trailers (git interpret-trailers
+    // format) under the human authorship: run/task linkage and spec digest.
+    const t1 = gitOk(report.worktree!, ["log", "--format=%B", "--grep=task T001", "-1"]);
+    expect(t1).toContain("SPC-Run-Id:");
+    expect(t1).toContain("SPC-Task-Id: T001");
+    expect(t1).toContain(`SPC-Spec-Digest: ${ir.digest}`);
+    const parsed = git(report.worktree!, ["interpret-trailers", "--parse"], { input: t1 }).stdout.trim();
+    expect(parsed).toContain("SPC-Task-Id: T001");
 
     // Task states carry their revisions.
     const state = JSON.parse(readFileSync(paths.stateFile(report.runId), "utf8")) as {
