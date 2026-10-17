@@ -255,6 +255,14 @@ requirements:
         type: command
         command: pnpm --filter @spc/core exec vitest run src/symlink.test.ts
 
+  - id: SELF-029
+    statement: Standalone verify runs and cancelled runs write prefix attestations (attestation.json + RUN_ATTESTED), replayable as verified.
+    priority: must
+    acceptance:
+      - id: SELF-029-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/attest-verify.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services

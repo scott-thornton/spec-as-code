@@ -8,6 +8,14 @@ uses semantic versioning.
 
 ### Added
 
+- Prefix attestation for verify and cancelled runs: standalone verify
+  runs - the evidence CI gates PRs on - and cancelled runs now write
+  the same prefix commitment as apply runs (attestRecords, no git
+  anchor; verify runs have no run branch). Landed as the first
+  self-hosted transaction: spec authored, planned and executed through
+  spc itself (harness provider, pre-committed red suite, red->green
+  flip proven, run attested and replayable). SELF-029.
+
 - Boundary hardening pass (external review #1, #3-#6): task write
   deltas now compare per-path CONTENT identity (git blob hashes, content
   sha256 for untracked) instead of git status transitions - an
