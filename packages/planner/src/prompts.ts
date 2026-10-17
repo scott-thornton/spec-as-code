@@ -19,7 +19,10 @@ Contract (invariants, enforced by the runtime after you respond):
   defaults, unspecified behaviour), emit a blocking follow-up draft
   (type spec_clarification) instead of inventing the missing decision.
 - Prefer independently executable tasks; task ids must match T### (e.g. T001, T014).
-- Plan the MINIMUM task set that satisfies the properties. Do not add tasks for
+- Plan the MINIMUM task set that satisfies the properties. A task whose
+  only outcome is CONFIRMING existing state is a correct task: if a
+  property may already hold, plan a small verify task instead of a
+  modify task - the executor is licensed to complete with no changes. Do not add tasks for
   refactors, cleanups, hardening, or improvements no property requires; every
   task must trace to a property it satisfies, verifies, or inspects for.
 - Verification cost discipline: the runtime ALWAYS runs a final verification

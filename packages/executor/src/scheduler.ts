@@ -11,7 +11,7 @@ export interface SchedulerIO {
   getPlan(): Plan;
   getTaskState(taskId: string): TaskState | undefined;
   /** Persist a lifecycle transition (runtime records the matching event). */
-  transition(taskId: string, state: TaskState): void;
+  transition(taskId: string, state: TaskState, summary?: string): void;
   execute(task: Task, attempt: number, failureContext?: { code: string; message: string }): Promise<ExecutionOutcome>;
   /** Perform replanning; returns whether the plan was amended successfully. */
   onNeedsReplan(taskId: string): Promise<"amended" | "failed">;
@@ -90,13 +90,17 @@ export async function runScheduler(io: SchedulerIO): Promise<SchedulerResult> {
 
     switch (outcome.status) {
       case "completed": {
-        io.transition(task.id, {
-          taskId: task.id,
-          status: "completed",
-          attempt,
-          startedAt: new Date().toISOString(),
-          completedAt: new Date().toISOString(),
-        });
+        io.transition(
+          task.id,
+          {
+            taskId: task.id,
+            status: "completed",
+            attempt,
+            startedAt: new Date().toISOString(),
+            completedAt: new Date().toISOString(),
+          },
+          outcome.summary,
+        );
         break;
       }
       case "failed": {

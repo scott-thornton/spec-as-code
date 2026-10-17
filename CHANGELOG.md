@@ -8,6 +8,15 @@ uses semantic versioning.
 
 ### Added
 
+- No-op as a first-class success: the executor contract now explicitly
+  licenses completing with an empty changes list when the repository
+  already satisfies the intent (stating what was observed), and the
+  planner contract prefers a verify task over a modify task when a
+  property may already hold. Found and fixed while testing: both
+  drivers discarded the executor\u2019s outcome summary, hardcoding
+  "task completed" into TASK_COMPLETED - executor justifications now
+  reach the event log verbatim. SELF-026.
+
 - Plan-drift views: run summaries derive how execution diverged from
   the original plan (tasks added/removed across replans, files changed,
   files outside original write targets) from recorded events. A

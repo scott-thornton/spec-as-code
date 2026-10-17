@@ -521,7 +521,7 @@ async function driveRun(ctx: RunContext): Promise<ApplyReport> {
   let schedulerFailedTasks: string[] = [];
   let schedulerOutcome: "done" | "deadlocked" | "replan_failed" = "done";
 
-  const transition = (taskId: string, next: TaskState): void => {
+  const transition = (taskId: string, next: TaskState, summary?: string): void => {
     const previous = ctx.state.tasks[taskId];
     ctx.state = { ...ctx.state, tasks: { ...ctx.state.tasks, [taskId]: next } };
     const p: Record<string, unknown> = { taskId, attempt: next.attempt };
@@ -541,7 +541,7 @@ async function driveRun(ctx: RunContext): Promise<ApplyReport> {
             [taskId]: { ...next, ...(previous?.revision ? { revision: previous.revision } : {}) },
           },
         };
-        ctx.events.append("TASK_COMPLETED", { ...p, summary: "task completed" });
+        ctx.events.append("TASK_COMPLETED", { ...p, summary: summary ?? "task completed" });
         break;
       }
       case "failed":
@@ -1131,7 +1131,7 @@ async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
     appendUsageRecord(ctx.paths.usageFile(ctx.meta.runId), record);
     ctx.events.append("USAGE_RECORDED", { role: record.role, requestId: record.requestId, model: record.model });
   };
-  const transition = (taskId: string, next: TaskState): void => {
+  const transition = (taskId: string, next: TaskState, summary?: string): void => {
     const previous = ctx.state.tasks[taskId];
     ctx.state = { ...ctx.state, tasks: { ...ctx.state.tasks, [taskId]: next } };
     const p: Record<string, unknown> = { taskId, attempt: next.attempt };
@@ -1146,7 +1146,7 @@ async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
           [taskId]: { ...next, ...(previous?.revision ? { revision: previous.revision } : {}) },
         },
       };
-      ctx.events.append("TASK_COMPLETED", { ...p, summary: "task completed" });
+      ctx.events.append("TASK_COMPLETED", { ...p, summary: summary ?? "task completed" });
     } else if (next.status === "failed") {
       ctx.events.append("TASK_FAILED", { ...p, error: next.failure ?? { code: "TASK_FAILED", message: "failed" } });
     } else if (next.status === "blocked") {
@@ -1302,13 +1302,17 @@ async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
 
       switch (outcome.status) {
         case "completed":
-          transition(task.id, {
-            taskId: task.id,
-            status: "completed",
-            attempt,
-            startedAt: ctx.now(),
-            completedAt: ctx.now(),
-          });
+          transition(
+            task.id,
+            {
+              taskId: task.id,
+              status: "completed",
+              attempt,
+              startedAt: ctx.now(),
+              completedAt: ctx.now(),
+            },
+            outcome.summary,
+          );
           break;
         case "failed": {
           const failure = outcome.failure ?? { code: "TASK_FAILED", message: outcome.summary };

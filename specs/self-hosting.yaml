@@ -222,6 +222,14 @@ requirements:
         type: command
         command: pnpm --filter @spc/renderer exec vitest run src/summary.test.ts
 
+  - id: SELF-026
+    statement: A task that confirms existing state completes with no changes as a correct outcome, and TASK_COMPLETED events record the executor outcome summary verbatim.
+    priority: must
+    acceptance:
+      - id: SELF-026-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/noop.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services
