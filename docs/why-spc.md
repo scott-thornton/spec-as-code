@@ -103,3 +103,74 @@ satisfaction status stay deterministic and inspectable. Whether that
 structure earns its overhead is an empirical question - the benchmark
 harness in [evals/](../evals/README.md) exists so the answer is measured,
 published, and iterated on rather than argued about.
+
+## The epistemics, stated plainly
+
+Four principles underlie every mechanism above. They emerged from use
+and review; writing them down keeps future features honest against
+them.
+
+**Producer-independence is the validity and durability criterion.** A
+recorded fact should not change its validity depending on which agent
+produced it. Evidence that runs through deterministic execution
+commands, files, digests - is producer-independent; agent-derived
+judgment is quarantined, labeled, and cannot satisfy a `must` property
+unless a human opts in. The same property decides what survives model
+replacement: when a model disappears, exactly the producer-independent
+subset of its work remains valid knowledge. Facts survive precisely as
+long as they were agent-independent. The test for any new capability's
+output: would this fact's validity change under a different producer?
+If yes, either verify it mechanically before it counts, label it, or
+narrow the claim until the dependence disappears.
+
+**The agent loop is a client, not the substrate.** Standard agent
+tooling makes the conversation the universe: context is memory, the
+transcript is the record, success is the model's word. spc inverts
+that - the records are the universe and the loop operates within them.
+The agent can observe, reason, plan, fail, and recover; it does not own
+the truth, the continuity of the work, or the authority to declare its
+own success. Three things persist independently of any session: the
+work (revisions, branches), the evidence (append-only, chained,
+attested), and - load-bearing, and the one most systems fail at - the
+uncertainty. Uncertainty persisting as first-class state is what keeps
+persistent evidence from rotting into unearned certainty. A
+consequence worth internalizing: implementation progress and
+verification progress are different goods. A failed run that
+establishes "one requirement is contradicted by a reproducible test"
+made real progress; a green run without discriminating evidence may
+have made less.
+
+**The verification frontier moves, and not only forward.** Which
+conclusions can be derived mechanically, which depend on fallible
+interpretation, and which require an external authority is not a fixed
+taxonomy - it is a frontier under migration. Red-phase verification
+moved "this test detects absence" from reviewer judgment to a property
+of the evidence record. The same frontier retreats when assumptions
+falsify: a criterion later shown to tolerate a wrong implementation
+must downgrade the warrant of every verdict that rested on it - by
+supersession, never erasure, preserving the history of what earlier
+evidence then justified. Durable evidence does not imply durable
+conclusions. Observations are immutable; the conclusions derived from
+them are scoped, conditional, and revisable. (The formal lineage is
+defeasible reasoning: claim, supporting evidence, defeating evidence,
+current warranted conclusion with its unresolved obligations retained.
+The evaluator's newest-evidence-wins rule is a crude belief-revision
+operator; the ambition is to make the warrant explicit rather than
+accidental.)
+
+**The substrate earns authority only from its evidence.** The runtime
+itself is not trusted on its word: `state.json` is a projection,
+replayable from the event log; `spc run replay` checks the substrate's
+honesty against its own records (this discipline caught a real bug -
+persisted state misreporting model calls while the log held the
+truth). The substrate is trusted for its mechanics - small,
+deterministic, inspectable, re-derivable - never for its conclusions.
+
+One rule of thumb closes the loop: as capabilities are added, every
+new verdict is held to the standard the originals set - it must
+decompose into execution, revision, producer, and residual
+uncertainty, or it is not a verdict yet. A device suite saying
+"passed" is an opinion; "criterion X ran on target Y at revision Z,
+artifacts bound at digest H, two assertions skipped with reasons
+recorded" is a verdict. External tools' results are consumed with
+provenance and translated into this grammar - never adopted wholesale.
