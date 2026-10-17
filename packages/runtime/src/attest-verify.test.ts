@@ -75,7 +75,7 @@ describe("attestation for verify and cancelled runs", () => {
     // Hand-craft the on-disk state of an interrupted running apply run.
     const runId = "run-interrupted";
     mkdirSync(paths.runDir(runId), { recursive: true });
-    const meta = { runId, kind: "apply", specId: "attest-v", specDigest: ir.digest, createdAt: "2026-01-01T00:00:00.000Z" };
+    const meta = { runId, kind: "apply" as const, specId: "attest-v", specDigest: ir.digest, createdAt: "2026-01-01T00:00:00.000Z" };
     writeFileSync(paths.metadataFile(runId), JSON.stringify(meta), "utf8");
     const events = new EventStore(paths.eventsFile(runId), runId, () => "2026-01-01T00:00:00.000Z");
     events.append("RUN_CREATED", { runId });
