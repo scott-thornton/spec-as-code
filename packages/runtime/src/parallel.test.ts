@@ -256,3 +256,44 @@ executor:
     expect(merged.map((e) => e.payload?.taskId)).toEqual(["T001"]);
   }, 120_000);
 });
+
+describe("atomic model budget under parallelism", () => {
+  it("a synchronously reserved budget admits exactly maxModelCalls tasks regardless of interleaving", async () => {
+    const repo = setupRepo("budget", ["execution:", "  parallelism: 2", "  maxModelCalls: 1"]);
+    const provider = new FakeProvider(
+      parseFakeScript(`
+executor:
+  T001:
+    status: completed
+    summary: feature a
+    changes:
+      - op: create
+        path: src/a.mjs
+        content: |
+          export const a = "feature-a";
+  T002:
+    status: completed
+    summary: feature b
+    changes:
+      - op: create
+        path: src/b.mjs
+        content: |
+          export const b = "feature-b";
+`),
+    );
+    const paths = spcPaths(repo);
+    mkdirSync(paths.plansDir, { recursive: true });
+    writeFileSync(paths.planFile("plan-parallel"), JSON.stringify(twoTaskPlan(), null, 2));
+
+    const report = await applyPlan({ repoRoot: repo }, { providerFactory: async () => provider, log: () => {} });
+    // Exactly one task dispatched (budget 1); the other failed atomically.
+    expect(report.modelCalls).toBe(1);
+    const state = JSON.parse(readFileSync(paths.stateFile(report.runId), "utf8")) as {
+      tasks: Record<string, { status: string; failure?: { code: string } }>;
+    };
+    const statuses = Object.values(state.tasks).map((t) => t.status);
+    expect(statuses.filter((s) => s === "completed").length).toBe(1);
+    const budgetFailed = Object.values(state.tasks).filter((t) => t.failure?.code === "MODEL_BUDGET_EXCEEDED");
+    expect(budgetFailed).toHaveLength(1);
+  }, 120_000);
+});

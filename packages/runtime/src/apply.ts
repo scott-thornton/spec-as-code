@@ -508,10 +508,8 @@ function maybeGateAmendment(
 async function driveRun(ctx: RunContext): Promise<ApplyReport> {
   const worktree = ctx.worktreePath!;
   const usageSink = (record: UsageRecord): void => {
-    ctx.modelCalls += 1;
-    // Keep the persisted projection in sync; the event log is truth, but
-    // state.json and the summary must not report 0 for live runs (found
-    // against real usage data: every state.json said modelCalls 0).
+    // Counting happens at reservation time (executeTaskInRun entry, sync);
+    // usage records here are the audit trail, not the counter.
     ctx.state = { ...ctx.state, modelCalls: ctx.modelCalls };
     appendUsageRecord(ctx.paths.usageFile(ctx.meta.runId), record);
     ctx.events.append("USAGE_RECORDED", { role: record.role, requestId: record.requestId, model: record.model });
@@ -848,6 +846,10 @@ export async function executeTaskInRun(
   failureContext: { code: string; message: string } | undefined,
   worktreeRoot: string,
 ): Promise<ExecutionOutcome> {
+  // Budget is RESERVED synchronously here, before any await: parallel
+  // tasks interleaving across their model calls must not all observe the
+  // same remaining budget (external review #6). The reservation IS the
+  // count; usageSink records usage but does not re-increment.
   if (ctx.modelCalls >= ctx.config.execution.maxModelCalls) {
     return {
       taskId: task.id,
@@ -857,6 +859,9 @@ export async function executeTaskInRun(
       appliedChanges: [],
       failure: { code: "MODEL_BUDGET_EXCEEDED", message: `maxModelCalls=${ctx.config.execution.maxModelCalls}` },
     };
+  }
+  if (task.kind !== "verify") {
+    ctx.modelCalls += 1;
   }
   const before = statusPorcelain(worktreeRoot);
 
@@ -1126,7 +1131,7 @@ async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
   const integration = ctx.worktreePath!;
   const maxParallel = Math.max(1, ctx.config.execution.parallelism);
   const usageSink = (record: UsageRecord): void => {
-    ctx.modelCalls += 1;
+    // See the sequential driver: the counter moves at reservation time.
     ctx.state = { ...ctx.state, modelCalls: ctx.modelCalls };
     appendUsageRecord(ctx.paths.usageFile(ctx.meta.runId), record);
     ctx.events.append("USAGE_RECORDED", { role: record.role, requestId: record.requestId, model: record.model });
