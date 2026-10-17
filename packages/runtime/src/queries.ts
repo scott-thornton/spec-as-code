@@ -11,6 +11,7 @@ import { spcPaths } from "./paths.js";
 import { listRunIds, loadRunMeta, newRunId, RUNTIME_ERROR, type RunMeta } from "./run.js";
 import { applyEvent, initialState, persistState } from "./state.js";
 import { EvidenceStore, FollowupStore } from "./stores.js";
+import { attestRecords } from "./attestation.js";
 import { verifyStandalone } from "./verify.js";
 
 export interface RunView {
@@ -284,5 +285,8 @@ export async function createVerifyRun(options: StandaloneVerifyOptions): Promise
     renderRunSummary({ specIr: options.specIr, runState: state, followups: [...followups.all()], evidence: [...evidence.all()] }),
     "utf8",
   );
+  // Verify runs are the evidence CI gates PRs on: they carry the same
+  // prefix commitment as apply runs. No git anchor (no run branch).
+  attestRecords({ runDir, runId, specId: meta.specId, status, events, evidence: [...evidence.all()], now });
   return { runId, runDir, states: sweep.states, followups: [...followups.all()], evidenceCount: evidence.all().length };
 }

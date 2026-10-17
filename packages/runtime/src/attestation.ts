@@ -74,3 +74,36 @@ export function attestRun(ctx: RunContext, status: RunStatus, resultRevision?: s
   }
   return attestation;
 }
+
+/**
+ * Slim attestation for flows without a RunContext (standalone verify,
+ * cancellation): same prefix commitment, no git anchor (verify runs
+ * have no run branch). Written AFTER the terminal event so the
+ * commitment covers the complete execution prefix.
+ */
+export function attestRecords(input: {
+  runDir: string;
+  runId: string;
+  specId: string;
+  status: RunStatus;
+  events: EventStore;
+  evidence: readonly Evidence[];
+  now: () => string;
+}): RunAttestation {
+  const eventCount = input.events.length;
+  const eventChainHead = input.events.chainHead() ?? "sha256:" + "0".repeat(64);
+  const evidenceHead = evidenceHeadOf(input.evidence);
+  const attestation: RunAttestation = {
+    schema: "spc-run-attestation/1",
+    runId: input.runId,
+    specId: input.specId,
+    status: input.status,
+    eventCount,
+    eventChainHead,
+    evidenceHead,
+    attestedAt: input.now(),
+  };
+  writeFileSync(path.join(input.runDir, "attestation.json"), JSON.stringify(attestation, null, 2) + "\n", "utf8");
+  input.events.append("RUN_ATTESTED", { ...attestation });
+  return attestation;
+}

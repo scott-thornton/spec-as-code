@@ -5,6 +5,8 @@ import type { RunState } from "@spc/schema";
 import { spcPaths } from "./paths.js";
 import { EventStore } from "./events.js";
 import { persistState } from "./state.js";
+import { attestRecords } from "./attestation.js";
+import { EvidenceStore } from "./stores.js";
 
 /**
  * Mark a run cancelled. Honest scope: this is for runs left `running` by an
@@ -28,5 +30,17 @@ export function cancelRun(repoRoot: string, runId: string, now: () => string = (
   const updated: RunState = { ...state, status: "cancelled", updatedAt: now() };
   events.append("RUN_COMPLETED", { status: "cancelled", reason: "cancelled by human", tasks: Object.fromEntries(Object.entries(updated.tasks).map(([id, t]) => [id, t.status])) });
   persistState(stateFile, updated);
+  // A cancelled run's prefix is still its record: commit to it.
+  const evidence = new EvidenceStore(paths.evidenceFile(runId));
+  evidence.load();
+  attestRecords({
+    runDir: paths.runDir(runId),
+    runId,
+    specId: state.specId,
+    status: "cancelled",
+    events,
+    evidence: [...evidence.all()],
+    now,
+  });
   return updated;
 }
