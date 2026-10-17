@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { EvidenceStore, FollowupStore, ObservationStore } from "./stores.js";
@@ -136,3 +136,62 @@ describe("event store and state projection", () => {
 });
 
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+describe("fail-closed audit loads", () => {
+  it("evidence: tampered content with stale digest throws on load", () => {
+    const file = path.join(dir, "evidence-tampered.jsonl");
+    const writer = new EvidenceStore(file);
+    writer.add({ id: "EV-0001", ...evidenceBase("supports", "T-001-A") });
+    const raw = readFileSync(file, "utf8").split("\n");
+    const rec = JSON.parse(raw[0]!);
+    rec.payload.exitCode = 99; // content changed, digest left alone
+    raw[0] = JSON.stringify(rec);
+    writeFileSync(file, raw.join("\n"), "utf8");
+    expect(() => new EvidenceStore(file).load()).toThrow(/digest mismatch/);
+  });
+
+  it("evidence: torn trailing line from an interrupted append is tolerated", () => {
+    const file = path.join(dir, "evidence-torn.jsonl");
+    const writer = new EvidenceStore(file);
+    writer.add({ id: "EV-0001", ...evidenceBase("supports", "T-001-A") });
+    // Simulate an interrupted append: partial JSON, no trailing newline.
+    appendFileSync(file, '{"id":"EV-0002","runId":"run-1","prop', "utf8");
+    const reloaded = new EvidenceStore(file);
+    expect(() => reloaded.load()).not.toThrow();
+    expect(reloaded.all()).toHaveLength(1);
+  });
+
+  it("evidence: corrupted interior line throws", () => {
+    const file = path.join(dir, "evidence-interior.jsonl");
+    const writer = new EvidenceStore(file);
+    writer.add({ id: "EV-0001", ...evidenceBase("supports", "T-001-A") });
+    writer.add({ id: "EV-0002", ...evidenceBase("supports", "T-001-A") });
+    const raw = readFileSync(file, "utf8").split("\n");
+    raw[0] = "not json at all";
+    writeFileSync(file, raw.join("\n"), "utf8");
+    expect(() => new EvidenceStore(file).load()).toThrow(/corrupted at line 1/);
+  });
+
+  it("events: schema-invalid interior event throws instead of vanishing", () => {
+    const file = path.join(dir, "events-invalid.jsonl");
+    const store = new EventStore(file, "run-1", () => "2026-09-17T00:00:00.000Z");
+    store.append("RUN_CREATED", { runId: "run-1" });
+    store.append("SPEC_LOADED", {});
+    const raw = readFileSync(file, "utf8").split("\n");
+    const second = JSON.parse(raw[1]!);
+    delete second.type; // schema-invalid: no type
+    raw[1] = JSON.stringify(second);
+    writeFileSync(file, raw.join("\n"), "utf8");
+    expect(() => new EventStore(file, "run-1").load()).toThrow(/invalid event at line 2/);
+  });
+
+  it("events: torn trailing line from an interrupted append is tolerated", () => {
+    const file = path.join(dir, "events-torn.jsonl");
+    const store = new EventStore(file, "run-1", () => "2026-09-17T00:00:00.000Z");
+    store.append("RUN_CREATED", { runId: "run-1" });
+    appendFileSync(file, '{"seq":2,"id":"torn', "utf8");
+    const reloaded = new EventStore(file, "run-1");
+    expect(() => reloaded.load()).not.toThrow();
+    expect(reloaded.length).toBe(1);
+  });
+});

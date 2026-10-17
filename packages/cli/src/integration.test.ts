@@ -381,3 +381,26 @@ describe("spc agent validate (preflight)", () => {
     expect(existsSync(answered) ? readdirSync(answered).length : 0).toBe(0);
   });
 });
+
+describe("spc policy explain", () => {
+  const repo = setupFixture("simple-node-service");
+
+  it("explains a classified command with pattern, policy and config source", () => {
+    const r = spc(repo, ["policy", "explain", "pnpm", "install", "foo"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("classified as: packageInstall");
+    expect(r.stdout).toContain("matched by:");
+    expect(r.stdout).toContain("approval");
+    expect(r.stdout).toContain(".spc/config.yaml");
+  });
+
+  it("explains denial and the unknown fallback", () => {
+    const deny = spc(repo, ["policy", "explain", "curl", "https://x.dev"]);
+    expect(deny.stdout).toContain("classified as: network");
+    expect(deny.stdout).toContain("deny");
+    const unknown = spc(repo, ["policy", "explain", "echo", "hi"]);
+    expect(unknown.stdout).toContain("classified as: unknown");
+    expect(unknown.stdout).toContain("fell through to unknown");
+    expect(unknown.stdout).toContain("guardrail");
+  });
+});

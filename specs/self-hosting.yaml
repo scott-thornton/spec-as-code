@@ -184,6 +184,17 @@ requirements:
         type: command
         command: pnpm --filter @spc/runtime exec vitest run src/protected-paths.test.ts
 
+  - id: SELF-022
+    statement: Audit loads fail closed on corrupted or schema-invalid interior records (recomputing evidence digests), tolerate only a torn trailing line, and spc policy explain makes command classification inspectable.
+    priority: must
+    acceptance:
+      - id: SELF-022-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/stores.test.ts
+      - id: SELF-022-B
+        type: command
+        command: pnpm --filter @spc/cli exec vitest run src/integration.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services

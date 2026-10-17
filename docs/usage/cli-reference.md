@@ -313,3 +313,16 @@ full base..result diff, the config as of export, and a `manifest.json`
 hashing every component (sha256) so the bundle can be audited offline
 instead of trusted. If the spec changed since the run, the export says
 so loudly - the run's original spec text is not reconstructible.
+
+## spc policy explain
+
+```bash
+spc policy explain <command...> [--cwd <dir>]
+```
+
+Shows how a command would be classified (category, the exact pattern
+that matched) and the effective policy under the repository's config -
+before the classification becomes consequential. Unknown-class commands
+print the guardrail note: classification catches accidental high-risk
+operations and does not resist adversarial construction
+(see [Threat model](../threat-model.md)).

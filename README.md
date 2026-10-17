@@ -181,6 +181,13 @@ re-derive the property status immediately.
   denied by default; installs and migrations approval-gated); permission
   checks live in code, never in prompts.
 
+The honest boundary of all of the above is written down in
+[docs/threat-model.md](docs/threat-model.md): write scopes constrain the
+mediated path and are not an OS sandbox; command policy is a guardrail
+against accidents, not adversarial construction; specs are executable
+configuration. spc governs negligent agents; it does not contain
+malicious ones.
+
 ## Run records contract
 
 - Commit `specs/` and `.spc/config.yaml`; `.spc/runs/`, `worktrees/` and

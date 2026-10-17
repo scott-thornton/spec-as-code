@@ -46,6 +46,20 @@ export function classifyCommand(command: string): CommandCategory {
   return "unknown";
 }
 
+/**
+ * Classification with its evidence: the matched category and the exact
+ * pattern that matched (or the unknown fallback). Powers `spc policy
+ * explain` - deterministic policy should be inspectable, not just
+ * enforced.
+ */
+export function explainClassification(command: string): { category: CommandCategory; matchedBy: string | null } {
+  const trimmed = command.trim();
+  for (const [category, pattern] of CATEGORY_PATTERNS) {
+    if (pattern.test(trimmed)) return { category, matchedBy: pattern.source };
+  }
+  return { category: "unknown", matchedBy: null };
+}
+
 const POLICY_KEY: Partial<Record<CommandCategory, keyof CommandsConfig>> = {
   network: "network",
   packageInstall: "packageInstall",

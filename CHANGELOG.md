@@ -8,6 +8,18 @@ uses semantic versioning.
 
 ### Added
 
+- Trust and integrity pass. docs/threat-model.md states the boundary
+  plainly: write scopes are not an OS sandbox, command policy is a
+  guardrail against accidents, specs are executable configuration -
+  spc governs negligent agents, it does not contain malicious ones.
+  Audit loads fail closed: corrupted or schema-invalid interior
+  events/evidence are loud errors instead of silent omissions, evidence
+  digests are recomputed on load (tolerating only a torn trailing line
+  from an interrupted append); verified against 5,934 real events and
+  2,063 evidence records from three weeks of production usage with zero
+  false positives. New `spc policy explain <command>` shows command
+  classification, the matched pattern and the effective policy.
+
 - Protected verification assets (`verification.protectedPaths`): glob
   patterns no task may change regardless of declared write targets -
   an agent that can modify its own oracle can manufacture green, so a

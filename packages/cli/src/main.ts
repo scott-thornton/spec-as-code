@@ -12,6 +12,7 @@ import { runFollowupResolve, runFollowups } from "./commands/followups.js";
 import { runCancel, runExport, runPr, runShow } from "./commands/run.js";
 import { runAgentList, runAgentRespond, runAgentShow, runAgentValidate } from "./commands/agent.js";
 import { runSkills, runUseSkill } from "./commands/skills.js";
+import { runPolicyExplain } from "./commands/policy.js";
 
 const program = new Command();
 
@@ -242,6 +243,15 @@ run
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action((runId: string, opts: { cwd: string; out?: string }) => {
     process.exitCode = runExport(runId, opts);
+  });
+
+const policy = program.command("policy").description("command policy inspection");
+policy
+  .command("explain <command...>")
+  .description("show how a command is classified and which policy applies")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action((command: string[], opts: { cwd: string }) => {
+    process.exitCode = runPolicyExplain(command, opts.cwd);
   });
 
 export function main(argv: string[]): void {

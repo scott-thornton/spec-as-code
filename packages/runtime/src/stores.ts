@@ -7,7 +7,7 @@ import type {
   Observation,
   ObservationDraft,
 } from "@spc/schema";
-import { followUpSchema, observationSchema } from "@spc/schema";
+import { evidenceSchema, followUpSchema, observationSchema } from "@spc/schema";
 
 function readJsonl(file: string): string[] {
   if (!existsSync(file)) return [];
@@ -26,14 +26,48 @@ export class EvidenceStore {
 
   constructor(private readonly file: string) {}
 
+  /**
+   * Fail-closed replay: schema-validate every record and recompute its
+   * digest - content changed while the digest was left alone (or
+   * recomputed by a naive editor) must be LOUD, not silently trusted.
+   * This is corruption detection, not provenance: an attacker who can
+   * write the file can recompute digests coherently; anchoring (see
+   * IDEAS 3a) is the answer to that class. The single tolerated case is
+   * a truncated FINAL line without a trailing newline: an interrupted
+   * append, which is crash physics, not tampering.
+   */
   load(): void {
-    for (const line of readJsonl(this.file)) {
+    if (!existsSync(this.file)) return;
+    const raw = readFileSync(this.file, "utf8");
+    const lines = raw.split("\n");
+    lines.forEach((line, index) => {
+      const trimmed = line.trim();
+      if (trimmed === "") return;
+      const tornTail = index === lines.length - 1 && !raw.endsWith("\n");
+      let value: unknown;
       try {
-        this.records.push(JSON.parse(line) as Evidence);
+        value = JSON.parse(trimmed);
       } catch {
-        // a torn line from an interrupted process is skipped on replay
+        if (tornTail) return; // a torn line from an interrupted process
+        throw new Error(`evidence log ${this.file} is corrupted at line ${index + 1}`);
       }
-    }
+      const parsed = evidenceSchema.safeParse(value);
+      if (!parsed.success) {
+        if (tornTail) return;
+        throw new Error(
+          `evidence log ${this.file} contains an invalid record at line ${index + 1}: ` +
+            parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
+        );
+      }
+      const record = parsed.data;
+      const { digest, ...rest } = record;
+      if (digestOf(rest) !== digest) {
+        throw new Error(
+          `evidence log ${this.file}: digest mismatch at line ${index + 1} (record ${record.id}) - content does not match its recorded digest`,
+        );
+      }
+      this.records.push(record);
+    });
   }
 
   add(record: Omit<Evidence, "digest">): Evidence {
