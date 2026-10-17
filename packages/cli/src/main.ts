@@ -13,6 +13,7 @@ import { runCancel, runExport, runPr, runReplay, runShow } from "./commands/run.
 import { runAgentList, runAgentRespond, runAgentShow, runAgentValidate } from "./commands/agent.js";
 import { runSkills, runUseSkill } from "./commands/skills.js";
 import { runPolicyExplain } from "./commands/policy.js";
+import { runQuickCommand } from "./commands/quick.js";
 
 const program = new Command();
 
@@ -250,6 +251,15 @@ run
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action((runId: string, opts: { cwd: string; out?: string }) => {
     process.exitCode = runExport(runId, opts);
+  });
+
+program
+  .command("quick <intent...>")
+  .description("compressed SPC transaction: ephemeral spec + one gate (--verify), same machinery")
+  .requiredOption("--verify <command>", "the gate you author: a side-effect-free check command")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action(async (intent: string[], opts: { verify: string; cwd: string }) => {
+    process.exitCode = await runQuickCommand(intent, opts);
   });
 
 const policy = program.command("policy").description("command policy inspection");

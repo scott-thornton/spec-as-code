@@ -341,3 +341,25 @@ field), and prefix-attestation checking (recomputed heads vs the
 recorded commitment; post-attestation events are reported as legitimate
 extension). Exit 0 when the run replays clean, 1 on any divergence.
 Logs written before chaining replay as `legacy` (unchained but strict).
+
+## spc quick
+
+```bash
+spc quick "<intent>" --verify "<command>" [--cwd <dir>]
+```
+
+A compressed SPC transaction - never a weaker safety system. The intent
+becomes an ephemeral one-requirement spec (committed as its own
+revision, with provenance trailers - the contract layer is real); the
+--verify command is the gate YOU author (it must be side-effect-free;
+see Spec authoring); the planner derives the task and its provisional
+write scope; execution runs through the same machinery as any run:
+command policy, actual-diff write scope, violation revert, evidence,
+chaining, attestation. Quick means less ceremony, never less evidence -
+the run replays and exports like any other.
+
+Escalation is fail-closed: if the change exceeds quick shape (scope
+violation, task failure, block), the command exits 1 and says to author
+a full spec. Nothing is silently absorbed. And a no-op outcome - the
+repository already satisfies the intent - is a correct result, not a
+suspicious one.

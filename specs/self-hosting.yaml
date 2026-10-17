@@ -230,6 +230,14 @@ requirements:
         type: command
         command: pnpm --filter @spc/runtime exec vitest run src/noop.test.ts
 
+  - id: SELF-027
+    statement: spc quick runs a compressed transaction through the same machinery - ephemeral spec committed with provenance, human-authored gate, full audit trail - and fails closed when the change exceeds quick shape.
+    priority: must
+    acceptance:
+      - id: SELF-027-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/quick.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services

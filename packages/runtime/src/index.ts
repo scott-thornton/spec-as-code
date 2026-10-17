@@ -13,3 +13,4 @@ export * from "./export.js";
 export * from "./attestation.js";
 export * from "./replay.js";
 export * from "./drift.js";
+export * from "./quick.js";

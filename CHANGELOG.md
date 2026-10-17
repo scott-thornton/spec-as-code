@@ -8,6 +8,15 @@ uses semantic versioning.
 
 ### Added
 
+- `spc quick "<intent>" --verify "<command>"`: a compressed SPC
+  transaction, never a weaker safety system. The intent becomes an
+  ephemeral one-requirement spec committed with provenance trailers;
+  the --verify command is the human-authored gate; the planner derives
+  the task and write scope; execution runs through the identical
+  machinery (policy, diff scope, revert, evidence, chain, attestation).
+  Escalation fails closed: exceeding quick shape exits 1 and asks for a
+  full spec; nothing is silently absorbed. SELF-027.
+
 - No-op as a first-class success: the executor contract now explicitly
   licenses completing with an empty changes list when the repository
   already satisfies the intent (stating what was observed), and the
