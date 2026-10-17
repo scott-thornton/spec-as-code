@@ -1,0 +1,31 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: attest-verify-runs
+  title: Prefix attestation for verify and cancelled runs
+goal: Every terminating run kind carries a prefix commitment - apply runs attest today; verify and cancelled runs must too.
+requirements:
+  - id: ATTV-001
+    statement: A standalone verify run writes attestation.json and a RUN_ATTESTED event after its terminal event, and spc run replay reports the attestation verified with a chained log.
+    priority: must
+    acceptance:
+      - id: ATTV-001-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/attest-verify.test.ts
+        discriminating: true
+      - id: ATTV-001-B
+        type: file
+        path: packages/runtime/src/attestation.ts
+        assert:
+          contains: "attestRecords"
+  - id: ATTV-002
+    statement: Cancelling an interrupted (running) run attests its prefix with status cancelled.
+    priority: must
+    acceptance:
+      - id: ATTV-002-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/attest-verify.test.ts
+        discriminating: true
+outOfScope:
+  - git anchoring for verify runs (no run branch exists)
+  - any change to apply-run attestation semantics

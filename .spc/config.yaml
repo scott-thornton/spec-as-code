@@ -1,7 +1,7 @@
 version: 1
 
 provider:
-  name: none
+  name: harness
 
 execution:
   requirePlanApproval: false
@@ -12,6 +12,8 @@ execution:
   maxOutputBytes: 65536
   parallelism: 1
   proceedOnClarificationFollowups: false
+  inPlace: true
+  inPlaceBranch: current
 
 commands:
   network: deny
@@ -25,3 +27,6 @@ commands:
 
 verification:
   allowAgentOnlyMustRequirements: false
+  requireRedPhase: true
+  protectedPaths:
+    - "packages/**/src/*.test.ts"
