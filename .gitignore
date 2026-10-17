@@ -7,5 +7,7 @@ coverage/
 /.spc/worktrees/
 /.spc/plans/
 /.spc/cache/
+/.spc/harness/
+/.spc/exports/
 results/
 packages/cli/skills/
