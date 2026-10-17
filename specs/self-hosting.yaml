@@ -211,6 +211,17 @@ requirements:
         type: command
         command: pnpm --filter @spc/runtime exec vitest run src/budgets.test.ts
 
+  - id: SELF-025
+    statement: Plan drift (planned vs actual tasks and write targets, replans) is derived from recorded events and rendered as a diagnostic section in the run summary.
+    priority: must
+    acceptance:
+      - id: SELF-025-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/drift.test.ts
+      - id: SELF-025-B
+        type: command
+        command: pnpm --filter @spc/renderer exec vitest run src/summary.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services

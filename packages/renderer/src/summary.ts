@@ -8,6 +8,15 @@ export interface SummaryInput {
   evidence: Evidence[];
   diffStat?: string;
   changedFileCount?: number;
+  /** Diagnostic (never a score): how execution diverged from the original plan. */
+  planDrift?: {
+    originalTaskCount: number;
+    tasksAdded: number;
+    tasksRemoved: number;
+    replans: number;
+    filesChanged: number;
+    filesOutsideOriginalTargets: string[];
+  };
 }
 
 /** Completion report (run summary). Markdown view; state files are canonical. */
@@ -57,6 +66,17 @@ export function renderRunSummary(input: SummaryInput): string {
     lines.push("## Changes", "");
     if (input.changedFileCount !== undefined) lines.push(`- ${input.changedFileCount} files changed`);
     if (input.diffStat) lines.push("", "```", input.diffStat, "```");
+    lines.push("");
+  }
+
+  if (input.planDrift) {
+    const d = input.planDrift;
+    lines.push("## Plan drift", "");
+    lines.push(
+      `- ${d.originalTaskCount} planned task(s); ${d.tasksAdded} added, ${d.tasksRemoved} removed across ${d.replans} replan(s)`,
+    );
+    lines.push(`- ${d.filesChanged} file(s) changed; ${d.filesOutsideOriginalTargets.length} outside original write targets`);
+    for (const f of d.filesOutsideOriginalTargets.slice(0, 10)) lines.push(`  - ${f}`);
     lines.push("");
   }
 

@@ -36,6 +36,7 @@ import { initialState, persistState, projectState } from "./state.js";
 import { appendUsageRecord, EvidenceStore, FollowupStore, ObservationStore } from "./stores.js";
 import { verifyProperties } from "./verify.js";
 import { attestRun } from "./attestation.js";
+import { computePlanDrift } from "./drift.js";
 
 export { RUNTIME_ERROR };
 
@@ -1449,6 +1450,7 @@ async function finalize(
   const specIrForSummary = ctx.specIr;
   const summary = renderRunSummary({
     specIr: specIrForSummary,
+    planDrift: computePlanDrift(ctx.events.all(), ctx.plan),
     runState: ctx.state,
     followups: [...ctx.followups.all()],
     evidence: [...ctx.evidence.all()],

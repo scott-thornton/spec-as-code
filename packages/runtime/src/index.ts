@@ -12,3 +12,4 @@ export { resumeRun } from "./apply.js";
 export * from "./export.js";
 export * from "./attestation.js";
 export * from "./replay.js";
+export * from "./drift.js";

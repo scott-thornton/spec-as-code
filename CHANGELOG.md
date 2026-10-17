@@ -8,6 +8,11 @@ uses semantic versioning.
 
 ### Added
 
+- Plan-drift views: run summaries derive how execution diverged from
+  the original plan (tasks added/removed across replans, files changed,
+  files outside original write targets) from recorded events. A
+  diagnostic, never a score - justification stays the human\u2019s job.
+
 - Budgets as signals (execution.budgets: wallTimeMs, diffLines,
   changedFiles): evaluated at run completion and reported via
   BUDGET_SIGNAL events and non-blocking follow-ups. Deliberately never
