@@ -35,6 +35,7 @@ import {
 import { initialState, persistState, projectState } from "./state.js";
 import { appendUsageRecord, EvidenceStore, FollowupStore, ObservationStore } from "./stores.js";
 import { verifyProperties } from "./verify.js";
+import { attestRun } from "./attestation.js";
 
 export { RUNTIME_ERROR };
 
@@ -1413,6 +1414,12 @@ async function finalize(
     ...(extra.changedFileCount !== undefined ? { changedFileCount: extra.changedFileCount } : {}),
   });
   writeFileSync(ctx.paths.summaryFile(ctx.meta.runId), summary, "utf8");
+
+  // Prefix attestation: the last act of the run, committing to events
+  // 1..N (RUN_COMPLETED included) after the summary/state are final.
+  // Must precede any branch restore so the git anchor lands on the run
+  // branch.
+  attestRun(ctx, status, extra.resultRevision);
 
   return {
     status,

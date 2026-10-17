@@ -93,6 +93,16 @@ export const verificationConfigSchema = z.strictObject({
    * protected paths happen deliberately, outside runs, as human edits.
    */
   protectedPaths: z.array(z.string().min(1)).default([]),
+  /**
+   * Anchor the run-completion attestation in Git: an empty commit on
+   * the run branch carrying the event/evidence chain heads as
+   * trailers, making post-run log tampering detectable against git
+   * history itself. The attestation file and RUN_ATTESTED event are
+   * always written; this gates only the git anchor. Skipped (with a
+   * log line) in inPlaceBranch "current" mode to avoid surprise empty
+   * commits on the user's own branch.
+   */
+  attestInGit: z.boolean().default(false),
 });
 
 export const configSchema = z.strictObject({

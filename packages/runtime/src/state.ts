@@ -177,6 +177,12 @@ export function applyEvent(state: RunState, event: Event): RunState {
       s.modelCalls += 1;
       break;
     }
+    case "RUN_ATTESTED": {
+      // Attestation is a commitment over the log, not a state
+      // transition: replaying must not move updatedAt past what the
+      // persisted projection recorded at RUN_COMPLETED.
+      return state;
+    }
     case "RUN_COMPLETED":
     case "RUN_FAILED": {
       if (typeof p.status === "string") s.status = p.status as RunState["status"];

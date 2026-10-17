@@ -147,6 +147,12 @@ function commitMessage(message: string, trailers?: Record<string, string>): stri
   return `${message}\n\n${block}\n`;
 }
 
+/** Empty commit for anchors/attestations: no tree change, message + trailers. */
+export function commitEmpty(cwd: string, message: string, trailers?: Record<string, string>): string {
+  gitOk(cwd, ["commit", "--allow-empty", "-m", commitMessage(message, trailers)], { identity: true });
+  return currentRevision(cwd);
+}
+
 export function commitAll(cwd: string, message: string, trailers?: Record<string, string>): string | null {
   const status = statusPorcelain(cwd);
   if (!status.dirty) return null;
