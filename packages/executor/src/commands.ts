@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { digestOf } from "@spc/core";
 import type { CommandsConfig, PolicyValue } from "@spc/schema";
 
@@ -171,15 +171,36 @@ export function runCommand(command: string, opts: CommandRunOptions): Promise<Co
     let stdout = "";
     let stderr = "";
     let timedOut = false;
+    // Own a process group on POSIX so a timeout kills the whole tree,
+    // not just the shell: with shell:true, SIGKILL to the shell leaves
+    // grandchildren running with the pipes - free to keep mutating the
+    // worktree after the task's delta check (external review #3).
+    const ownsGroup = process.platform !== "win32";
     const child = spawn(command, {
       shell: true,
       cwd: opts.cwd,
       env: opts.env ?? process.env,
       stdio: ["ignore", "pipe", "pipe"],
+      ...(ownsGroup ? { detached: true } : {}),
     });
+    const killTree = (): void => {
+      if (child.pid === undefined) return;
+      if (ownsGroup) {
+        try {
+          process.kill(-child.pid, "SIGKILL");
+          return;
+        } catch {
+          // group already gone; fall through to the child
+        }
+      } else {
+        // Windows: taskkill /T walks the spawn tree; /F forces.
+        spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+      }
+      child.kill("SIGKILL");
+    };
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGKILL");
+      killTree();
     }, opts.timeoutMs);
 
     const cap = opts.maxOutputBytes * 8; // hard collection cap; persisted output is truncated further

@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+const os = { tmpdir };
+import path from "node:path";
 import { DEFAULT_CONFIG } from "@spc/schema";
 import {
   classifyCommand,
@@ -116,4 +120,36 @@ describe("runCommand", () => {
     expect(redactSecrets("x abcdefgh", { MY_NAME: "abcdefgh" })).toBe("x abcdefgh");
     expect(redactSecrets("x abcdefgh", { MY_TOKEN: "abcdefgh" })).toBe("x <redacted:MY_TOKEN>");
   });
+});
+
+describe("timeout kills the process tree", () => {
+  it("a grandchild surviving the shell is killed with the group", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "spc-orphan-"));
+    const marker = path.join(dir, "orphan.txt");
+    // Script files instead of nested -e quoting: the parent blocks
+    // forever; the grandchild writes the marker at +400ms. Timeout at
+    // 150ms kills the GROUP; a shell-only kill would leave the
+    // grandchild alive to write the marker anyway.
+    writeFileSync(
+      path.join(dir, "block.mjs"),
+      `import { spawn } from "node:child_process";\n` +
+        `spawn(process.execPath, [new URL("./orphan.mjs", import.meta.url).pathname, process.argv[2]], { stdio: "ignore" });\n` +
+        `while (true) {}\n`,
+    );
+    writeFileSync(
+      path.join(dir, "orphan.mjs"),
+      `import { writeFileSync } from "node:fs";\n` +
+        `setTimeout(() => writeFileSync(process.argv[2], "orphan"), 400);\n`,
+    );
+    const r = await runCommand(`node ${path.join(dir, "block.mjs")} ${JSON.stringify(marker)}`, {
+      cwd: dir,
+      timeoutMs: 150,
+      maxOutputBytes: 1024,
+      commandsConfig: DEFAULT_CONFIG.commands,
+    });
+    expect(r.timedOut).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(existsSync(marker)).toBe(false);
+    rmSync(dir, { recursive: true, force: true });
+  }, 10_000);
 });
