@@ -1,5 +1,10 @@
 name: ci
 
+# Spec self-verification (all 29 self-hosting requirements,
+# `spc verify specs/self-hosting.yaml`) runs in spc-verify.yml on the
+# same triggers - kept separate so a suite failure never masks a
+# build failure and vice versa.
+
 on:
   push:
     branches: [main]

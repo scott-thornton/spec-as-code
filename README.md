@@ -12,7 +12,7 @@ evidence the runtime collected itself.
 
 ## What spc is
 
-A v0.1 vertical slice of a requirements-as-state workflow:
+A requirements-as-state workflow for agent-driven code changes:
 
 - **Author** requirements, constraints and acceptance criteria in YAML.
   Four criterion types carry different evidence strength: command, file,
@@ -57,11 +57,7 @@ canonical hashing, validation), `@spc/repo` (Git, observation, worktrees),
 
 ## Install
 
-```bash
-npm install -g @spc/cli
-```
-
-Or run it once with `npx @spc/cli`. From a clone instead:
+Not yet on npm; install from a clone:
 
 ```bash
 git clone https://github.com/scott-thornton/spec-as-code
@@ -70,6 +66,9 @@ pnpm install --frozen-lockfile
 pnpm build
 alias spc='node "$PWD/packages/cli/dist/main.js"'
 ```
+
+Once published, `npm install -g @spc/cli` (or `npx @spc/cli`) replaces
+all of the above.
 
 Every command below assumes the `spc` command.
 
@@ -218,13 +217,22 @@ malicious ones.
   desynchronize the projection from the event log.
 - The run branch is yours to review and merge; spc never merges or pushes.
 
-## Current v0.1 limitations
+## Current limitations (0.2)
 
-Single repository, single spec per plan. Planning and agent execution need
-a provider (API key, or an agent answering harness requests through
-files). Agent-verified requirements are flagged and stay indeterminate
-unless explicitly allowed. The benchmark corpus measures small-task
-behavior; real-repository behavior is unmeasured. No npm package yet.
+- Single repository, single spec per `spc verify` invocation (pass an
+  explicit file when `specs/` holds more than one).
+- Planning and agent execution need a provider: an API key, or an agent
+  answering harness requests through files.
+- Agent-verified requirements are flagged and stay indeterminate unless
+  explicitly allowed.
+- No operating-system sandbox: command policy is a guardrail against
+  accidental high-risk operations, not adversarial containment
+  ([threat model](docs/threat-model.md)).
+- The benchmark corpus measures small-task behavior; real-repository
+  field data exists but is unpublished (see
+  [docs/field-report-2026-10.md](docs/field-report-2026-10.md) when it
+  lands).
+- Not yet on npm: install from a clone.
 
 ## Documentation
 
@@ -248,5 +256,10 @@ pnpm install --frozen-lockfile
 pnpm build            # all packages, topological
 pnpm typecheck        # strict tsc across workspaces
 pnpm test             # deterministic suite, no network, no live model
-node packages/cli/dist/main.js verify   # the tool's own spec, in CI
+node packages/cli/dist/main.js verify specs/self-hosting.yaml
 ```
+
+CI runs two workflows on every push and PR: `ci` (build, typecheck,
+test) and `spc-verify` (the tool's own 29 self-hosting requirements
+via `spc verify --format github`). Separate on purpose: a spec failure
+never masks a build failure and vice versa.
