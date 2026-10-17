@@ -13,6 +13,7 @@ import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { makeUsageRecord } from "@spc/llm";
 import { z } from "zod";
 import { classifyCommand, evaluateCommandPolicy, runCommand, type CommandRunResult } from "@spc/executor";
+import { isSafeRelativePath } from "@spc/core";
 
 /**
  * Deterministic criterion execution + agent/human paths. The verifier is
@@ -178,6 +179,38 @@ function verifyFile(
   property: DesiredProperty,
   ctx: CriterionContext,
 ): CriterionResult {
+  // File criteria are spec-authored, but the spec is executable
+  // configuration: validate the path lexically before joining, the same
+  // way the executor validates writes (external review #4).
+  if (!isSafeRelativePath(criterion.path)) {
+    return {
+      evidence: makeEvidence(
+        {
+          id: "pending",
+          runId: ctx.runId,
+          ...(ctx.taskId ? { taskId: ctx.taskId } : {}),
+          criterionId: criterion.id,
+          propertyRefs: [property.id],
+          kind: "file",
+          outcome: "inconclusive",
+          producer: { type: "runtime", identity: "unsafe-criterion-path" },
+          timestamp: (ctx.now ?? (() => new Date().toISOString()))(),
+          repositoryRevision: ctx.repositoryRevision,
+          payload: { path: criterion.path, reason: "criterion path is not a safe relative path" },
+        },
+        ctx.now,
+      ),
+      followUp: {
+        criterionId: criterion.id,
+        type: "investigation",
+        blocking: false,
+        title: `Unsafe file criterion path for ${property.id}`,
+        description: `Criterion ${criterion.id} path "${criterion.path}" escapes the repository; fix the spec.`,
+        propertyId: property.id,
+        ...(ctx.taskId ? { taskId: ctx.taskId } : {}),
+      },
+    };
+  }
   const full = path.join(ctx.cwd, criterion.path);
   const exists = existsSync(full) && statSync(full).isFile();
   let content: string | null = null;

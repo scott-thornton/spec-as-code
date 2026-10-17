@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { enforceWriteScope, OUT_OF_SCOPE_WRITE, UNSAFE_PATH } from "./enforce.js";
 
 describe("write-scope enforcement", () => {
@@ -23,5 +26,20 @@ describe("write-scope enforcement", () => {
   it("flags unsafe paths", () => {
     const v = enforceWriteScope(["**"], ["../outside.ts", "/abs/path"]);
     expect(v.map((x) => x.code)).toEqual([UNSAFE_PATH, UNSAFE_PATH]);
+  });
+});
+
+describe("physical containment in change application", () => {
+  it("isPhysicallyContained is applied to proposed changes (unit contract)", async () => {
+    // Contract test through the exported guard the executor applies
+    // before writeFileSync: an in-scope path through a symlink fails.
+    const { isPhysicallyContained } = await import("@spc/core");
+    const dir = mkdtempSync(path.join(tmpdir(), "spc-phys-"));
+    mkdirSync(path.join(dir, "allowed"), { recursive: true });
+    mkdirSync(path.join(dir, "elsewhere"), { recursive: true });
+    symlinkSync(path.join(dir, "elsewhere"), path.join(dir, "allowed", "link"));
+    expect(isPhysicallyContained(dir, "allowed/link/escape.txt")).toBe(false);
+    expect(isPhysicallyContained(dir, "allowed/ok.txt")).toBe(true);
+    rmSync(dir, { recursive: true, force: true });
   });
 });

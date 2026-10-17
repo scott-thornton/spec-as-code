@@ -4,6 +4,8 @@
  * (within one segment) and `?` (single character within one segment).
  */
 
+import { lstatSync } from "node:fs";
+import path from "node:path";
 import { SpcError } from "./errors.js";
 
 export const GLOB_ERROR = "SPC_GLOB_ERROR";
@@ -35,6 +37,40 @@ export function isSafeRelativePath(p: string): boolean {
   if (norm.startsWith("/") || /^[a-zA-Z]:/.test(norm)) return false;
   const segments = norm.split("/");
   return segments.every((s) => s.length > 0 && s !== "." && s !== "..");
+}
+
+/**
+ * PHYSICAL containment: no component of the path (directories or the
+ * final existing entry) may be a symlink. Lexical safety alone lets an
+ * in-repo symlink redirect an "in-scope" write outside the worktree,
+ * where the git delta cannot see it (external review #4).
+ */
+export function isPhysicallyContained(root: string, relPath: string): boolean {
+  if (!isSafeRelativePath(relPath)) return false;
+  const parts = relPath.split("/");
+  let current = root;
+  for (let i = 0; i < parts.length; i++) {
+    current = path.join(current, parts[i]!);
+    let st: { isSymbolicLink(): boolean };
+    try {
+      st = lstatSync(current);
+    } catch {
+      // Missing entry: the last component is about to be created; any
+      // missing DIRECTORY component is created by us and cannot be a
+      // symlink. An earlier component existing as a symlink is caught
+      // in a previous iteration, so absence here is safe.
+      if (i < parts.length - 1) {
+        // A missing intermediate directory: mkdirSync will create it -
+        // but a symlink deeper in a LATER component is checked when
+        // reached... components after a missing one cannot exist, so
+        // remaining components are all new. Safe.
+        return true;
+      }
+      return true;
+    }
+    if (st.isSymbolicLink()) return false;
+  }
+  return true;
 }
 
 export function globToRegExp(pattern: string): RegExp {

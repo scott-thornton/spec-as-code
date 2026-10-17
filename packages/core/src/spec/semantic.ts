@@ -1,6 +1,7 @@
 import { HIGH_ASSURANCE_CATEGORIES, type Constraint, type Priority, type Requirement, type Spec } from "@spc/schema";
 import { error, warning, type Diagnostic, type SourceLocation } from "../diagnostics.js";
 import { findCycle } from "../graph.js";
+import { isSafeRelativePath } from "../glob.js";
 
 export type Locs = ReadonlyMap<string, SourceLocation>;
 
@@ -137,6 +138,27 @@ export function validateSpecLocal(spec: Spec, locs: Locs): Diagnostic[] {
         ),
       );
     }
+  }
+
+  // File criterion paths must be safe relative paths: a criterion that
+  // escapes the repository is a defect at authoring time, not at
+  // verification time (external review #4).
+  for (const p of props) {
+    const list =
+      p.base === "requirements"
+        ? spec.requirements[p.index]?.acceptance
+        : spec.constraints?.[p.index]?.acceptance;
+    (list ?? []).forEach((c, ci) => {
+      if (c.type === "file" && !isSafeRelativePath(c.path)) {
+        diags.push(
+          error(
+            "SPC1011",
+            `file criterion ${c.id} on ${p.kind} ${p.id} has an unsafe path "${c.path}"; criterion paths must stay inside the repository`,
+            locs.get(`${p.base}.${p.index}.acceptance.${ci}.path`),
+          ),
+        );
+      }
+    });
   }
 
   // SPC1010 - `discriminating` (red-phase) is only meaningful on criteria

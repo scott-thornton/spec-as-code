@@ -1,6 +1,6 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { isSafeRelativePath, SpcError } from "@spc/core";
+import { isPhysicallyContained, isSafeRelativePath, SpcError } from "@spc/core";
 import type { AcceptanceCriterion, ObservationDraft, RepositorySnapshot, SpecIR, Task } from "@spc/schema";
 import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { makeUsageRecord } from "@spc/llm";
@@ -150,7 +150,10 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
     };
   }
   for (const change of result.changes) {
-    if (!isSafeRelativePath(change.path)) {
+    if (!isSafeRelativePath(change.path) || !isPhysicallyContained(worktreeRoot, change.path)) {
+      // Lexical safety plus PHYSICAL containment: a path whose components
+      // traverse a symlink escapes the worktree where the git delta
+      // cannot see it, so both checks reject.
       return {
         taskId: task.id,
         status: "failed",
