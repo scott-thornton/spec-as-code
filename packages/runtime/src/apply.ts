@@ -702,6 +702,37 @@ async function finishRun(
   const stat = diffStat(worktree, baseRev, resultRevision);
   const changedFileCount = countChanged(worktree, baseRev, resultRevision);
 
+  // Soft budgets: reported, never enforced. "This run became
+  // unexpectedly large" is state for the human, not a failure.
+  const budgets = ctx.config.execution.budgets;
+  const signals: { kind: string; budget: number; actual: number; unit: string }[] = [];
+  if (budgets.wallTimeMs !== undefined) {
+    const wallMs = Date.parse(ctx.now()) - Date.parse(ctx.meta.createdAt);
+    if (wallMs > budgets.wallTimeMs) signals.push({ kind: "wallTime", budget: budgets.wallTimeMs, actual: wallMs, unit: "ms" });
+  }
+  if (budgets.diffLines !== undefined) {
+    const lines = countDiffLines(worktree, baseRev, resultRevision);
+    if (lines > budgets.diffLines) signals.push({ kind: "diffLines", budget: budgets.diffLines, actual: lines, unit: "lines" });
+  }
+  if (budgets.changedFiles !== undefined && changedFileCount > budgets.changedFiles) {
+    signals.push({ kind: "changedFiles", budget: budgets.changedFiles, actual: changedFileCount, unit: "files" });
+  }
+  for (const signal of signals) {
+    ctx.events.append("BUDGET_SIGNAL", { ...signal });
+    const f = ctx.followups.create(
+      {
+        type: "post_run",
+        blocking: false,
+        title: `Budget exceeded: ${signal.kind}`,
+        description: `Run exceeded its ${signal.kind} budget (${signal.actual} ${signal.unit} vs budget ${signal.budget} ${signal.unit}). Reported, not enforced - judge whether the size was justified (see plan drift in the summary).`,
+      },
+      ctx.meta.runId,
+      ctx.now,
+    );
+    ctx.events.append("FOLLOWUP_CREATED", { followupId: f.id, blocking: false, type: f.type });
+    ctx.log(`budget signal: ${signal.kind} ${signal.actual} ${signal.unit} > ${signal.budget}`);
+  }
+
   // Final verification sweep over every property, in the worktree.
   const sweep = await verifyProperties({
     properties: ctx.specIr.properties,
@@ -1064,6 +1095,17 @@ export async function executeTaskInRun(
     }
   }
   return outcome;
+}
+
+function countDiffLines(worktree: string, from: string, to: string): number {
+  const r = git(worktree, ["diff", "--numstat", `${from}..${to}`]);
+  let lines = 0;
+  for (const line of r.stdout.split("\n")) {
+    const [add, del] = line.split("\t");
+    if (add === undefined) continue;
+    lines += (add === "-" ? 0 : Number(add) || 0) + (del === "-" ? 0 : Number(del) || 0);
+  }
+  return lines;
 }
 
 function countChanged(worktree: string, from: string, to: string): number {

@@ -8,6 +8,11 @@ uses semantic versioning.
 
 ### Added
 
+- Budgets as signals (execution.budgets: wallTimeMs, diffLines,
+  changedFiles): evaluated at run completion and reported via
+  BUDGET_SIGNAL events and non-blocking follow-ups. Deliberately never
+  enforced - unexpected size is state for the human, not a failure.
+
 - The audit spine. Events are hash-chained: each event carries the
   digest of its predecessor, so editing, inserting, deleting or
   reordering any event breaks the next pointer on load (legacy logs

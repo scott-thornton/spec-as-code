@@ -203,6 +203,14 @@ requirements:
         type: command
         command: pnpm --filter @spc/runtime exec vitest run src/audit-spine.test.ts
 
+  - id: SELF-024
+    statement: Soft budgets (execution.budgets) are reported at run completion as BUDGET_SIGNAL events and non-blocking follow-ups, and never change the run outcome.
+    priority: must
+    acceptance:
+      - id: SELF-024-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/budgets.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services

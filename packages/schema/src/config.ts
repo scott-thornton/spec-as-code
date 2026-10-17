@@ -59,6 +59,19 @@ export const executionConfigSchema = z.strictObject({
   harnessResponseTimeoutMs: z.number().int().positive().default(900_000),
   /** Extra high-risk write patterns for tiered amendment approval. */
   highRiskWritePatterns: z.array(z.string().min(1)).default([]),
+  /**
+   * Soft budgets, evaluated at run completion and reported - never
+   * enforced. Exceeding one emits a BUDGET_SIGNAL event and a
+   * non-blocking follow-up: "this run became unexpectedly large" is
+   * state for the human, not a reason to fail. All fields optional.
+   */
+  budgets: z
+    .strictObject({
+      wallTimeMs: z.number().int().positive().optional(),
+      diffLines: z.number().int().positive().optional(),
+      changedFiles: z.number().int().positive().optional(),
+    })
+    .prefault({}),
 });
 
 export const commandsConfigSchema = z.strictObject({

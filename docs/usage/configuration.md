@@ -89,6 +89,16 @@ execution:
   # (ADR-0013).
   proceedOnClarificationFollowups: false
 
+  # Soft budgets, evaluated at run completion and REPORTED - never
+  # enforced. Exceeding one emits a BUDGET_SIGNAL event and a
+  # non-blocking follow-up ("this run became unexpectedly large" is
+  # state for the human, not a failure). All fields optional; omit the
+  # block entirely for no budgets.
+  budgets:
+    wallTimeMs: 10800000   # 3h
+    diffLines: 1500        # additions + deletions, base..result
+    changedFiles: 25
+
   # §31 tiered amendment approval:
   #   auto   - validate every amendment and continue (previous behaviour)
   #   tiered - compute risk from the amendment's operations; high-risk
