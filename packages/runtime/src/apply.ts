@@ -1272,8 +1272,15 @@ async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
           attempt > 1 && prior?.failure ? { code: prior.failure.code, message: prior.failure.message } : undefined,
           wt.path,
         );
-        // Merge the task patch deterministically into the integration branch.
-        const sha = commitAll(wt.path, `spc: task ${task.id} (run ${ctx.meta.runId})`);
+        // Merge ONLY completed-task patches into the integration branch.
+        // Failed/blocked/needs-replan mutations are preserved nowhere by
+        // design: the per-task worktree is removed below, so a failed
+        // task's partial work never reaches the run branch - failure
+        // status keeps its isolation meaning.
+        const sha =
+          outcome.status === "completed"
+            ? commitAll(wt.path, `spc: task ${task.id} (run ${ctx.meta.runId})`)
+            : null;
         if (sha) {
           const merged = mergeTaskPatch(integration, sha);
           if (!merged.ok) {

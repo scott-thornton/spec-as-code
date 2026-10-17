@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { compileSpecSource } from "@spc/core";
 import { FakeProvider, parseFakeScript } from "@spc/llm-fake";
-import { commitAll, gitOk } from "@spc/repo";
+import { commitAll, git, gitOk } from "@spc/repo";
 import type { Plan } from "@spc/schema";
 import { applyPlan, mergeTaskPatch } from "./apply.js";
 import { spcPaths } from "./paths.js";
@@ -207,4 +207,52 @@ executor:
     gitOk(repo, ["checkout", "integration"]);
     expect(mergeTaskPatch(repo, shaC).ok).toBe(true);
   });
+});
+
+describe("parallel failure isolation", () => {
+  it("a failed task's mutations never reach the integration branch", async () => {
+    const repo = setupRepo("failed-merge", ["execution:", "  parallelism: 2"]);
+    // T001 completes and writes src/a.mjs; T002 reports FAILED but has
+    // already written src/b.mjs in its per-task worktree.
+    const provider = new FakeProvider(
+      parseFakeScript(`
+executor:
+  T001:
+    status: completed
+    summary: feature a
+    changes:
+      - op: create
+        path: src/a.mjs
+        content: |
+          export const a = "feature-a";
+  T002:
+    status: failed
+    summary: could not finish
+    changes:
+      - op: create
+        path: src/b.mjs
+        content: |
+          export const b = "should-never-merge";
+`),
+    );
+    const paths = spcPaths(repo);
+    mkdirSync(paths.plansDir, { recursive: true });
+    writeFileSync(paths.planFile("plan-parallel"), JSON.stringify(twoTaskPlan(), null, 2));
+
+    const report = await applyPlan({ repoRoot: repo }, { providerFactory: async () => provider, log: () => {} });
+    expect(report.status).toBe("failed");
+
+    // T001's patch merged; T002's mutations are gone from the run branch.
+    expect(gitOk(report.worktree!, ["show", "HEAD:src/a.mjs"])).toContain("feature-a");
+    expect(git(report.worktree!, ["cat-file", "-e", "HEAD:src/b.mjs"]).ok).toBe(false);
+    // T002's state records the failure, and no PATCH_MERGED exists for it.
+    const events = readFileSync(paths.eventsFile(report.runId), "utf8");
+    expect(events).toContain('"type":"TASK_FAILED"');
+    const merged = events
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l) as { type: string; payload?: { taskId?: string } })
+      .filter((e) => e.type === "PATCH_MERGED");
+    expect(merged.map((e) => e.payload?.taskId)).toEqual(["T001"]);
+  }, 120_000);
 });
