@@ -8,6 +8,18 @@ uses semantic versioning.
 
 ### Added
 
+- Boundary hardening pass (external review #1, #3-#6): task write
+  deltas now compare per-path CONTENT identity (git blob hashes, content
+  sha256 for untracked) instead of git status transitions - an
+  out-of-scope rewrite of an already-dirty file no longer vanishes from
+  the delta; command timeouts kill the entire process tree (POSIX
+  process groups, Windows taskkill /T) instead of leaving orphaned
+  grandchildren holding pipes; symlink path components are rejected on
+  mediated writes (physical containment) and file criterion paths are
+  validated at spec compile (new SPC1011) and at verification; parallel
+  execution merges ONLY completed-task patches; the model budget is
+  reserved atomically before dispatch. SELF-028.
+
 - `spc quick "<intent>" --verify "<command>"`: a compressed SPC
   transaction, never a weaker safety system. The intent becomes an
   ephemeral one-requirement spec committed with provenance trailers;

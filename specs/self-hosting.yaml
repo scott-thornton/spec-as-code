@@ -238,6 +238,23 @@ requirements:
         type: command
         command: pnpm --filter @spc/runtime exec vitest run src/quick.test.ts
 
+  - id: SELF-028
+    statement: Task write deltas compare per-path content identity (blob hashes), so an out-of-scope rewrite of an already-dirty file is caught; parallel runs merge only completed-task patches, the model budget is reserved atomically, command timeouts kill the process tree, and symlink components are rejected on mediated writes and criterion reads.
+    priority: must
+    acceptance:
+      - id: SELF-028-A
+        type: command
+        command: pnpm --filter @spc/repo exec vitest run src/content.test.ts
+      - id: SELF-028-B
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/parallel.test.ts
+      - id: SELF-028-C
+        type: command
+        command: pnpm --filter @spc/executor exec vitest run src/commands.test.ts src/enforce.test.ts
+      - id: SELF-028-D
+        type: command
+        command: pnpm --filter @spc/core exec vitest run src/symlink.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services

@@ -14,7 +14,7 @@ import type { FollowUp, Observation, Plan, RequirementState, RunState, RunStatus
 import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { enforceProtectedPaths, executeTask, enforceWriteScope, runScheduler, type ExecutionOutcome } from "@spc/executor";
 import { classifyAmendmentRisk, generateAmendment } from "@spc/planner";
-import { commitAll, compileSpecFile, currentBranch, currentRevision, diffStat, git, gitOk, statusDelta, statusPorcelain, type WorktreeStatus } from "@spc/repo";
+import { commitAll, compileSpecFile, contentDelta, contentSnapshot, currentBranch, currentRevision, diffStat, git, gitOk, statusDelta, statusPorcelain, type ContentSnapshot, type WorktreeStatus } from "@spc/repo";
 import { checkoutBranch, checkoutRunBranch, createWorktree, removeWorktree } from "@spc/repo";
 import { observeRepository } from "@spc/repo";
 import { renderRunSummary } from "@spc/renderer";
@@ -818,8 +818,13 @@ function revertPaths(worktreeRoot: string, paths: readonly string[]): void {
   }
 }
 
-function taskScopeDelta(before: WorktreeStatus, worktreeRoot: string) {
-  const delta = statusDelta(before, statusPorcelain(worktreeRoot));
+function taskScopeDelta(before: ContentSnapshot, worktreeRoot: string) {
+  // CONTENT identity, not status transitions (external review #1): a
+  // status-code delta is blind to files already dirty from an earlier
+  // task, so an out-of-scope rewrite of a dirty file vanished from the
+  // delta. Blob/content hashes catch every real change regardless of
+  // prior dirtiness.
+  const delta = contentDelta(before, contentSnapshot(worktreeRoot));
   const spcState = (p: string) =>
     p.startsWith(".spc/runs/") ||
     p.startsWith(".spc/plans/") ||
@@ -863,7 +868,7 @@ export async function executeTaskInRun(
   if (task.kind !== "verify") {
     ctx.modelCalls += 1;
   }
-  const before = statusPorcelain(worktreeRoot);
+  const before = contentSnapshot(worktreeRoot);
 
   if (task.kind === "verify") {
     const subset = ctx.specIr.properties.filter((p) => (task.verifies ?? []).includes(p.id));
