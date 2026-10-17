@@ -3,7 +3,7 @@ import path from "node:path";
 import { SpcError } from "@spc/core";
 import { compileSpecFile, diffStat } from "@spc/repo";
 import { renderPrDraft } from "@spc/renderer";
-import { cancelRun, loadRunView } from "@spc/runtime";
+import { cancelRun, exportRun, loadRunView } from "@spc/runtime";
 import { resolveRepoRoot } from "../context.js";
 
 /** `spc run show <runId>` - reconstruct what happened, without chat logs. */
@@ -74,5 +74,19 @@ export function runCancel(runId: string, cwd?: string): number {
   console.log(`Run ${runId} cancelled (was running; task states preserved).`);
   console.log(`Run directory: ${path.join(repoRoot, ".spc", "runs", runId)}`);
   void state;
+  return 0;
+}
+
+/** `spc run export <runId>`: self-contained evidence bundle. */
+export function runExport(runId: string, options: { out?: string; cwd?: string }): number {
+  const repoRoot = resolveRepoRoot(options.cwd);
+  const result = exportRun(repoRoot, runId, options.out);
+  for (const warning of result.warnings) {
+    console.log(`warning: ${warning}`);
+  }
+  console.log(`Exported run ${runId} to ${path.relative(process.cwd(), result.dir)}`);
+  console.log(`Manifest:   ${path.relative(process.cwd(), result.manifestPath)}`);
+  console.log("The bundle is self-contained (spec, plan, events, evidence, diff, hashes);");
+  console.log("verify integrity by checking component sha256 values against manifest.json.");
   return 0;
 }

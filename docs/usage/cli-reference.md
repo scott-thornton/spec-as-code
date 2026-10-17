@@ -299,3 +299,17 @@ pending request's embedded schema BEFORE submitting, printing the exact
 issues a submission would be requeued for. Advisory - the authoritative
 check remains the runtime's validation - but it turns a schema mistake
 from a submit-requeue-regenerate round trip into a local command.
+
+## spc run export
+
+```bash
+spc run export <runId> [--out <dir>] [--cwd <dir>]
+```
+
+Emits a self-contained evidence bundle for one run (default under
+`.spc/exports/<runId>`): the run directory verbatim (events, evidence,
+state, amendments), the spec file and its import closure, the plan, the
+full base..result diff, the config as of export, and a `manifest.json`
+hashing every component (sha256) so the bundle can be audited offline
+instead of trusted. If the spec changed since the run, the export says
+so loudly - the run's original spec text is not reconstructible.

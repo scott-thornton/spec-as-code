@@ -9,7 +9,7 @@ import { runVerify } from "./commands/verify.js";
 import { runReconcile } from "./commands/reconcile.js";
 import { runDiff, runStatus } from "./commands/status.js";
 import { runFollowupResolve, runFollowups } from "./commands/followups.js";
-import { runCancel, runPr, runShow } from "./commands/run.js";
+import { runCancel, runExport, runPr, runShow } from "./commands/run.js";
 import { runAgentList, runAgentRespond, runAgentShow, runAgentValidate } from "./commands/agent.js";
 import { runSkills, runUseSkill } from "./commands/skills.js";
 
@@ -234,6 +234,14 @@ run
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action((runId: string, opts: { cwd: string; out?: string }) => {
     process.exitCode = runPr(runId, opts);
+  });
+run
+  .command("export <runId>")
+  .description("emit a self-contained evidence bundle (spec, plan, events, diff, hashes)")
+  .option("--out <dir>", "bundle directory (default .spc/exports/<runId>)")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action((runId: string, opts: { cwd: string; out?: string }) => {
+    process.exitCode = runExport(runId, opts);
   });
 
 export function main(argv: string[]): void {
