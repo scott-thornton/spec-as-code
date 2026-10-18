@@ -1,0 +1,31 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: verify-all-specs
+  title: Bare spc verify handles multi-spec repositories
+goal: A repository holding several specs is the normal state (this one has two); bare verification must handle it instead of erroring.
+requirements:
+  - id: VAS-001
+    statement: spc verify with no explicit file verifies EVERY spec under specs/, reporting each, exiting worst-of (0 only when all pass).
+    priority: must
+    acceptance:
+      - id: VAS-001-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/verify-all.test.ts
+        discriminating: true
+      - id: VAS-001-B
+        type: file
+        path: packages/cli/src/context.ts
+        assert:
+          contains: "resolveAllSpecs"
+  - id: VAS-002
+    statement: An explicit spec file still verifies exactly that spec, with unchanged single-spec output.
+    priority: must
+    acceptance:
+      - id: VAS-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/verify-all.test.ts
+        discriminating: true
+outOfScope:
+  - changes to status, diff or reconcile resolution (separate cards if wanted)
+  - json format redesign beyond wrapping multi-spec output as an array
