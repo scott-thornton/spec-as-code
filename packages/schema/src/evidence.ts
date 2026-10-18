@@ -31,9 +31,23 @@ export const evidenceSchema = z.strictObject({
    * means evidence against the current/result tree.
    */
   phase: z.literal("red").optional(),
+  /**
+   * Chain pointer: the digest of the PREVIOUS evidence record (the
+   * digest of that record as stored, including its own chain field).
+   * Mirrors the event chain: swapping a mid-run record for a
+   * self-consistent forgery (new content, recomputed digest) breaks the
+   * next record's pointer - digest recomputation alone cannot catch a
+   * coherent forger between attestations. Absent on all records of
+   * legacy logs written before evidence chaining; partially-chained
+   * logs are treated as tampered.
+   */
+  chain: z.string().optional(),
   payload: z.unknown(),
   digest: z.string().min(1),
 });
+
+/** Genesis chain value for the first evidence record of a chained log. */
+export const EVIDENCE_CHAIN_GENESIS = `sha256:${"0".repeat(64)}`;
 
 export type EvidenceKind = z.infer<typeof evidenceKindSchema>;
 export type EvidenceOutcome = z.infer<typeof evidenceOutcomeSchema>;

@@ -3,6 +3,7 @@ import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { EvidenceStore, FollowupStore, ObservationStore } from "./stores.js";
+import { digestOf } from "@spc/core";
 import { EventStore } from "./events.js";
 import { applyEvent, initialState, projectState } from "./state.js";
 import type { Plan } from "@spc/schema";
@@ -193,5 +194,69 @@ describe("fail-closed audit loads", () => {
     const reloaded = new EventStore(file, "run-1");
     expect(() => reloaded.load()).not.toThrow();
     expect(reloaded.length).toBe(1);
+  });
+});
+
+describe("evidence chain", () => {
+  const file = path.join(dir, "evidence-chain.jsonl");
+
+  it("records chain genesis then prior digests; tampering a mid-record breaks the chain on load", () => {
+    const store = new EvidenceStore(file);
+    const e1 = store.add({ id: "EV-0001", ...evidenceBase("supports", "C-001") });
+    const e2 = store.add({ id: "EV-0002", ...evidenceBase("supports", "C-001") });
+    const e3 = store.add({ id: "EV-0003", ...evidenceBase("contradicts", "C-001") });
+    expect(e1.chain).toBe(`sha256:${"0".repeat(64)}`);
+    expect(e2.chain).toBe(e1.digest);
+    expect(e3.chain).toBe(e2.digest);
+
+    // The between-attestations attack: swap record 2 for a
+    // self-consistent forgery (new content, RECOMPUTED digest). The
+    // digest check alone passes; the chain catches it.
+    const raw = readFileSync(file, "utf8").split("\n");
+    const forged = JSON.parse(raw[1]!);
+    forged.payload.exitCode = 99;
+    const { digest: _d, ...rest } = forged;
+    
+    forged.digest = digestOf(rest);
+    raw[1] = JSON.stringify(forged);
+    writeFileSync(file, raw.join("\n"), "utf8");
+    expect(() => new EvidenceStore(file).load()).toThrow(/chain break/);
+  });
+
+  it("legacy logs stay legacy on append and load; mixing is rejected", () => {
+    const legacyFile = path.join(dir, "evidence-legacy.jsonl");
+    // Hand-written pre-chaining log: no chain fields.
+    const mk = (id: string) => {
+      const rec = {
+        id,
+        runId: "run-1",
+        criterionId: "C-001",
+        propertyRefs: ["AUTH-001"],
+        kind: "command" as const,
+        outcome: "supports" as const,
+        producer: { type: "runtime" as const },
+        timestamp: "2026-01-01T00:00:00.000Z",
+        repositoryRevision: "r1",
+        payload: {},
+      };
+      return JSON.stringify({ ...rec, digest: digestOf(rec) });
+    };
+    writeFileSync(legacyFile, `${mk("EV-0001")}\n${mk("EV-0002")}\n`, "utf8");
+    const legacy = new EvidenceStore(legacyFile);
+    legacy.load();
+    expect(legacy.chainStatus).toBe("legacy");
+    // Append stays legacy (resume across versions).
+    const appended = legacy.add({ id: "EV-0003", ...evidenceBase("supports", "C-001") });
+    expect(appended.chain).toBeUndefined();
+    expect(() => new EvidenceStore(legacyFile).load()).not.toThrow();
+
+    // Mixed: inject a chained record into a legacy log (digest
+    // recomputed so ONLY the chain rule catches it).
+    const mixedFile = path.join(dir, "evidence-mixed.jsonl");
+    const base = JSON.parse(mk("EV-0002")) as Record<string, unknown>;
+    const { digest: _md, ...mRest } = base;
+    const mixedRecord = { ...mRest, chain: `sha256:${"0".repeat(64)}` };
+    writeFileSync(mixedFile, `${mk("EV-0001")}\n${JSON.stringify({ ...mixedRecord, digest: digestOf(mixedRecord) })}\n`, "utf8");
+    expect(() => new EvidenceStore(mixedFile).load()).toThrow(/partially chained/);
   });
 });

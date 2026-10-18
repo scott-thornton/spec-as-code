@@ -8,6 +8,16 @@ uses semantic versioning.
 
 ### Added
 
+- Evidence records are hash-chained, mirroring the event chain: each
+  record carries the digest of its predecessor, so the between-
+  attestations attack - swapping a mid-run record for a self-consistent
+  forgery with a RECOMPUTED digest, which passes the digest check -
+  breaks the next record\u2019s chain pointer on load. Legacy logs stay
+  legacy on append (resume across versions never produces a mixed
+  log); partially-chained logs are rejected as tampering; the prefix
+  attestation\u2019s evidence head now pins a chain, not just a list.
+  SELF-034.
+
 - `spc rectify [runId] | --findings <file>`: scaffold a rectification
   spec from findings - a run\u2019s unsatisfied/indeterminate properties and
   open investigation follow-ups, or an external findings JSON file

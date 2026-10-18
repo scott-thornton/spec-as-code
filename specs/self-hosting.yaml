@@ -295,6 +295,17 @@ requirements:
         type: command
         command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/rectify.test.ts
 
+  - id: SELF-034
+    statement: Evidence records are hash-chained like events - a self-consistent mid-record forgery breaks the chain on load, legacy logs stay legacy on append, and mixed logs are rejected.
+    priority: must
+    acceptance:
+      - id: SELF-034-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/stores.test.ts
+      - id: SELF-034-B
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/audit-spine.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services
