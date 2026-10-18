@@ -38,6 +38,32 @@ export function compileSpecFile(file: string): SpecCompileResult {
 }
 
 /** Resolve which spec to use: explicit file, or the single spec in specs/. */
+/**
+ * Every spec under specs/ when no explicit file is given - multi-spec
+ * repositories are the normal state (this repo has several). An explicit
+ * file selects exactly one; zero specs is still an error.
+ */
+export function resolveAllSpecs(specsDir: string, explicitFile?: string): { file: string; ir: SpecIR }[] {
+  if (explicitFile) return [resolveSpec(specsDir, explicitFile)];
+  if (!existsSync(specsDir)) {
+    throw new SpcError("SPEC_FILE_NOT_FOUND", `no specs directory at ${specsDir}; run spc init or pass a spec file`);
+  }
+  const entries = readdirSync(specsDir)
+    .filter((f) => f.endsWith(".yaml") || f.endsWith(".yml"))
+    .sort();
+  if (entries.length === 0) {
+    throw new SpcError("SPEC_FILE_NOT_FOUND", `no spec files found in ${specsDir}`);
+  }
+  return entries.map((f) => {
+    const file = path.join(specsDir, f);
+    const result = compileSpecFile(file);
+    if (!result.ok || !result.ir) {
+      throw new SpcError("SPEC_INVALID", `${file}: ${result.diagnostics.map((d) => d.message).join("\n")}`);
+    }
+    return { file, ir: result.ir };
+  });
+}
+
 export function resolveSpec(specsDir: string, explicitFile?: string): { file: string; ir: SpecIR } {
   if (explicitFile) {
     const result = compileSpecFile(explicitFile);

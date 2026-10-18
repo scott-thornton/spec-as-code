@@ -118,7 +118,7 @@ program
 
 program
   .command("verify [specFile]")
-  .description("run acceptance criteria against the current working tree")
+  .description("run acceptance criteria against the current tree (every spec in specs/ when no file is given, exit worst-of)")
   .option("--cwd <dir>", "repository directory", process.cwd())
   .option("--format <format>", "text | github | json", "text")
   .action(async (specFile: string | undefined, opts: { cwd: string; format: string }) => {
