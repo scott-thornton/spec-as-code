@@ -263,6 +263,14 @@ requirements:
         type: command
         command: pnpm --filter @spc/runtime exec vitest run src/attest-verify.test.ts
 
+  - id: SELF-030
+    statement: Bare spc verify with no explicit file verifies every spec under specs/, reporting each and exiting worst-of; an explicit file still selects one.
+    priority: must
+    acceptance:
+      - id: SELF-030-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/verify-all.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services

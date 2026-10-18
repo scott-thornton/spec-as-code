@@ -8,6 +8,14 @@ uses semantic versioning.
 
 ### Added
 
+- Bare `spc verify` handles multi-spec repositories: with no explicit
+  file it verifies EVERY spec under specs/ (per-spec sections in text
+  output, grouped annotations in github format, json wrapped as an
+  array when multiple) and exits worst-of; an explicit file still
+  selects one, with unchanged single-spec output. Landed as the second
+  self-hosted transaction (pre-committed red suite, red->green flip
+  proven, run attested and replayable). SELF-030.
+
 - Prefix attestation for verify and cancelled runs: standalone verify
   runs - the evidence CI gates PRs on - and cancelled runs now write
   the same prefix commitment as apply runs (attestRecords, no git
