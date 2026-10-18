@@ -8,6 +8,13 @@ uses semantic versioning.
 
 ### Added
 
+- Bare `spc status` and `spc diff` handle multi-spec repositories
+  like `spc verify` does: every spec gets a section when no file is
+  given, json wraps as an array when multiple (single-spec output
+  byte-identical - found and fixed a double-encoding bug the e2e
+  suite caught where pre-serialized views were stringified twice),
+  explicit file selects one. SELF-032.
+
 - `spc verify --bundle <dir>`: verify an exported run bundle WITHOUT the
   repository or the original process. Checks manifest component hashes
   (flagging post-export additions), event chain, evidence digests,

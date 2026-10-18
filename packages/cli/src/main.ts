@@ -138,7 +138,7 @@ program
 
 program
   .command("status [specFile]")
-  .description("requirement-oriented status from the latest run")
+  .description("requirement-oriented status from the latest run (every spec in specs/ when no file is given)")
   .option("--cwd <dir>", "repository directory", process.cwd())
   .option("--format <format>", "text | json (machine-readable)", "text")
   .action((specFile: string | undefined, opts: { cwd: string; format: string }) => {
@@ -147,7 +147,7 @@ program
 
 program
   .command("diff [specFile]")
-  .description("desired vs observed property states")
+  .description("desired vs observed property states (every spec in specs/ when no file is given)")
   .option("--cwd <dir>", "repository directory", process.cwd())
   .option("--format <format>", "text | json (machine-readable)", "text")
   .action((specFile: string | undefined, opts: { cwd: string; format: string }) => {

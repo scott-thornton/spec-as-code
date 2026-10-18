@@ -279,6 +279,14 @@ requirements:
         type: command
         command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/bundle-verify.test.ts
 
+  - id: SELF-032
+    statement: Bare spc status and spc diff with no explicit file report every spec under specs/, json wrapping as an array when multiple; an explicit file selects one.
+    priority: must
+    acceptance:
+      - id: SELF-032-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/verify-all.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services

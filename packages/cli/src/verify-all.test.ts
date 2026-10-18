@@ -76,3 +76,37 @@ describe("bare spc verify with multiple specs", () => {
     expect(r.stdout).not.toContain("beta");
   });
 });
+
+describe("bare spc status and diff with multiple specs", () => {
+  it("status with no file reports every spec", () => {
+    const repo = setupRepo("statusall", ["alpha", "beta"]);
+    const r = spc(repo, ["status"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("alpha");
+    expect(r.stdout).toContain("beta");
+  });
+
+  it("diff with no file reports every spec; explicit file selects one", () => {
+    const repo = setupRepo("diffall", ["alpha", "beta"]);
+    const r = spc(repo, ["diff"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("alpha");
+    expect(r.stdout).toContain("beta");
+    const one = spc(repo, ["diff", "specs/alpha.yaml"]);
+    expect(one.status).toBe(0);
+    expect(one.stdout).not.toContain("beta");
+  });
+
+  it("json status with multiple specs wraps as an array; single spec stays bare", () => {
+    const repo = setupRepo("statusjson", ["alpha", "beta"]);
+    const r = spc(repo, ["status", "--format", "json"]);
+    expect(r.status).toBe(0);
+    const parsed = JSON.parse(r.stdout) as unknown[];
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed).toHaveLength(2);
+    const single = setupRepo("statusjson1", ["only"]);
+    const r1 = spc(single, ["status", "--format", "json"]);
+    const parsed1 = JSON.parse(r1.stdout) as { spec?: unknown };
+    expect(Array.isArray(parsed1)).toBe(false);
+  });
+});
