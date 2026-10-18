@@ -379,3 +379,23 @@ a loud failure naming the file and line. What this cannot do, ever:
 re-execute acceptance commands - a bundle proves integrity and
 derivation, not re-execution (see
 [Threat model](../threat-model.md)).
+
+## spc rectify
+
+```bash
+spc rectify <runId> [--cwd <dir>]
+spc rectify --findings <file.json> [--cwd <dir>]
+```
+
+Scaffolds a rectification spec from findings: either a run's
+unsatisfied/indeterminate properties plus open investigation
+follow-ups, or an external findings file (`[{id, statement, severity?,
+class?, propertyRef?}]` - pen-test reports, review rounds). One
+requirement per finding, findings cited in requirement metadata as
+facts; acceptance criteria are explicit TODOs for you - the scaffold
+deliberately fails SPC1004 until every criterion is authored, so
+`spc spec validate` doubles as the authoring checklist. The original
+spec is never edited: it keeps verifying as the regression gate while
+the rectification spec carries the new contract (see the `rectify`
+process skill for the full workflow, including compaction when
+rectification chains grow).

@@ -8,6 +8,17 @@ uses semantic versioning.
 
 ### Added
 
+- `spc rectify [runId] | --findings <file>`: scaffold a rectification
+  spec from findings - a run\u2019s unsatisfied/indeterminate properties and
+  open investigation follow-ups, or an external findings JSON file
+  (pen-test reports, review rounds). Findings are carried as facts with
+  provenance (finding ids, class, severity, related properties cited in
+  requirement metadata); acceptance criteria are explicit TODOs for the
+  human, and the scaffold DELIBERATELY fails SPC1004 until every one is
+  authored - the compiler\u2019s error list is the authoring checklist. The
+  original spec is never touched and keeps verifying as the regression
+  gate. SELF-033.
+
 - Bare `spc status` and `spc diff` handle multi-spec repositories
   like `spc verify` does: every spec gets a section when no file is
   given, json wraps as an array when multiple (single-spec output

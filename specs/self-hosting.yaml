@@ -287,6 +287,14 @@ requirements:
         type: command
         command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/verify-all.test.ts
 
+  - id: SELF-033
+    statement: spc rectify scaffolds a rectification spec from a run or an external findings file - findings carried as facts with provenance, criteria left as explicit TODOs, scaffold fails SPC1004 until authored, original spec untouched.
+    priority: must
+    acceptance:
+      - id: SELF-033-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/rectify.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services

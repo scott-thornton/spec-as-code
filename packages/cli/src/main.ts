@@ -14,6 +14,7 @@ import { runAgentList, runAgentRespond, runAgentShow, runAgentValidate } from ".
 import { runSkills, runUseSkill } from "./commands/skills.js";
 import { runPolicyExplain } from "./commands/policy.js";
 import { runQuickCommand } from "./commands/quick.js";
+import { runRectify } from "./commands/rectify.js";
 
 const program = new Command();
 
@@ -261,6 +262,15 @@ program
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action(async (intent: string[], opts: { verify: string; cwd: string }) => {
     process.exitCode = await runQuickCommand(intent, opts);
+  });
+
+program
+  .command("rectify [runId]")
+  .description("scaffold a rectification spec from findings (run's unsatisfied properties + investigations, or --findings file)")
+  .option("--findings <file>", "external findings JSON file ([{id, statement, ...}])")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action((runId: string | undefined, opts: { findings?: string; cwd: string }) => {
+    process.exitCode = runRectify({ runId, findingsFile: opts.findings, cwd: opts.cwd });
   });
 
 const policy = program.command("policy").description("command policy inspection");
