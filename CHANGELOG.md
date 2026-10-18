@@ -8,6 +8,14 @@ uses semantic versioning.
 
 ### Added
 
+- `spc verify --bundle <dir>`: verify an exported run bundle WITHOUT the
+  repository or the original process. Checks manifest component hashes
+  (flagging post-export additions), event chain, evidence digests,
+  state projection from the bundle\u2019s own event log, and the prefix
+  attestation - rendering tampering as loud bundle failures. The honest
+  limit, per the threat model: integrity and derivation only; a bundle
+  cannot re-execute commands. SELF-031.
+
 - Bare `spc verify` handles multi-spec repositories: with no explicit
   file it verifies EVERY spec under specs/ (per-spec sections in text
   output, grouped annotations in github format, json wrapped as an

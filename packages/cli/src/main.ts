@@ -121,9 +121,10 @@ program
   .description("run acceptance criteria against the current tree (every spec in specs/ when no file is given, exit worst-of)")
   .option("--cwd <dir>", "repository directory", process.cwd())
   .option("--format <format>", "text | github | json", "text")
-  .action(async (specFile: string | undefined, opts: { cwd: string; format: string }) => {
+  .option("--bundle <dir>", "verify an exported run bundle (integrity + derivation, no repo)")
+  .action(async (specFile: string | undefined, opts: { cwd: string; format: string; bundle?: string }) => {
     const vfmt = opts.format === "github" ? "github" : opts.format === "json" ? "json" : "text";
-    process.exitCode = await runVerify(specFile, opts.cwd, vfmt);
+    process.exitCode = await runVerify(specFile, opts.cwd, vfmt, opts.bundle);
   });
 
 program

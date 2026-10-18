@@ -271,6 +271,14 @@ requirements:
         type: command
         command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/verify-all.test.ts
 
+  - id: SELF-031
+    statement: spc verify --bundle verifies an exported run without the repository - manifest component hashes, event chain, evidence digests, state projection and prefix attestation - failing loudly on tampering.
+    priority: must
+    acceptance:
+      - id: SELF-031-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/bundle-verify.test.ts
+
 outOfScope:
   - publishing the packages
   - long-running services

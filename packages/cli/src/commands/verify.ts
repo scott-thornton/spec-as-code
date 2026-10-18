@@ -2,7 +2,7 @@ import path from "node:path";
 import { appendFileSync } from "node:fs";
 import { statusPorcelain } from "@spc/repo";
 import { renderGithubAnnotations, renderGithubSummary } from "@spc/renderer";
-import { createVerifyRun, inPlaceHandoffWarning } from "@spc/runtime";
+import { createVerifyRun, inPlaceHandoffWarning, verifyBundle } from "@spc/runtime";
 import { createProvider, loadRepoConfig, resolveAllSpecs, resolveRepoRoot } from "../context.js";
 
 /**
@@ -15,7 +15,41 @@ export async function runVerify(
   specFile: string | undefined,
   cwd?: string,
   format: "text" | "github" | "json" = "text",
+  bundleDir?: string,
 ): Promise<number> {
+  // Bundle mode: verify an exported run's integrity and derivation
+  // WITHOUT the repository. Cannot re-execute commands (threat model).
+  if (bundleDir) {
+    let report;
+    try {
+      report = verifyBundle(path.resolve(bundleDir));
+    } catch (e) {
+      // Strict loaders throw on tampered logs (chain breaks, digest
+      // mismatches): render as a bundle failure with the reason, not a
+      // crash - the bundle is untrusted input by definition.
+      const message = e instanceof Error ? e.message : String(e);
+      if (format === "json") {
+        console.log(JSON.stringify({ ok: false, error: message }, null, 2));
+      } else {
+        console.log(`BUNDLE FAILED: ${message}`);
+      }
+      return 1;
+    }
+    if (format === "json") {
+      console.log(JSON.stringify(report, null, 2));
+    } else {
+      console.log(`Bundle: ${report.bundle}`);
+      console.log(`Run ${report.runId}: ${report.ok ? "bundle OK" : "BUNDLE FAILED"}`);
+      console.log(`Manifest: ${report.manifest}${report.manifestProblems.length > 0 ? "" : " (every component hashes to its recorded sha256)"}`);
+      for (const p of report.manifestProblems) console.log(`  - ${p}`);
+      console.log(`Events: ${report.eventCount} (${report.chainStatus}), evidence: ${report.evidenceCount} (digests ${report.evidenceDigests})`);
+      console.log(`Projection: ${report.projectionMatches ? "state.json follows from the bundle's event log" : "DIVERGED"}`);
+      for (const d of report.projectionDiffs) console.log(`  - ${d}`);
+      console.log(`Attestation: ${report.attestation}${report.attestationDetail ? ` (${report.attestationDetail})` : ""}`);
+      if (report.chainStatus === "legacy") console.log("note: legacy (pre-chaining) log; integrity holds, chain verification does not apply");
+    }
+    return report.ok ? 0 : 1;
+  }
   const repoRoot = resolveRepoRoot(cwd);
   const config = loadRepoConfig(repoRoot);
   const provider = await createProvider(config, repoRoot);

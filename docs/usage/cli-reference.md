@@ -363,3 +363,19 @@ violation, task failure, block), the command exits 1 and says to author
 a full spec. Nothing is silently absorbed. And a no-op outcome - the
 repository already satisfies the intent - is a correct result, not a
 suspicious one.
+
+## spc verify --bundle
+
+```bash
+spc verify --bundle <dir> [--format text|json]
+```
+
+Verifies an exported run bundle (`spc run export`) without the
+repository: every manifest component hashed against its recorded
+sha256 (post-export additions are flagged), event chain verified,
+evidence digests recomputed, `state.json` replayed from the bundle's own
+event log, and the prefix attestation recomputed. Tampering anywhere is
+a loud failure naming the file and line. What this cannot do, ever:
+re-execute acceptance commands - a bundle proves integrity and
+derivation, not re-execution (see
+[Threat model](../threat-model.md)).
