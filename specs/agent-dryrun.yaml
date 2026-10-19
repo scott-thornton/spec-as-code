@@ -1,0 +1,95 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: agent-dryrun
+  title: Composition-time criteria dry-run for harness answers
+goal: >
+  Field agents keep shadow-building pre-submission checks - re-implementing
+  all fifteen assertions of a guard spec in python, hand-running vitest to
+  confirm red at base, bash -n and YAML parses on results - because
+  discovering a bad answer costs a task retry (maxTaskRetries 1). Three
+  occurrences across two runs. spc agent dry-run makes the preflight
+  first-class: stage the draft answer's changes in a temporary worktree,
+  run the task's deterministic criteria against the staged tree with the
+  ordinary verification machinery, report each criterion's outcome (and
+  failure shapes, including suite-did-not-run), then clean up. The real
+  tree is never touched. Report-only: advisory material for the
+  proposer, never a gate - the authoritative check remains the run.
+requirements:
+  - id: ADR-001
+    statement: >
+      `spc agent dry-run <requestId> --file <draft.json>` stages the
+      draft's change set (refusing with the applicator's code when it
+      would not stage), executes the task's deterministic criteria
+      (file and command, derived from the request payload's
+      relevantProperties against the repo's compiled spec) in a
+      temporary worktree, and prints each criterion id with its
+      outcome. Exit 0 whether criteria pass or fail - refusal to stage
+      is the only nonzero path besides errors.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: ADR-001-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/agent-dryrun.test.ts
+        discriminating: true
+  - id: ADR-002
+    statement: >
+      The dry run never mutates the working tree: all staging happens
+      in a temporary worktree removed afterwards, and the real tree's
+      bytes are identical before and after.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: ADR-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/agent-dryrun.test.ts
+        discriminating: true
+  - id: ADR-003
+    statement: >
+      Failure surfaces recorded by verification surface in the report:
+      a criterion contradicted by a suite that never collected tests
+      reports suite-did-not-run, so a broken oracle is visible at
+      composition time.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: ADR-003-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/agent-dryrun.test.ts
+        discriminating: true
+  - id: ADR-004
+    statement: >
+      Unknown request ids fail with a named error naming the id; the
+      skill documentation tells answering agents to dry-run drafts
+      before responding.
+    priority: must
+    scope:
+      include: [packages/cli/src/**, .agents/skills/**]
+    acceptance:
+      - id: ADR-004-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/agent-dryrun.test.ts
+        discriminating: true
+      - id: ADR-004-B
+        type: file
+        path: .agents/skills/answer-queue/SKILL.md
+        assert:
+          contains: "dry-run"
+  - id: ADR-005
+    statement: >
+      Regression guard: workspace builds, CLI and verifier suites green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: ADR-005-A
+        type: command
+        command: pnpm -r build > /dev/null && pnpm --filter @spc/cli test && pnpm --filter @spc/verifier test
+outOfScope:
+  - gating submission on dry-run results (report-only by design)
+  - agent/human criterion simulation (deterministic only)
+  - writing dry-run evidence anywhere (it is advisory, not a record)
