@@ -124,7 +124,8 @@ describe("stageChanges: anchored patch application", () => {
       message: expect.stringMatching(/src\/a\.ts/),
     });
     if (!staged.ok) {
-      expect(staged.message).toMatch(/\b2\b/);
+      const expected = base.split("user").length - 1;
+      expect(staged.message).toMatch(new RegExp(`\\b${expected}\\b`));
       expect(staged.message).toContain("user");
     }
   });
