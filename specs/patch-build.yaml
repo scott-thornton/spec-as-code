@@ -1,0 +1,116 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: patch-build
+  title: First-class patch composition (spc patch build)
+goal: >
+  The patch op is a concurrency-control protocol, but answering agents
+  still shadow-implement it by hand: transcribing digests, counting
+  anchor occurrences, sequencing chained edits with ad-hoc scripts -
+  and hand-construction already produced one wrong-anchor failure in a
+  real run. spc patch build makes composition first-class: the agent
+  supplies the semantic choice (path, anchor, replacement) and the tool
+  performs the protocol mechanics - digest computed from reality, anchor
+  uniqueness verified, chained bases via --after, optional --expect-digest
+  cross-check against the digest the agent was shown. The tool verifies
+  and never decides: refusals happen at composition time for free
+  instead of at apply time for a task retry.
+requirements:
+  - id: PB-001
+    statement: >
+      `spc patch build <path>` with anchor and replacement (strings or
+      files, exact bytes) emits a complete patch op whose baseDigest is
+      computed from the actual tree content and which applies cleanly
+      through the staged applicator.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: PB-001-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/patch-build.test.ts
+        discriminating: true
+      - id: PB-001-B
+        type: file
+        path: packages/cli/src/main.ts
+        assert:
+          contains: "patch"
+  - id: PB-002
+    statement: >
+      Composition-time refusals mirror the applicator's: a non-unique or
+      absent anchor, a missing base file, or an --expect-digest that
+      disagrees with the tree refuse with the stable code
+      (PATCH_ANCHOR_NOT_UNIQUE, PATCH_ANCHOR_ABSENT, PATCH_BASE_MISSING,
+      PATCH_BASE_MISMATCH) and nothing is emitted.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: PB-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/patch-build.test.ts
+        discriminating: true
+  - id: PB-003
+    statement: >
+      --after chains compositions: prior ops are overlaid in memory, the
+      new anchor is verified against the chained state, the emitted
+      baseDigest is the digest of that state, and a refusal inside the
+      prior ops propagates.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: PB-003-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/patch-build.test.ts
+        discriminating: true
+  - id: PB-004
+    statement: >
+      The executor contract prefers patches (not merely permits them) and
+      the answer-queue skill directs answering agents to compose patch
+      ops with spc patch build instead of hand-typing them.
+    priority: must
+    scope:
+      include: [packages/executor/src/**, .agents/skills/**]
+    acceptance:
+      - id: PB-004-A
+        type: file
+        path: packages/executor/src/prompts.ts
+        assert:
+          contains: "prefer patch ops"
+        discriminating: true
+      - id: PB-004-B
+        type: file
+        path: .agents/skills/answer-queue/SKILL.md
+        assert:
+          contains: "spc patch build"
+  - id: PB-005
+    statement: >
+      The agent-harnesses guide documents the change protocol vocabulary
+      (create, update, patch, delete, commands with touch-sets), the
+      refusal contract, and the patch build workflow.
+    priority: must
+    scope:
+      include: [docs/usage/**]
+    acceptance:
+      - id: PB-005-A
+        type: file
+        path: docs/usage/agent-harnesses.md
+        assert:
+          contains: "spc patch build"
+  - id: PB-006
+    statement: >
+      Regression guard: the whole workspace builds, and the CLI and
+      executor suites stay green (covers the readFiles digest
+      single-read cleanup in execute.ts).
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: PB-006-A
+        type: command
+        command: pnpm -r build > /dev/null && pnpm --filter @spc/cli test && pnpm --filter @spc/executor test
+outOfScope:
+  - any change to the applicator or refusal semantics in @spc/executor (patch.ts, touchset.ts untouched)
+  - automatic anchor selection or fuzzy suggestion (the tool verifies, never decides)
+  - answer-file staging or queue state (the command emits an op; merging stays with the agent)
