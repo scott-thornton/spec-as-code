@@ -1,0 +1,130 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: docs-coverage
+  title: Documentation catches up with the shipped surface
+goal: >
+  The CLI reference promises "every command, flag and exit code" and is
+  missing six; the agent-harnesses guide predates request decomposition
+  and the dry-run; the diagnostics reference knows none of the patch,
+  touch-set or run-verification codes. Docs debt is drift - the same
+  class of staleness the tool exists to catch - and it accrued inside
+  one day of shipping. This transaction brings the three pages back to
+  truth.
+requirements:
+  - id: DC-001
+    statement: >
+      docs/usage/cli-reference.md documents spc patch build, spc brief,
+      spc usage, spc agent dry-run, the agent show decomposition
+      (--part, --json), and verify --run, each with invocation and a
+      truthful description.
+    priority: must
+    scope:
+      include: [docs/usage/**]
+    acceptance:
+      - id: DC-001-A
+        type: file
+        path: docs/usage/cli-reference.md
+        assert:
+          contains: "spc patch build"
+        discriminating: true
+      - id: DC-001-B
+        type: file
+        path: docs/usage/cli-reference.md
+        assert:
+          contains: "spc brief"
+        discriminating: true
+      - id: DC-001-C
+        type: file
+        path: docs/usage/cli-reference.md
+        assert:
+          contains: "spc usage"
+        discriminating: true
+      - id: DC-001-D
+        type: file
+        path: docs/usage/cli-reference.md
+        assert:
+          contains: "spc agent dry-run"
+        discriminating: true
+      - id: DC-001-E
+        type: file
+        path: docs/usage/cli-reference.md
+        assert:
+          contains: "--part <part>"
+        discriminating: true
+      - id: DC-001-F
+        type: file
+        path: docs/usage/cli-reference.md
+        assert:
+          contains: "spc verify --run"
+        discriminating: true
+  - id: DC-002
+    statement: >
+      docs/usage/agent-harnesses.md shows the decomposed agent show
+      (--part/--json) and includes the dry-run in the answering
+      workflow.
+    priority: must
+    scope:
+      include: [docs/usage/**]
+    acceptance:
+      - id: DC-002-A
+        type: file
+        path: docs/usage/agent-harnesses.md
+        assert:
+          contains: "--part"
+        discriminating: true
+      - id: DC-002-B
+        type: file
+        path: docs/usage/agent-harnesses.md
+        assert:
+          contains: "dry-run"
+        discriminating: true
+  - id: DC-003
+    statement: >
+      docs/usage/diagnostics.md documents the refusal and run-verification
+      codes shipped today: PATCH_BASE_MISSING, PATCH_BASE_MISMATCH,
+      PATCH_ANCHOR_ABSENT, PATCH_ANCHOR_NOT_UNIQUE, TOUCH_SET_VIOLATION,
+      COMMAND_DENIED, COMMAND_FAILED, SPC_RUN_NOT_FOUND,
+      VERIFY_RUN_NO_RESULT, HARNESS_PROMPT_PAYLOAD.
+    priority: must
+    scope:
+      include: [docs/usage/**]
+    acceptance:
+      - id: DC-003-A
+        type: file
+        path: docs/usage/diagnostics.md
+        assert:
+          contains: "PATCH_ANCHOR_NOT_UNIQUE"
+        discriminating: true
+      - id: DC-003-B
+        type: file
+        path: docs/usage/diagnostics.md
+        assert:
+          contains: "TOUCH_SET_VIOLATION"
+        discriminating: true
+      - id: DC-003-C
+        type: file
+        path: docs/usage/diagnostics.md
+        assert:
+          contains: "VERIFY_RUN_NO_RESULT"
+        discriminating: true
+      - id: DC-003-D
+        type: file
+        path: docs/usage/diagnostics.md
+        assert:
+          contains: "SPC_RUN_NOT_FOUND"
+        discriminating: true
+  - id: DC-004
+    statement: >
+      Regression guard: the workspace builds (docs-only change; the
+      guard proves nothing was accidentally broken).
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: DC-004-A
+        type: command
+        command: pnpm -r build > /dev/null
+outOfScope:
+  - restructuring the docs site or its navigation
+  - configuration.md changes (configDigest is described where brief documents its warning)
