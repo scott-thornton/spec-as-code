@@ -98,8 +98,9 @@ export function runUsage(cwd: string | undefined, format: "text" | "json" = "tex
         }
       }
 
-      const ops: Record<string, number> = {};
-      const emittedBytes: Record<string, number> = {};
+      // Stable keys: absent op kinds report zero, never undefined.
+      const ops: Record<string, number> = { create: 0, update: 0, patch: 0, delete: 0, commands: 0 };
+      const emittedBytes: Record<string, number> = { create: 0, update: 0, patch: 0, delete: 0, commands: 0 };
       const bump = (k: string, bytes: number): void => {
         ops[k] = (ops[k] ?? 0) + 1;
         emittedBytes[k] = (emittedBytes[k] ?? 0) + bytes;
