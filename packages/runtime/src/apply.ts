@@ -796,10 +796,7 @@ async function finishRun(
  * count as a task write (write scope) or land in a task commit.
  */
 // revertPaths lives in @spc/executor (touchset.ts) - shared by the runtime
-// and executor enforcement paths.;
-    }
-  }
-}
+// and executor enforcement paths.
 
 function taskScopeDelta(before: ContentSnapshot, worktreeRoot: string) {
   // CONTENT identity, not status transitions (external review #1): a
@@ -843,7 +840,7 @@ export async function executeTaskInRun(
       taskId: task.id,
       status: "failed",
       summary: "model call budget exhausted",
-      result: { status: "failed", summary: "model call budget exhausted", changes: [], observations: [], evidenceCandidates: [], followups: [] },
+      result: { status: "failed", summary: "model call budget exhausted", changes: [], commands: [], observations: [], evidenceCandidates: [], followups: [] },
       appliedChanges: [],
       failure: { code: "MODEL_BUDGET_EXCEEDED", message: `maxModelCalls=${ctx.config.execution.maxModelCalls}` },
     };
@@ -892,7 +889,7 @@ export async function executeTaskInRun(
       taskId: task.id,
       status: "completed",
       summary: `verification: ${summary}`,
-      result: { status: "completed", summary: `verification: ${summary}`, changes: [], observations: [], evidenceCandidates: [], followups: [] },
+      result: { status: "completed", summary: `verification: ${summary}`, changes: [], commands: [], observations: [], evidenceCandidates: [], followups: [] },
       appliedChanges: [],
     };
   }
@@ -1423,7 +1420,7 @@ function failedOutcome(task: Task, code: string, message: string): ExecutionOutc
     taskId: task.id,
     status: "failed",
     summary: message,
-    result: { status: "failed", summary: message, changes: [], observations: [], evidenceCandidates: [], followups: [] },
+    result: { status: "failed", summary: message, changes: [], commands: [], observations: [], evidenceCandidates: [], followups: [] },
     appliedChanges: [],
     failure: { code, message },
   };

@@ -210,7 +210,10 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
 
   let executedCommands: { command: string; exitCode: number | null }[] | undefined;
   let summary = result.summary;
-  if (result.commands.length > 0) {
+  // Executor results are untrusted input; a schema-bypassing producer may
+  // omit defaulted fields, so treat a missing commands array as empty.
+  const proposedCommands = result.commands ?? [];
+  if (proposedCommands.length > 0) {
     if (!input.commands) {
       return {
         taskId: task.id,
@@ -221,7 +224,7 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
         failure: { code: "COMMAND_UNCONFIGURED", message: "result.commands is non-empty but ExecuteTaskInput.commands is absent; the runtime must always pass the configured command policy" },
       };
     }
-    const commandOutcome = await runDeclaredCommands(worktreeRoot, result.commands, input.commands);
+    const commandOutcome = await runDeclaredCommands(worktreeRoot, proposedCommands, input.commands);
     if (!commandOutcome.ok) {
       return {
         taskId: task.id,

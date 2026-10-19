@@ -229,6 +229,7 @@ function completed(changes: ProposedChange[]) {
     status: "completed" as const,
     summary: "patch applied",
     changes,
+    commands: [],
     observations: [],
     evidenceCandidates: [],
     followups: [],
