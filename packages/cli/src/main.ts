@@ -15,6 +15,7 @@ import { runSkills, runUseSkill } from "./commands/skills.js";
 import { runPolicyExplain } from "./commands/policy.js";
 import { runQuickCommand } from "./commands/quick.js";
 import { runRectify } from "./commands/rectify.js";
+import { runPatchBuild } from "./commands/patch.js";
 
 const program = new Command();
 
@@ -271,6 +272,21 @@ program
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action((runId: string | undefined, opts: { findings?: string; cwd: string }) => {
     process.exitCode = runRectify({ runId, findingsFile: opts.findings, cwd: opts.cwd });
+  });
+
+const patch = program.command("patch").description("anchored patch composition (verifies, never decides)");
+patch
+  .command("build <path>")
+  .description("emit a verified patch op for <path>: digest from the actual tree, anchor uniqueness checked")
+  .option("--anchor <text>", "anchor text (exact bytes)")
+  .option("--anchor-file <file>", "read anchor from file (exact bytes)")
+  .option("--replacement <text>", "replacement text (exact bytes)")
+  .option("--replacement-file <file>", "read replacement from file (exact bytes)")
+  .option("--after <ops.json>", "JSON array of prior change ops to overlay before anchoring")
+  .option("--expect-digest <sha256>", "refuse if the tree's digest differs from this (what the request showed you)")
+  .option("--root <dir>", "tree root (defaults to cwd)")
+  .action((path: string, opts) => {
+    process.exitCode = runPatchBuild(path, opts);
   });
 
 const policy = program.command("policy").description("command policy inspection");

@@ -80,6 +80,41 @@ answer attached, so the agent can retry within the timeout window. Valid
 answers are kept forever in `.spc/harness/answered/` as the record of who
 decided what.
 
+### The change protocol an executor answers with
+
+Executor answers carry `changes` and `commands`:
+
+- `{op: "create"|"update", path, content}` - full content for new files
+  and wholesale rewrites.
+- `{op: "patch", path, baseDigest, anchor, replacement}` - an anchored
+  edit: `baseDigest` is the sha256 of the file as the request's
+  repositoryExcerpts digested it, `anchor` is exact text occurring
+  exactly once, `replacement` is its exact substitute. Ops apply as one
+  all-or-nothing staged set, in array order.
+- `{op: "delete", path}` - content-free by construction.
+- `{command, touchSet}` command entries - run under the command policy;
+  the observed content delta must fall inside the declared touch-set,
+  and writing commands without a touch-set refuse fail-closed.
+
+Refusals are named and total: `PATCH_BASE_MISMATCH` (the file changed
+since it was read), `PATCH_ANCHOR_ABSENT`, `PATCH_ANCHOR_NOT_UNIQUE`,
+`PATCH_BASE_MISSING`, `TOUCH_SET_VIOLATION`, `COMMAND_DENIED`,
+`COMMAND_FAILED`. The applicator never repairs an anchor, never
+normalizes whitespace, never falls back to rewriting the file - a
+refusal means re-read reality and restate.
+
+Compose patch ops with the dedicated command rather than by hand:
+
+```bash
+spc patch build src/app.ts --anchor-file a.txt --replacement-file r.txt \
+  --expect-digest sha256:...        # from the request excerpt
+```
+
+It computes the digest from the tree, verifies anchor uniqueness, chains
+via `--after ops.json`, and emits the op JSON. The tool verifies and
+never decides; a refusal at composition time costs a rebuild, not a
+task retry.
+
 ### What this buys you
 
 Every spc guardrail applies to the harness agent's answers unchanged:

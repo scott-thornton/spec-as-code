@@ -44,6 +44,31 @@ evidenceCandidates are informational; verification happens elsewhere.
 Every file you changed must appear in `changes`; never report changes
 you did not make.
 
+## Composing patch answers
+
+Never hand-type a patch op. Compose it with the tool that performs the
+protocol mechanics:
+
+```bash
+spc patch build <path> --anchor-file a.txt --replacement-file r.txt
+```
+
+The command computes the baseDigest from the actual tree, verifies the
+anchor occurs exactly once, and emits the complete op JSON - merge that
+into your answer's `changes`. Extra flags that matter:
+
+- `--expect-digest <sha256>`: pass the digest from the request's
+  repositoryExcerpts entry; the command refuses if the tree moved since
+  the request was built (composition-time optimism check, free).
+- `--after ops.json`: when chaining multiple edits to one file, pass the
+  ops composed so far; the new anchor is verified against the overlay
+  and the digest chains.
+
+A refusal here costs a command error, not a task retry - fix the anchor
+and rebuild. Use file flags for exact bytes (trailing newlines included).
+On commands that write files, declare a `touchSet` - undeclared writes
+fail closed.
+
 ## Session hygiene
 
 The answering session is one long conversation with a frozen prefix -
