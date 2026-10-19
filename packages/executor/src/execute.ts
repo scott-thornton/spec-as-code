@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { isPhysicallyContained, isSafeRelativePath, SpcError } from "@spc/core";
-import type { AcceptanceCriterion, ObservationDraft, RepositorySnapshot, SpecIR, Task } from "@spc/schema";
+import type { AcceptanceCriterion, CommandsConfig, ObservationDraft, RepositorySnapshot, SpecIR, Task } from "@spc/schema";
 import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { makeUsageRecord } from "@spc/llm";
 import { readExcerpt, listMatchingFiles } from "@spc/repo";
@@ -9,6 +9,7 @@ import { enforceWriteScope, UNSAFE_PATH } from "./enforce.js";
 import { buildExecutorPrompt, EXECUTOR_SYSTEM, type ExecutorTaskContext } from "./prompts.js";
 import { executorResultSchema, type ExecutorResult } from "./result.js";
 import { fileDigest, stageChanges } from "./patch.js";
+import { runDeclaredCommands } from "./touchset.js";
 
 export const EXECUTION_ERROR = "SPC_EXECUTION_ERROR";
 
@@ -21,6 +22,7 @@ export interface ExecuteTaskInput {
   priorResults: { taskId: string; summary: string }[];
   observations: ObservationDraft[];
   failureContext?: { code: string; message: string };
+  commands?: { commandsConfig: CommandsConfig; timeoutMs: number; maxOutputBytes: number };
   openClarifications?: { title: string; description: string; recommendedDefault?: string }[];
 }
 
@@ -30,6 +32,7 @@ export interface ExecutionOutcome {
   summary: string;
   result: ExecutorResult;
   appliedChanges: { path: string; change: string }[];
+  executedCommands?: { command: string; exitCode: number | null }[];
   failure?: { code: string; message: string };
 }
 
@@ -205,12 +208,43 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
     appliedChanges.push({ path: p, change: "deleted" });
   }
 
+  let executedCommands: { command: string; exitCode: number | null }[] | undefined;
+  let summary = result.summary;
+  if (result.commands.length > 0) {
+    if (!input.commands) {
+      return {
+        taskId: task.id,
+        status: "failed",
+        summary: "commands proposed but no command policy configured for this run",
+        result,
+        appliedChanges,
+        failure: { code: "COMMAND_UNCONFIGURED", message: "result.commands is non-empty but ExecuteTaskInput.commands is absent; the runtime must always pass the configured command policy" },
+      };
+    }
+    const commandOutcome = await runDeclaredCommands(worktreeRoot, result.commands, input.commands);
+    if (!commandOutcome.ok) {
+      return {
+        taskId: task.id,
+        status: "failed",
+        summary: `command set refused: ${commandOutcome.code}`,
+        result,
+        appliedChanges,
+        failure: { code: commandOutcome.code, message: commandOutcome.message },
+      };
+    }
+    executedCommands = commandOutcome.results.map((r) => ({ command: r.command, exitCode: r.exitCode }));
+    if (commandOutcome.untouched.length > 0) {
+      summary = `${summary} (declared but unchanged: ${commandOutcome.untouched.join(", ")})`;
+    }
+  }
+
   return {
     taskId: task.id,
     status: result.status,
-    summary: result.summary,
+    summary,
     result,
     appliedChanges,
+    ...(executedCommands ? { executedCommands } : {}),
     failure: result.failure
       ? { code: result.failure.code ?? "TASK_FAILED", message: result.failure.message }
       : undefined,

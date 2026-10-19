@@ -40,6 +40,20 @@ export const executorResultSchema = z.strictObject({
   status: z.enum(["completed", "failed", "blocked", "needs_replan"]),
   summary: z.string().min(1),
   changes: z.array(proposedChangeSchema).default([]),
+  /**
+   * Declared commands: the model states what a command will touch before
+   * the runtime runs it; the observed content delta must fall inside the
+   * declaration (declared == observed) or the writes revert and the task
+   * fails. Commands that write anything must declare a touch-set.
+   */
+  commands: z
+    .array(
+      z.strictObject({
+        command: z.string().min(1),
+        touchSet: z.array(z.string().min(1)).optional(),
+      }),
+    )
+    .default([]),
   observations: z.array(observationDraftSchema).default([]),
   evidenceCandidates: z
     .array(

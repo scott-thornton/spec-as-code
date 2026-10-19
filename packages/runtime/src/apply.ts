@@ -1,8 +1,7 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
   compileSpecSource,
-  isSafeRelativePath,
   formatDiagnostics,
   hasErrors,
   patternsOverlap,
@@ -12,9 +11,9 @@ import {
 } from "@spc/core";
 import type { FollowUp, Observation, Plan, RequirementState, RunState, RunStatus, SpecIR, Task, TaskState } from "@spc/schema";
 import type { LLMProvider, UsageRecord } from "@spc/llm";
-import { enforceProtectedPaths, executeTask, enforceWriteScope, runScheduler, type ExecutionOutcome } from "@spc/executor";
+import { enforceProtectedPaths, executeTask, enforceWriteScope, revertPaths, runScheduler, type ExecutionOutcome } from "@spc/executor";
 import { classifyAmendmentRisk, generateAmendment } from "@spc/planner";
-import { commitAll, compileSpecFile, contentDelta, contentSnapshot, currentBranch, currentRevision, diffStat, git, gitOk, statusDelta, statusPorcelain, type ContentSnapshot, type WorktreeStatus } from "@spc/repo";
+import { commitAll, compileSpecFile, contentDelta, contentSnapshot, currentBranch, currentRevision, diffStat, git, statusDelta, statusPorcelain, type ContentSnapshot, type WorktreeStatus } from "@spc/repo";
 import { checkoutBranch, checkoutRunBranch, createWorktree, removeWorktree } from "@spc/repo";
 import { observeRepository } from "@spc/repo";
 import { renderRunSummary } from "@spc/renderer";
@@ -796,24 +795,8 @@ async function finishRun(
  * in-place runs the runtime itself writes it mid-task, and it must never
  * count as a task write (write scope) or land in a task commit.
  */
-/**
- * Revert the paths a task had no right to touch, so the violation STICKS:
- * without this, a retry inherits the already-written file, its delta comes
- * back empty, and the retry completes with the forbidden change still in
- * the tree. Tracked paths restore from the index; untracked files are
- * removed. Scoped to the violating paths only - never a hard reset, which
- * in in-place mode would destroy .spc state.
- */
-function revertPaths(worktreeRoot: string, paths: readonly string[]): void {
-  for (const p of paths) {
-    // Unsafe relative paths (../ and friends) escape the worktree; they
-    // are already flagged UNSAFE_PATH - never act on them with rm.
-    if (!isSafeRelativePath(p)) continue;
-    const tracked = git(worktreeRoot, ["ls-files", "--error-unmatch", p]).ok;
-    if (tracked) {
-      gitOk(worktreeRoot, ["checkout", "--", p]);
-    } else {
-      rmSync(path.join(worktreeRoot, p), { force: true });
+// revertPaths lives in @spc/executor (touchset.ts) - shared by the runtime
+// and executor enforcement paths.;
     }
   }
 }
@@ -956,6 +939,11 @@ export async function executeTaskInRun(
         observations: [...ctx.observations.all()],
         ...(failureContext ? { failureContext } : {}),
         ...(openClarifications ? { openClarifications } : {}),
+        commands: {
+          commandsConfig: ctx.config.commands,
+          timeoutMs: ctx.config.execution.commandTimeoutMs,
+          maxOutputBytes: ctx.config.execution.maxOutputBytes,
+        },
       },
       { provider: ctx.provider, onUsage: usageSink },
     );
