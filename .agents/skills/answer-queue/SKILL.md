@@ -36,7 +36,7 @@ Read the request system prompt first: it carries the executor
 contract - which op to prefer (patch for edits to existing files, full
 content only for creates and wholesale rewrites) and the touch-set
 rules for commands. The JSON Schema per-op descriptions carry the same
-guidance. Validate the draft against the response schema locally first - an
+guidance. Validate the draft against the response schema locally first (`spc agent validate <id> --file draft.json`), and for executor requests dry-run the substance too (`spc agent dry-run <id> --file draft.json`): it stages your changes in a throwaway worktree and runs the task's deterministic criteria - fix what it reports, including suite-did-not-run, before responding - an
 invalid answer costs a round trip through the requeue-with-feedback
 loop. A requeued request with feedback means your previous answer failed
 schema validation: read the errors, fix the shape, do not change the

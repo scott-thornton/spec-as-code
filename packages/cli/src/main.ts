@@ -10,7 +10,7 @@ import { runReconcile } from "./commands/reconcile.js";
 import { runDiff, runStatus } from "./commands/status.js";
 import { runFollowupResolve, runFollowups } from "./commands/followups.js";
 import { runCancel, runExport, runPr, runReplay, runShow } from "./commands/run.js";
-import { runAgentList, runAgentRespond, runAgentShow, runAgentValidate, type AgentShowPart } from "./commands/agent.js";
+import { runAgentList, runAgentRespond, runAgentShow, runAgentValidate, runAgentDryRun, type AgentShowPart } from "./commands/agent.js";
 import { runSkills, runUseSkill } from "./commands/skills.js";
 import { runPolicyExplain } from "./commands/policy.js";
 import { runQuickCommand } from "./commands/quick.js";
@@ -198,6 +198,14 @@ agent
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action((id: string, opts: { file: string; cwd: string }) => {
     process.exitCode = runAgentValidate({ id, file: opts.file, cwd: opts.cwd });
+  });
+agent
+  .command("dry-run <id>")
+  .description("stage a draft answer in a throwaway worktree and run the task's deterministic criteria (advisory, never gates)")
+  .requiredOption("--file <path>", "file containing the draft JSON value")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action(async (id: string, opts: { file: string; cwd: string }) => {
+    process.exitCode = await runAgentDryRun({ id, file: opts.file, cwd: opts.cwd });
   });
 
 const followup = program.command("followup").description("follow-up operations");
