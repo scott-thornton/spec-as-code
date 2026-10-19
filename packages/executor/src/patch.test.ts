@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { RepositorySnapshot, Task } from "@spc/schema";
+import type { RepositorySnapshot, SpecIR, Task } from "@spc/schema";
 import { compileSpecSource } from "@spc/core";
 import type { LLMProvider, StructuredRequest } from "@spc/llm";
 import { proposedChangeSchema, type ProposedChange } from "./result.js";
@@ -262,8 +262,8 @@ requirements:
         command: "true"
 `;
 
-let cachedIr: ReturnType<typeof fixtureSpecIr> | null = null;
-function fixtureSpecIr() {
+let cachedIr: SpecIR | null = null;
+function fixtureSpecIr(): SpecIR {
   cachedIr ??= compileSpecSource(MINIMAL_SPEC, "patch-fixture.yaml").ir!;
   return cachedIr;
 }
