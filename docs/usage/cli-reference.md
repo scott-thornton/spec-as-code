@@ -152,6 +152,13 @@ property plus a Markdown summary table appended to
 
 Exit `1` when any property is not satisfied or waived.
 
+`spc verify --run <runId>` verifies a run's acceptance criteria against
+that run's RESULT revision in a temporary worktree - useful after the
+checkout moved on or the run branch was restored. Records land in the
+repository as a verify run; the worktree is always cleaned up. Unknown
+run ids fail with `SPC_RUN_NOT_FOUND`; runs without a result revision
+fail with `VERIFY_RUN_NO_RESULT`.
+
 ## spc reconcile
 
 ```bash
@@ -254,9 +261,15 @@ ls .spc/runs
 
 ```bash
 spc agent list [--format text|json]
-spc agent show <id>
+spc agent show <id> [--part <part>] [--json]
 spc agent respond <id> (--file <path> | --stdin) [--by <who>]
 ```
+
+`agent show` prints headed sections (SYSTEM, PROMPT, SCHEMA) by default.
+Decompose instead of parsing: `--part system|prompt|schema|payload`
+prints exactly that piece (`payload` extracts the JSON object embedded
+in the prompt), `--part json` or `--json` prints the whole request as
+one machine-readable object.
 
 The harness-provider half of agent-harness integration: lists pending model
 requests awaiting an external answer, prints one in full (prompt plus the
@@ -299,6 +312,21 @@ pending request's embedded schema BEFORE submitting, printing the exact
 issues a submission would be requeued for. Advisory - the authoritative
 check remains the runtime's validation - but it turns a schema mistake
 from a submit-requeue-regenerate round trip into a local command.
+
+## spc agent dry-run
+
+```bash
+spc agent dry-run <id> --file <answer.json> [--cwd <dir>]
+```
+
+Preflight for the substance of an executor answer: stages the draft's
+change set (refusing with the applicator's code when it would not
+stage), materializes it in a throwaway worktree, runs the task's
+deterministic criteria with the ordinary verification machinery, and
+prints each criterion's outcome - including `suite-did-not-run` when a
+test would fail to collect. Advisory only: never gates, never writes
+the working tree; a mistake costs thirty seconds here instead of a task
+retry in the run.
 
 ## spc run export
 
@@ -399,3 +427,43 @@ spec is never edited: it keeps verifying as the regression gate while
 the rectification spec carries the new contract (see the `rectify`
 process skill for the full workflow, including compaction when
 rectification chains grow).
+
+## spc patch build
+
+```bash
+spc patch build <path> (--anchor <text> | --anchor-file <f>) (--replacement <text> | --replacement-file <f>) [--after <ops.json>] [--expect-digest <sha256>] [--root <dir>]
+```
+
+Composes an anchored patch op with the protocol mechanics done by the
+tool: the base digest is computed from the actual tree (or the overlay
+of `--after` ops, for chaining multiple edits to one file), anchor
+uniqueness is verified, and `--expect-digest` refuses when the tree
+moved since the request you are answering was built. Prints the
+complete op JSON to merge into an answer. Refusals use the applicator's
+codes and cost a rebuild, not a task retry. The tool verifies and never
+decides: it never selects anchors or invents replacements.
+
+## spc brief
+
+```bash
+spc brief [--format text|json] [--cwd <dir>]
+```
+
+Session orientation in one read-only command: every spec with its most
+recent run and open blocking follow-ups, the pending harness queue, the
+config posture, unmerged run branches, and stray worktrees. Warns when
+a spec's last run executed under a different config (its authored
+assumptions may be stale) by comparing the `configDigest` runs record.
+Never runs criteria and never creates records.
+
+## spc usage
+
+```bash
+spc usage [--format text|json] [--cwd <dir>]
+```
+
+Corpus economics from recorded state: per-run model calls by role,
+change-op distribution with exact emitted bytes, patch usage rate
+(patch ops over patch plus update), refusal counts (applicator and
+touch-set failure codes) and retries. Bytes are byte counts from
+answered records - never presented as token estimates. Read-only.

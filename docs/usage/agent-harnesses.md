@@ -69,7 +69,8 @@ The harness side uses three commands:
 
 ```bash
 spc agent list                 # pending requests: id, role, schema
-spc agent show <id>            # the full request: system, prompt, jsonSchema
+spc agent show <id>            # headed sections: system, prompt, schema
+spc agent show <id> --part payload   # one piece, no parsing (--part system|prompt|schema|payload|json)
 spc agent respond <id> --file answer.json
 ```
 
@@ -79,6 +80,14 @@ requeued into `spc agent list` with the validation errors and the prior
 answer attached, so the agent can retry within the timeout window. Valid
 answers are kept forever in `.spc/harness/answered/` as the record of who
 decided what.
+
+Compose, then check, then submit: `spc patch build` emits verified
+patch ops (never hand-type one), `spc agent validate` checks the
+draft's shape, and `spc agent dry-run` stages the draft in a throwaway
+worktree and runs the task's deterministic criteria - reporting each
+outcome, including `suite-did-not-run` for a suite that would fail to
+collect. All three are advisory; the run's own verification stays
+authoritative.
 
 ### The change protocol an executor answers with
 

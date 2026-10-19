@@ -213,6 +213,16 @@ Not errors, but you will see them in logs and summaries:
 | `EXECUTION_CONFLICT` | A task patch conflicted during deterministic merge in a parallel run; the integration branch was restored untouched and the task failed. Never silently resolved. |
 | `MODEL_BUDGET_EXCEEDED` | `execution.maxModelCalls` reached; the task failed rather than looping. |
 | `PLAN_STALE` | Plan digest no longer matches the spec (surfaces via SPC2009 at validation). |
+| `PATCH_BASE_MISSING` | A patch op targeted a file that does not exist; refused before anything was written. |
+| `PATCH_BASE_MISMATCH` | The file's content digests differently than the patch's `baseDigest` - reality moved since it was read; refused, never repaired. |
+| `PATCH_ANCHOR_ABSENT` | The anchor text does not occur in the base content (exact bytes, no normalization); refused. |
+| `PATCH_ANCHOR_NOT_UNIQUE` | The anchor occurs more than once; the applicator refuses rather than pick, and suggests a longer unique span. |
+| `TOUCH_SET_VIOLATION` | A declared command wrote outside its `touchSet` (or wrote anything with no touch-set declared); writes reverted, task failed. |
+| `COMMAND_DENIED` | A command in a policy-denied category was never executed; the reason names the category and policy. |
+| `COMMAND_FAILED` | A declared command exited nonzero or timed out; the task failed with the exit code. |
+| `SPC_RUN_NOT_FOUND` | `spc verify --run` was given an id with no run directory. |
+| `VERIFY_RUN_NO_RESULT` | `spc verify --run` found the run but it has no result revision to verify. |
+| `HARNESS_PROMPT_PAYLOAD` | A prompt carried no parseable JSON object (`agent show --part payload` / `agent dry-run`). |
 
 ## Evidence outcomes
 
