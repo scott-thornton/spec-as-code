@@ -1,0 +1,105 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: request-hygiene
+  title: Harness request hygiene and decomposition
+goal: >
+  From the first field-report census: the planner prompt was a 74KB
+  firehose (15% signal) because the observer walks build caches, the
+  relevance matcher selects by substring against filenames, readExcerpt
+  passes binary NUL soup through as text, and the respond instructions
+  are appended AFTER the payload - the one untruncatable thing in the
+  most truncatable position. And the answering agent had to write a
+  python parser because agent show dumps one undifferentiated 92KB
+  blob. Five fixes, one transaction: truncation-safe instruction
+  placement, a binary guard, cache-directory skips, ranked
+  source-first artifact matching, and first-class request decomposition
+  so no consumer ever hand-parses a request again.
+requirements:
+  - id: RH-001
+    statement: >
+      Harness requests place the respond instructions BEFORE the
+      model-facing prompt, so a truncating backend loses repository
+      noise before it loses how to answer.
+    priority: must
+    scope:
+      include: [packages/llm-harness/src/**]
+    acceptance:
+      - id: RH-001-A
+        type: command
+        command: pnpm --filter @spc/llm-harness exec vitest run src/request-layout.test.ts
+        discriminating: true
+  - id: RH-002
+    statement: >
+      readExcerpt refuses binary content (NUL bytes in the first block)
+      instead of returning decoded garbage into prompts.
+    priority: must
+    scope:
+      include: [packages/repo/src/**]
+    acceptance:
+      - id: RH-002-A
+        type: command
+        command: pnpm --filter @spc/repo exec vitest run src/observer-hygiene.test.ts
+        discriminating: true
+  - id: RH-003
+    statement: >
+      The repository walk skips mobile and build-tool cache directories
+      (.gradle, Pods, DerivedData, .dart_tool, .expo, .next, .nuxt,
+      .turbo) alongside the existing exclusions.
+    priority: must
+    scope:
+      include: [packages/repo/src/**]
+    acceptance:
+      - id: RH-003-A
+        type: command
+        command: pnpm --filter @spc/repo exec vitest run src/observer-hygiene.test.ts
+        discriminating: true
+  - id: RH-004
+    statement: >
+      Relevant-artifact matching is source-first: only source-ish
+      extensions are eligible, shallow paths rank above deep ones, and
+      cache or binary artifacts are never selected even when a domain
+      keyword appears in their filename.
+    priority: must
+    scope:
+      include: [packages/repo/src/**]
+    acceptance:
+      - id: RH-004-A
+        type: command
+        command: pnpm --filter @spc/repo exec vitest run src/observer-hygiene.test.ts
+        discriminating: true
+  - id: RH-005
+    statement: >
+      spc agent show decomposes the request: --part system|prompt|
+      schema|payload prints exactly that piece (payload extracts the
+      prompt's embedded JSON object), --json prints the whole request
+      as one machine-readable object, and the default output is headed
+      sections instead of a single raw blob.
+    priority: must
+    scope:
+      include: [packages/cli/src/**, .agents/skills/**]
+    acceptance:
+      - id: RH-005-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/agent-show.test.ts
+        discriminating: true
+      - id: RH-005-B
+        type: file
+        path: .agents/skills/spc/SKILL.md
+        assert:
+          contains: "--part"
+  - id: RH-006
+    statement: >
+      Regression guard: the workspace builds and the repo, harness and
+      CLI suites stay green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: RH-006-A
+        type: command
+        command: pnpm -r build > /dev/null && pnpm --filter @spc/repo test && pnpm --filter @spc/llm-harness test && pnpm --filter @spc/cli test
+outOfScope:
+  - planner payload internal key reordering (instructions-first resolves the truncation hazard)
+  - semantic ranking beyond extension + depth heuristics (no embeddings)
+  - spc agent respond changes
