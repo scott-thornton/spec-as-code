@@ -1,0 +1,81 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: schema-guidance
+  title: The change protocol schema carries its own guidance
+goal: >
+  The first live field run answered with a full-content update for an
+  8-line anchored edit - the answering agent read the request's JSON
+  Schema (the artifact every agent attends to) and found four bare op
+  variants with no descriptions, while the preference guidance sat in
+  the system field its skill never told it to read. The schema is the
+  most-read surface: put the contract on it. Every op arm describes
+  when it is the right rung, and the commands items carry the
+  touch-set rule. Guidance where attention lands, not where it is
+  cheap to put.
+requirements:
+  - id: SG-001
+    statement: >
+      In the JSON Schema shown to answering agents (zod toJSONSchema,
+      io output), every change-op variant carries a description: patch
+      names itself an anchored edit and says baseDigest comes from the
+      request's excerpt; update says wholesale rewrite and prefers the
+      patch op for edits; create and delete state their scope.
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: SG-001-A
+        type: command
+        command: pnpm --filter @spc/executor exec vitest run src/schema-guidance.test.ts
+        discriminating: true
+  - id: SG-002
+    statement: >
+      The commands array items in the same schema carry the touch-set
+      contract: declare touchSet for writing commands, undeclared
+      writes fail closed.
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: SG-002-A
+        type: command
+        command: pnpm --filter @spc/executor exec vitest run src/schema-guidance.test.ts
+        discriminating: true
+  - id: SG-003
+    statement: >
+      The spc and answer-queue skills tell the answering agent that the
+      request's system prompt carries the executor contract and must be
+      read - closing the gap where guidance lived in a field no
+      instruction pointed at.
+    priority: must
+    scope:
+      include: [.agents/skills/**]
+    acceptance:
+      - id: SG-003-A
+        type: file
+        path: .agents/skills/spc/SKILL.md
+        assert:
+          contains: "system prompt"
+        discriminating: true
+      - id: SG-003-B
+        type: file
+        path: .agents/skills/answer-queue/SKILL.md
+        assert:
+          contains: "system prompt"
+        discriminating: true
+  - id: SG-004
+    statement: >
+      Regression guard: the workspace builds and the executor suite
+      stays green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: SG-004-A
+        type: command
+        command: pnpm -r build > /dev/null && pnpm --filter @spc/executor test
+outOfScope:
+  - EXECUTOR_SYSTEM content changes (the system prompt already carries the contract)
+  - spc agent show output formatting (separate UX card if wanted)
+  - any enforcement or applicator changes
