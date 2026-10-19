@@ -84,7 +84,13 @@ export async function runVerify(
     const config = loadRepoConfig(repoRoot);
     const provider = await createProvider(config, repoRoot);
     const worktree = path.join(repoRoot, ".spc", "worktrees", `verify-${runId}`);
-    gitOk(repoRoot, ["worktree", "remove", "--force", worktree]);
+    // Defensive pre-clean of a stale verification worktree; nothing to
+    // remove on the first run, and that is not an error.
+    try {
+      gitOk(repoRoot, ["worktree", "remove", "--force", worktree]);
+    } catch {
+      // absent - fine
+    }
     gitOk(repoRoot, ["worktree", "add", "--detach", worktree, state.resultRevision]);
     try {
       console.log(`Verifying run ${runId} at revision ${state.resultRevision.slice(0, 12)} (temporary worktree)`);
