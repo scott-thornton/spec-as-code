@@ -210,6 +210,8 @@ export interface StandaloneVerifyOptions {
   config: Config;
   provider: LLMProvider | null;
   now?(): string;
+  /** Criteria execution root (temporary worktree for --run). */
+  executionRoot?: string;
 }
 
 export interface StandaloneVerifyReport {
@@ -251,6 +253,7 @@ export async function createVerifyRun(options: StandaloneVerifyOptions): Promise
   const followups = new FollowupStore(paths.followupsFile(runId));
   const sweep = await verifyStandalone({
     repoRoot: options.repoRoot,
+    ...(options.executionRoot ? { executionRoot: options.executionRoot } : {}),
     specIr: options.specIr,
     runId,
     config: options.config,

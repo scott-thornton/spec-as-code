@@ -1,6 +1,6 @@
 import path from "node:path";
-import { appendFileSync } from "node:fs";
-import { statusPorcelain } from "@spc/repo";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { gitOk, statusPorcelain } from "@spc/repo";
 import { renderGithubAnnotations, renderGithubSummary } from "@spc/renderer";
 import { createVerifyRun, inPlaceHandoffWarning, verifyBundle } from "@spc/runtime";
 import { createProvider, loadRepoConfig, resolveAllSpecs, resolveRepoRoot } from "../context.js";
@@ -16,6 +16,7 @@ export async function runVerify(
   cwd?: string,
   format: "text" | "github" | "json" = "text",
   bundleDir?: string,
+  runId?: string,
 ): Promise<number> {
   // Bundle mode: verify an exported run's integrity and derivation
   // WITHOUT the repository. Cannot re-execute commands (threat model).
@@ -49,6 +50,66 @@ export async function runVerify(
       if (report.chainStatus === "legacy") console.log("note: legacy (pre-chaining) log; integrity holds, chain verification does not apply");
     }
     return report.ok ? 0 : 1;
+  }
+  // Run mode: verify a run's acceptance criteria against its RESULT
+  // revision in a temporary worktree - the field agent's git-show
+  // archaeology, first-class. Records still land in the real repo.
+  if (runId) {
+    const repoRoot = resolveRepoRoot(cwd);
+    const runDir = path.join(repoRoot, ".spc", "runs", runId);
+    const metaFile = path.join(runDir, "metadata.json");
+    if (!existsSync(metaFile)) {
+      console.error(`error SPC_RUN_NOT_FOUND: no run ${runId} under ${path.join(repoRoot, ".spc", "runs")}`);
+      return 2;
+    }
+    const meta = JSON.parse(readFileSync(metaFile, "utf8")) as { specId: string; specDigest?: string };
+    const stateFile = path.join(runDir, "state.json");
+    const state = existsSync(stateFile)
+      ? (JSON.parse(readFileSync(stateFile, "utf8")) as { resultRevision?: string })
+      : {};
+    if (!state.resultRevision) {
+      console.error(`error VERIFY_RUN_NO_RESULT: run ${runId} has no result revision to verify`);
+      return 2;
+    }
+    const spec = resolveAllSpecs(path.join(repoRoot, "specs")).find(
+      (s) => s.ir.spec.metadata.id === meta.specId,
+    );
+    if (!spec) {
+      console.error(`error SPEC_NOT_FOUND: run ${runId} references spec ${meta.specId}, which is not under specs/`);
+      return 2;
+    }
+    if (format === "text" && meta.specDigest && meta.specDigest !== spec.ir.digest) {
+      console.log(`note: spec ${meta.specId} changed since the run; verifying current spec text against the run's revision`);
+    }
+    const config = loadRepoConfig(repoRoot);
+    const provider = await createProvider(config, repoRoot);
+    const worktree = path.join(repoRoot, ".spc", "worktrees", `verify-${runId}`);
+    gitOk(repoRoot, ["worktree", "remove", "--force", worktree]);
+    gitOk(repoRoot, ["worktree", "add", "--detach", worktree, state.resultRevision]);
+    try {
+      console.log(`Verifying run ${runId} at revision ${state.resultRevision.slice(0, 12)} (temporary worktree)`);
+      const report = await createVerifyRun({
+        repoRoot,
+        specIr: spec.ir,
+        config,
+        provider,
+        executionRoot: worktree,
+      });
+      if (format === "json") {
+        console.log(JSON.stringify({
+          runId,
+          revision: state.resultRevision,
+          properties: report.states.map((s) => ({ id: s.propertyId, status: s.status, ...(s.reason ? { reason: s.reason } : {}) })),
+        }, null, 2));
+      } else {
+        for (const s of report.states) {
+          console.log(`  ${s.status.padEnd(12)} ${s.propertyId}${s.reason ? ` - ${s.reason}` : ""}`);
+        }
+      }
+      return report.states.every((s) => s.status === "satisfied" || s.status === "waived") ? 0 : 1;
+    } finally {
+      gitOk(repoRoot, ["worktree", "remove", "--force", worktree]);
+    }
   }
   const repoRoot = resolveRepoRoot(cwd);
   const config = loadRepoConfig(repoRoot);

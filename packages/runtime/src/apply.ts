@@ -804,7 +804,7 @@ function taskScopeDelta(before: ContentSnapshot, worktreeRoot: string) {
   // task, so an out-of-scope rewrite of a dirty file vanished from the
   // delta. Blob/content hashes catch every real change regardless of
   // prior dirtiness.
-  const delta = contentDelta(before, contentSnapshot(worktreeRoot));
+  const delta = contentDelta(before, contentSnapshot(worktreeRoot), worktreeRoot);
   const spcState = (p: string) =>
     p.startsWith(".spc/runs/") ||
     p.startsWith(".spc/plans/") ||

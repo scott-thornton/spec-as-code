@@ -145,6 +145,10 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
 /** Standalone `spc verify`: a verify-only run against the current tree. */
 export interface StandaloneVerifyInput {
   repoRoot: string;
+  /** Where criteria execute. Defaults to repoRoot; revision verification
+   * passes a temporary worktree at the run's result revision while
+   * records still land under repoRoot. */
+  executionRoot?: string;
   specIr: SpecIR;
   runId: string;
   config: Config;
@@ -161,7 +165,7 @@ export async function verifyStandalone(input: StandaloneVerifyInput): Promise<Ve
   return verifyProperties({
     properties: input.specIr.properties,
     runId: input.runId,
-    cwd: input.repoRoot,
+    cwd: input.executionRoot ?? input.repoRoot,
     revision: input.revision,
     config: input.config,
     provider: input.provider,

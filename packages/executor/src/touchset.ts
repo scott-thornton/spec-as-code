@@ -61,7 +61,7 @@ export function revertPaths(worktreeRoot: string, paths: readonly string[]): voi
 }
 
 function changedPathsSince(before: ReturnType<typeof contentSnapshot>, worktreeRoot: string): string[] {
-  const delta = contentDelta(before, contentSnapshot(worktreeRoot));
+  const delta = contentDelta(before, contentSnapshot(worktreeRoot), worktreeRoot);
   for (const p of [...delta.keys()]) {
     if (SPC_STATE_PREFIXES.some((prefix) => p.startsWith(prefix))) delta.delete(p);
   }

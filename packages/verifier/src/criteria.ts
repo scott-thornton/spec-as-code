@@ -133,6 +133,19 @@ async function verifyCommand(
     : run.exitCode === expected
       ? "supports"
       : "contradicts";
+  // A contradicted run whose output shows the suite never collected
+  // tests is not an assertion red: without this mark, a broken oracle
+  // (bad import, syntax error) records identically to a genuine failing
+  // assertion and the red->green flip certifies nothing (field
+  // instance: EV-0001, "Tests: no tests" recorded as plain contradicts).
+  const output = `${run.stdout}\n${run.stderr}`;
+  const suiteNeverRan =
+    outcome === "contradicts" &&
+    (/tests?\s+no tests/i.test(output) ||
+      /cannot find module/i.test(output) ||
+      /failed suites/i.test(output) ||
+      /failed to load/i.test(output) ||
+      /must contain at least one test/i.test(output));
   const evidence = makeEvidence(
     {
       id: "pending",
@@ -154,6 +167,7 @@ async function verifyCommand(
         durationMs: run.durationMs,
         stdout: run.stdout,
         stderr: run.stderr,
+        ...(suiteNeverRan ? { failureShape: "suite-did-not-run" } : {}),
         ...(run.deniedReason ? { deniedReason: run.deniedReason } : {}),
       },
     },

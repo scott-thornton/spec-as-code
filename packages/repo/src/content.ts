@@ -82,15 +82,27 @@ export function contentSnapshot(cwd: string): ContentSnapshot {
 
 export type ContentChange = "created" | "modified" | "deleted";
 
-/** Paths whose content identity changed between two snapshots. */
-export function contentDelta(before: ContentSnapshot, after: ContentSnapshot): Map<string, ContentChange> {
+/**
+ * Paths whose content identity changed between two snapshots. With cwd,
+ * a path present only in the after-snapshot is classified by
+ * tracked-ness: snapshots are HEAD-diff based, so a task starting from
+ * a clean tree has an empty before-map and every first touch of an
+ * existing (tracked) file would otherwise mislabel as "created".
+ */
+export function contentDelta(
+  before: ContentSnapshot,
+  after: ContentSnapshot,
+  cwd?: string,
+): Map<string, ContentChange> {
   const out = new Map<string, ContentChange>();
   for (const [p, identity] of after.entries) {
     const prior = before.entries.get(p);
     if (prior === identity) continue;
     if (identity === DELETED) out.set(p, "deleted");
-    else if (prior === undefined) out.set(p, "created");
-    else out.set(p, "modified");
+    else if (prior === undefined) {
+      const tracked = cwd !== undefined && git(cwd, ["ls-files", "--error-unmatch", p]).ok;
+      out.set(p, tracked ? "modified" : "created");
+    } else out.set(p, "modified");
   }
   for (const [p, prior] of before.entries) {
     if (!after.entries.has(p)) {
