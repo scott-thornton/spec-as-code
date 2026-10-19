@@ -1,0 +1,84 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: corpus-usage
+  title: spc usage - corpus economics from recorded state
+goal: >
+  The measure half of release-measure-decide is ad-hoc scripts in /tmp:
+  the queries that justified patches, killed symbols, and will judge
+  adoption only run when someone writes them. spc usage makes the
+  corpus query a command over records that already exist - usage.jsonl
+  per run, harness answered values, state.json - reporting per-run and
+  corpus economics: model calls by role, op-type distribution with
+  emitted bytes, patch usage rate (patch ops over patch+update), and
+  refusal counts from task failure codes. Bytes are exact from answered
+  values; tokens are never claimed. Read-only.
+requirements:
+  - id: SU-001
+    statement: >
+      `spc usage` lists every apply run with model calls by role and
+      op-type distribution (create, update, patch, delete, commands)
+      over the executor answers attributed to it (harness answered
+      files matched by the run's executor task+attempt pairs from
+      state.json).
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: SU-001-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/usage.test.ts
+        discriminating: true
+  - id: SU-002
+    statement: >
+      Emitted bytes per op type are exact sums over answered change
+      values (content for create/update; anchor+replacement for patch);
+      patch usage rate is patch ops divided by patch plus update ops,
+      per run and corpus-wide.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: SU-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/usage.test.ts
+        discriminating: true
+  - id: SU-003
+    statement: >
+      Refusals count task failure codes carrying the applicator or
+      touch-set prefixes (PATCH_, TOUCH_SET_, COMMAND_) across the
+      run's task states; retries surface as attempt counts above one.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: SU-003-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/usage.test.ts
+        discriminating: true
+  - id: SU-004
+    statement: >
+      --format json emits per-run and corpus aggregates as one
+      machine-readable object; the command is read-only.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: SU-004-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/usage.test.ts
+        discriminating: true
+  - id: SU-005
+    statement: >
+      Regression guard: workspace builds; CLI suite green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: SU-005-A
+        type: command
+        command: pnpm -r build > /dev/null && pnpm --filter @spc/cli test
+outOfScope:
+  - token estimates presented as measurements (bytes only, labeled)
+  - cross-repo aggregation (single repository per invocation)
+  - network or cache economics (provider-side costs stay out of the record)
