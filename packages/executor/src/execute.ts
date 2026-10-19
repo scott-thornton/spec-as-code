@@ -20,7 +20,7 @@ export interface ExecuteTaskInput {
   attempt: number;
   priorResults: { taskId: string; summary: string }[];
   observations: ObservationDraft[];
-  failureContext?: { code: string; message: string; attempt: number };
+  failureContext?: { code: string; message: string };
   openClarifications?: { title: string; description: string; recommendedDefault?: string }[];
 }
 
