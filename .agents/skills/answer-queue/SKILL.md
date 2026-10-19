@@ -32,7 +32,11 @@ spc agent respond <requestId> --file <answer.json>
 
 ## Before you respond
 
-Validate the draft against the response schema locally first - an
+Read the request system prompt first: it carries the executor
+contract - which op to prefer (patch for edits to existing files, full
+content only for creates and wholesale rewrites) and the touch-set
+rules for commands. The JSON Schema per-op descriptions carry the same
+guidance. Validate the draft against the response schema locally first - an
 invalid answer costs a round trip through the requeue-with-feedback
 loop. A requeued request with feedback means your previous answer failed
 schema validation: read the errors, fix the shape, do not change the

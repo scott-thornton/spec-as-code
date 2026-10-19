@@ -54,8 +54,11 @@ spc agent respond <id> --file answer.json --by <agent-name>
 
 The answer file contains the JSON value itself, satisfying the request's
 `jsonSchema` exactly. Read `spc agent show` output carefully: the request
-embeds the task, allowed read/write paths, repository excerpts and the
-schema. Produce a minimal valid value, nothing extra. If your answer fails
+embeds the task, allowed read/write paths, repository excerpts, the
+schema, and the system prompt - which carries the executor contract
+(op preference, patch discipline, touch-set rules for commands) and
+must be read before choosing op shapes. Produce a minimal valid value,
+nothing extra. If your answer fails
 validation, the request reappears in `spc agent list` with the errors and
 your prior answer attached - fix it and respond again with the same id.
 
