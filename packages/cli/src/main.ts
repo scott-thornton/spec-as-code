@@ -17,6 +17,7 @@ import { runQuickCommand } from "./commands/quick.js";
 import { runRectify } from "./commands/rectify.js";
 import { runPatchBuild } from "./commands/patch.js";
 import { runBrief } from "./commands/brief.js";
+import { runUsage } from "./commands/usage.js";
 
 const program = new Command();
 
@@ -290,6 +291,15 @@ program
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action((runId: string | undefined, opts: { findings?: string; cwd: string }) => {
     process.exitCode = runRectify({ runId, findingsFile: opts.findings, cwd: opts.cwd });
+  });
+
+program
+  .command("usage")
+  .description("corpus economics from recorded state: model calls, op distribution, exact emitted bytes, patch usage, refusals (read-only)")
+  .option("--format <format>", "text | json", "text")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action((opts: { format: string; cwd: string }) => {
+    process.exitCode = runUsage(opts.cwd, opts.format === "json" ? "json" : "text");
   });
 
 program
