@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+import { git } from "@spc/repo";
 
 const CLI = new URL("../dist/main.js", import.meta.url).pathname;
 const root = mkdtempSync(path.join(tmpdir(), "spc-agentshow-"));
@@ -20,6 +21,9 @@ const REQUEST = {
 };
 
 mkdirSync(path.join(root, ".spc", "harness", "pending"), { recursive: true });
+git(root, ["init", "-q"]);
+git(root, ["config", "user.email", "test@example.com"]);
+git(root, ["config", "user.name", "test"]);
 writeFileSync(
   path.join(root, ".spc", "harness", "pending", `${REQUEST.id}.json`),
   JSON.stringify(REQUEST, null, 2),
