@@ -1,0 +1,99 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: anchored-patches
+  title: Anchored patch change operations
+goal: >
+  Update emission is the measured cost center of mediated changes: the field
+  corpus re-sent roughly 72K unchanged lines across 156 update ops. A patch
+  operation lets the model express an edit as base digest + unique anchor +
+  exact replacement; the runtime applies it deterministically or refuses it
+  by name. The runtime never repairs a failed anchor and never falls back to
+  rewriting the file: refusal, not guessing, is the contract.
+requirements:
+  - id: PATCH-001
+    statement: >
+      The executor change protocol accepts a patch operation (path,
+      baseDigest, anchor, replacement) alongside create/update/delete;
+      applying it replaces the anchor's single exact occurrence with the
+      replacement and leaves every other byte of the file untouched.
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: PATCH-001-A
+        type: command
+        command: pnpm --filter @spc/executor exec vitest run src/patch.test.ts
+        discriminating: true
+      - id: PATCH-001-B
+        type: file
+        path: packages/executor/src/patch.ts
+        assert:
+          contains: "PATCH_BASE_MISMATCH"
+  - id: PATCH-002
+    statement: >
+      Refusals are total and named: a missing base file, a stale base digest,
+      an absent anchor, or a non-unique anchor refuses the entire change set
+      before anything is written (all-or-nothing), with a stable failure code
+      and a message naming the path and the offending anchor or digest.
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: PATCH-002-A
+        type: command
+        command: pnpm --filter @spc/executor exec vitest run src/patch.test.ts
+        discriminating: true
+  - id: PATCH-003
+    statement: >
+      The applicator never repairs: anchors match exact bytes only - no
+      whitespace normalization, fuzzy matching, or best-effort fallback -
+      and a failed anchor never degrades into a full-file rewrite.
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: PATCH-003-A
+        type: command
+        command: pnpm --filter @spc/executor exec vitest run src/patch.test.ts
+        discriminating: true
+  - id: PATCH-004
+    statement: >
+      Hybrid validity: full-content update ops remain valid and mix with
+      patch ops in one change set, applied deterministically in array order.
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: PATCH-004-A
+        type: command
+        command: pnpm --filter @spc/executor exec vitest run src/patch.test.ts
+        discriminating: true
+  - id: PATCH-005
+    statement: >
+      Executor prompts carry, for every repository excerpt, the
+      runtime-computed sha256 digest of the file's full content, so patch
+      ops reference a digest of reality rather than a model-invented hash.
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: PATCH-005-A
+        type: command
+        command: pnpm --filter @spc/executor exec vitest run src/patch.test.ts
+        discriminating: true
+  - id: PATCH-006
+    statement: The existing executor suite stays green (regression guard).
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: PATCH-006-A
+        type: command
+        command: pnpm --filter @spc/executor test
+outOfScope:
+  - symbol-addressed operations (rename/delete by symbol - parked card, measured out for now)
+  - planner, verifier or scheduler behavior changes
+  - llm-harness schema-check changes beyond accepting the new union arm as converted
+  - configuration surface additions
+  - usage accounting changes beyond existing recording
