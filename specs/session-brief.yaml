@@ -1,0 +1,102 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: session-brief
+  title: spc brief - one-command session orientation
+goal: >
+  Every session - driving agent, answering agent, human - reconstructs
+  repository state by hand: git log archaeology, directory listings,
+  per-spec status calls, opening config.yaml. The field agent's first
+  substantive act was archaeology. spc brief renders the full picture
+  in one read-only command: every spec with its last run and open
+  blocking follow-ups, the pending harness queue, the config posture,
+  a warning when a spec's last run executed under a different config
+  (the stale-premise near-miss of 2026-10-19, caught then only by
+  diligence), and unmerged run branches. It renders recorded state; it
+  never runs criteria, never creates runs, never writes.
+requirements:
+  - id: BR-001
+    statement: >
+      `spc brief` lists every spec under specs/ with its most recent
+      run (id, status) and that run's open blocking follow-up ids;
+      specs without runs are marked as such.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: BR-001-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/brief.test.ts
+        discriminating: true
+  - id: BR-002
+    statement: >
+      The brief reports the pending harness request count and a config
+      posture summary (provider, inPlace mode, requireRedPhase,
+      protectedPaths patterns).
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: BR-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/brief.test.ts
+        discriminating: true
+  - id: BR-003
+    statement: >
+      When a spec's last run recorded a configDigest that differs from
+      the current .spc/config.yaml digest, the brief warns that the
+      spec's authored assumptions may be stale; matching digests
+      produce no warning. New apply and verify runs record configDigest
+      in metadata.json so the comparison is meaningful going forward.
+    priority: must
+    scope:
+      include: [packages/cli/src/**, packages/runtime/src/**]
+    acceptance:
+      - id: BR-003-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/brief.test.ts
+        discriminating: true
+      - id: BR-003-B
+        type: file
+        path: packages/runtime/src/queries.ts
+        assert:
+          contains: "configDigest"
+  - id: BR-004
+    statement: >
+      The brief lists unmerged run branches (spc/ prefix, not merged
+      into the current HEAD) and stray entries under .spc/worktrees.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: BR-004-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/brief.test.ts
+        discriminating: true
+  - id: BR-005
+    statement: >
+      --format json emits the same facts as a machine-readable object;
+      the command is strictly read-only (no new run records, no tree
+      changes).
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: BR-005-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/brief.test.ts
+        discriminating: true
+  - id: BR-006
+    statement: >
+      Regression guard: workspace builds; CLI and runtime suites green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: BR-006-A
+        type: command
+        command: pnpm -r build > /dev/null && pnpm --filter @spc/cli test && pnpm --filter @spc/runtime test
+outOfScope:
+  - running criteria or spawning verification runs (recorded state only)
+  - drift re-derivation (reports the last recorded verification, labeled with its revision)
+  - changes to run event schemas beyond the optional metadata field
