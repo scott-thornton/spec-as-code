@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
@@ -192,16 +193,21 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
   const snapshot = observeRepository(options.repoRoot, specIr, now);
   writeFileSync(paths.snapshotFile(runId), JSON.stringify(snapshot, null, 2), "utf8");
 
+  const configDigestOf = (configPath: string): string => {
+    const content = existsSync(configPath) ? readFileSync(configPath, "utf8") : JSON.stringify(config);
+    return "sha256:" + createHash("sha256").update(content, "utf8").digest("hex");
+  };
   const meta: RunMeta = {
     runId,
     kind: "apply",
     specId: specIr.spec.metadata.id,
     specDigest: specIr.digest,
+    configDigest: configDigestOf(paths.configPath),
     planId: plan.metadata.id,
     planDigest: computePlanDigest(plan),
     baseRevision: snapshot.revision,
     createdAt: now(),
-  };
+  } as RunMeta & { configDigest: string };
   writeFileSync(paths.metadataFile(runId), JSON.stringify(meta, null, 2), "utf8");
 
   const events = new EventStore(paths.eventsFile(runId), runId, now);

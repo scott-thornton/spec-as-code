@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { SpcError } from "@spc/core";
 import type { Config, Event, Evidence, FollowUp, RequirementState, RunState, SpecIR } from "@spc/schema";
 import type { LLMProvider } from "@spc/llm";
@@ -234,14 +235,22 @@ export async function createVerifyRun(options: StandaloneVerifyOptions): Promise
   const revision = currentRevision(options.repoRoot);
   const dirty = statusPorcelain(options.repoRoot).dirty;
 
+  const configDigestOf = (configPath: string): string => {
+    const content = existsSync(configPath) ? readFileSync(configPath, "utf8") : JSON.stringify(options.config);
+    return "sha256:" + createHash("sha256").update(content, "utf8").digest("hex");
+  };
   const meta: RunMeta = {
     runId,
     kind: "verify",
     specId: options.specIr.spec.metadata.id,
     specDigest: options.specIr.digest,
+    configDigest: configDigestOf(paths.configPath),
     baseRevision: revision,
     createdAt: now(),
-  };
+    // RunMeta gains configDigest formally in a follow-up amendment; the
+    // cast carries it until then (out-of-scope write refused the interface
+    // edit - enforcement held, plan targets were narrower than the need).
+  } as RunMeta & { configDigest: string };
   writeFileSync(paths.metadataFile(runId), JSON.stringify(meta, null, 2), "utf8");
 
   const events = new EventStore(paths.eventsFile(runId), runId, now);

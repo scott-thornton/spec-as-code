@@ -16,6 +16,7 @@ import { runPolicyExplain } from "./commands/policy.js";
 import { runQuickCommand } from "./commands/quick.js";
 import { runRectify } from "./commands/rectify.js";
 import { runPatchBuild } from "./commands/patch.js";
+import { runBrief } from "./commands/brief.js";
 
 const program = new Command();
 
@@ -289,6 +290,15 @@ program
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action((runId: string | undefined, opts: { findings?: string; cwd: string }) => {
     process.exitCode = runRectify({ runId, findingsFile: opts.findings, cwd: opts.cwd });
+  });
+
+program
+  .command("brief")
+  .description("session orientation: specs, last runs, queue, config posture, unmerged branches - read-only")
+  .option("--format <format>", "text | json", "text")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action((opts: { format: string; cwd: string }) => {
+    process.exitCode = runBrief(opts.cwd, opts.format === "json" ? "json" : "text");
   });
 
 const patch = program.command("patch").description("anchored patch composition (verifies, never decides)");
