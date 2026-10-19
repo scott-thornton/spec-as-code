@@ -23,7 +23,7 @@ function outcome(taskId: string, status: ExecutionOutcome["status"], summary = "
     taskId,
     status,
     summary,
-    result: { status, summary: summary || "x", changes: [], observations: [], evidenceCandidates: [], followups: [] },
+    result: { status, summary: summary || "x", changes: [], commands: [], observations: [], evidenceCandidates: [], followups: [] },
     appliedChanges: [],
   };
 }
