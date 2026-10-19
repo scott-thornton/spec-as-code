@@ -194,7 +194,7 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
   writeFileSync(paths.snapshotFile(runId), JSON.stringify(snapshot, null, 2), "utf8");
 
   const configDigestOf = (configPath: string): string => {
-    const content = existsSync(configPath) ? readFileSync(configPath, "utf8") : JSON.stringify(config);
+    const content = existsSync(configPath) ? readFileSync(configPath, "utf8") : JSON.stringify(loadConfig(configPath));
     return "sha256:" + createHash("sha256").update(content, "utf8").digest("hex");
   };
   const meta: RunMeta = {

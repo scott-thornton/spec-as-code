@@ -12,6 +12,10 @@ export interface RunMeta {
   kind: "apply" | "verify";
   specId: string;
   specDigest: string;
+  /** Digest of the config the run executed under (file bytes, or the
+   *  canonical default when no config.yaml); spc brief compares it to
+   *  warn about stale authored premises. */
+  configDigest?: string;
   planId?: string;
   planDigest?: string;
   baseRevision?: string;
