@@ -48,7 +48,9 @@ calls. A running spc process blocks on pending requests that you answer:
 
 ```bash
 spc agent list --format json     # [{"id": "executor-T001@1-1", "role": "executor", ...}]
-spc agent show <id>              # full prompt + the exact JSON Schema
+spc agent show <id>              # headed sections: system, prompt, schema
+spc agent show <id> --part system|prompt|schema|payload   # one piece, no parsing
+spc agent show <id> --json       # the whole request as one JSON object
 spc agent respond <id> --file answer.json --by <agent-name>
 ```
 

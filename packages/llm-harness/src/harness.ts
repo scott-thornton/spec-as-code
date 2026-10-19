@@ -58,7 +58,7 @@ export class HarnessProvider implements LLMProvider {
       schemaName: request.schemaName,
       jsonSchema,
       system: request.system,
-      prompt: `${request.prompt}\n\n--- harness instructions ---\n${HARNESS_INSTRUCTIONS.replace("<id>", id)}`,
+      prompt: `--- harness instructions ---\n${HARNESS_INSTRUCTIONS.replace("<id>", id)}\n\n${request.prompt}`,
       createdAt: new Date().toISOString(),
     });
 

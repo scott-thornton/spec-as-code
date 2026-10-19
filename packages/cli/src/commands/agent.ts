@@ -50,13 +50,74 @@ export function runAgentList(cwd: string | undefined, format: "text" | "json"): 
   return 1;
 }
 
-export function runAgentShow(id: string, cwd: string | undefined): number {
+const SHOW_PARTS = ["system", "prompt", "schema", "payload", "json"] as const;
+export type AgentShowPart = (typeof SHOW_PARTS)[number];
+
+/** Extract the prompt's embedded JSON object (banner lines, then JSON). */
+function extractPromptPayload(prompt: string): unknown {
+  const start = prompt.indexOf("{");
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < prompt.length; i++) {
+    const ch = prompt[i]!;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth += 1;
+    else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        try {
+          return JSON.parse(prompt.slice(start, i + 1));
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+export function runAgentShow(id: string, cwd: string | undefined, part?: AgentShowPart): number {
   const { store } = storeFor(cwd);
   const request = store.getRequest(id);
   if (!request) {
     throw new SpcError("HARNESS_REQUEST_NOT_FOUND", `no pending harness request with id ${id}`);
   }
-  console.log(JSON.stringify(request, null, 2));
+  // Decomposition first: consumers should never hand-parse a request
+  // blob (the first field run wrote a python script for exactly this).
+  if (part === "system") {
+    console.log(request.system);
+    return 0;
+  }
+  if (part === "prompt") {
+    console.log(request.prompt);
+    return 0;
+  }
+  if (part === "schema") {
+    console.log(JSON.stringify(request.jsonSchema, null, 2));
+    return 0;
+  }
+  if (part === "payload") {
+    const payload = extractPromptPayload(request.prompt);
+    if (payload === null || typeof payload !== "object") {
+      throw new SpcError("HARNESS_PROMPT_PAYLOAD", `the prompt for ${id} carries no parseable JSON object`);
+    }
+    console.log(JSON.stringify(payload, null, 2));
+    return 0;
+  }
+  if (part === "json") {
+    console.log(JSON.stringify(request, null, 2));
+    return 0;
+  }
+  console.log(`=== SYSTEM ===\n${request.system}\n\n=== PROMPT ===\n${request.prompt}\n\n=== SCHEMA (${request.schemaName}) ===`);
+  console.log(JSON.stringify(request.jsonSchema, null, 2));
   return 0;
 }
 

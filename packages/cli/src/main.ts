@@ -10,7 +10,7 @@ import { runReconcile } from "./commands/reconcile.js";
 import { runDiff, runStatus } from "./commands/status.js";
 import { runFollowupResolve, runFollowups } from "./commands/followups.js";
 import { runCancel, runExport, runPr, runReplay, runShow } from "./commands/run.js";
-import { runAgentList, runAgentRespond, runAgentShow, runAgentValidate } from "./commands/agent.js";
+import { runAgentList, runAgentRespond, runAgentShow, runAgentValidate, type AgentShowPart } from "./commands/agent.js";
 import { runSkills, runUseSkill } from "./commands/skills.js";
 import { runPolicyExplain } from "./commands/policy.js";
 import { runQuickCommand } from "./commands/quick.js";
@@ -167,10 +167,18 @@ agent
   });
 agent
   .command("show <id>")
-  .description("print a pending request in full (prompt + embedded JSON Schema)")
+  .description("print a pending request; decompose with --part system|prompt|schema|payload|json")
+  .option("--part <part>", "system | prompt | schema | payload | json")
+  .option("--json", "print the whole request as one JSON object (same as --part json)")
   .option("--cwd <dir>", "repository directory", process.cwd())
-  .action((id: string, opts: { cwd: string }) => {
-    process.exitCode = runAgentShow(id, opts.cwd);
+  .action((id: string, opts: { part?: string; json?: boolean; cwd: string }) => {
+    const part = opts.json ? "json" : opts.part;
+    if (part !== undefined && !["system", "prompt", "schema", "payload", "json"].includes(part)) {
+      console.error(`unknown part "${part}"; use system, prompt, schema, payload or json`);
+      process.exitCode = 2;
+      return;
+    }
+    process.exitCode = runAgentShow(id, opts.cwd, part as AgentShowPart | undefined);
   });
 agent
   .command("respond <id>")

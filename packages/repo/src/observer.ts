@@ -19,6 +19,14 @@ const SKIP_DIRS = new Set([
   "target",
   ".idea",
   ".vscode",
+  ".gradle",
+  "Pods",
+  "DerivedData",
+  ".dart_tool",
+  ".expo",
+  ".next",
+  ".nuxt",
+  ".turbo",
 ]);
 
 const MAX_ENTRIES = 4000;
@@ -83,6 +91,13 @@ const LANGUAGE_BY_EXTENSION: Record<string, string> = {
   ".css": "css",
   ".html": "html",
 };
+
+const SOURCE_EXTENSIONS = new Set([
+  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte",
+  ".py", ".go", ".rs", ".java", ".kt", ".swift", ".rb", ".php", ".cs",
+  ".c", ".cpp", ".h", ".hpp", ".sh", ".yaml", ".yml", ".json", ".toml",
+  ".xml", ".md",
+]);
 
 const MANIFEST_FILES: Record<string, string> = {
   "package.json": "npm",
@@ -187,7 +202,13 @@ export function observeRepository(
         }
       }
     }
-    for (const f of files) {
+    // Source-first: only source-ish extensions are eligible, shallow paths
+    // rank above deep ones, so cache and binary artifacts never crowd out
+    // real code even when a domain keyword appears in their filename.
+    const candidates = files
+      .filter((f) => SOURCE_EXTENSIONS.has(path.posix.extname(f).toLowerCase()))
+      .sort((a, b) => a.split("/").length - b.split("/").length || a.localeCompare(b));
+    for (const f of candidates) {
       const lower = f.toLowerCase();
       const hit = [...tokens].find((t) => lower.includes(t));
       if (hit && relevantArtifacts.length < 50) {
@@ -221,6 +242,9 @@ export function readExcerpt(repoRoot: string, relPath: string, maxBytes = MAX_FI
   try {
     if (!statSync(full).isFile()) return null;
     const buf = readFileSync(full);
+    // Binary refusal: a NUL byte in the leading block means this is not
+    // text - decode-and-hope turns it into \u0000 soup inside prompts.
+    if (buf.subarray(0, Math.min(buf.length, 8192)).includes(0)) return null;
     const text = buf.subarray(0, maxBytes).toString("utf8");
     return text;
   } catch {
