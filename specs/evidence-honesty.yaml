@@ -1,0 +1,86 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: evidence-honesty
+  title: Evidence honesty - labels, revision verification, red classification
+goal: >
+  Three defects from the field-run review, all touching the record the
+  product IS. First: an 8-line anchored patch was recorded as "created"
+  because contentSnapshot is HEAD-diff-based, so a task starting from a
+  clean tree has an empty before-snapshot and every first touch of an
+  existing file mislabels. Second: verifying a run's result revision
+  required manual git show archaeology because spc verify only inspects
+  the current tree. Third: the red phase records a suite that never
+  collected tests identically to a genuine failing assertion - a
+  fake-flip channel with a proven field instance (EV-0001: "Tests: no
+  tests" recorded as plain contradicts).
+requirements:
+  - id: EH-001
+    statement: >
+      contentDelta classifies a path present only in the after-snapshot
+      by tracked-ness when a working directory is supplied: tracked
+      files are modified, untracked files are created. Runtime and
+      executor delta callers pass their working roots.
+    priority: must
+    scope:
+      include: [packages/repo/src/**, packages/runtime/src/**, packages/executor/src/**]
+    acceptance:
+      - id: EH-001-A
+        type: command
+        command: pnpm --filter @spc/repo exec vitest run src/delta-labels.test.ts
+        discriminating: true
+  - id: EH-002
+    statement: >
+      Contradicted command evidence whose output shows the suite never
+      ran (no tests collected, module-not-found, failed suites) carries
+      failureShape "suite-did-not-run" in its payload; assertion-shaped
+      failures and supporting runs carry no such mark.
+    priority: must
+    scope:
+      include: [packages/verifier/src/**]
+    acceptance:
+      - id: EH-002-A
+        type: command
+        command: pnpm --filter @spc/verifier exec vitest run src/red-classification.test.ts
+        discriminating: true
+  - id: EH-003
+    statement: >
+      spc verify --run <id> verifies the run's acceptance criteria
+      against the run's result revision in a temporary worktree -
+      green when the change exists only at that revision - and cleans
+      the worktree up afterwards.
+    priority: must
+    scope:
+      include: [packages/cli/src/**, packages/runtime/src/**]
+    acceptance:
+      - id: EH-003-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/verify-run.test.ts
+        discriminating: true
+  - id: EH-004
+    statement: >
+      spc verify --run fails with a named error for an unknown run id
+      and for a run without a result revision.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: EH-004-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/verify-run.test.ts
+        discriminating: true
+  - id: EH-005
+    statement: >
+      Regression guard: the workspace builds and the repo, verifier,
+      runtime and CLI suites stay green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: EH-005-A
+        type: command
+        command: pnpm -r build > /dev/null && pnpm --filter @spc/repo test && pnpm --filter @spc/verifier test && pnpm --filter @spc/runtime test && pnpm --filter @spc/cli test
+outOfScope:
+  - re-running agent or human criteria at historical revisions (deterministic only)
+  - dependency installation inside revision worktrees (criteria must be self-contained or fail honestly)
+  - retroactive relabeling of existing evidence records (append-only)
