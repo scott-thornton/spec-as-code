@@ -1,0 +1,103 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: command-touchset
+  title: Declared touch-set for executor commands
+goal: >
+  Executor tasks could express file edits but not commands, so sweep-shaped
+  work (codemods, generators) had no mediated path: the model either
+  hand-emitted every file or the human ran the tool outside spc. This adds
+  a command channel to the executor protocol with a declaration contract -
+  the model states which paths a command will touch, the runtime runs the
+  command under the existing policy engine, and the observed content delta
+  must fall inside the declaration. Declared equals observed, or the
+  violation reverts and fails the task. Undeclared writes refuse
+  fail-closed; policy-denied categories never execute.
+requirements:
+  - id: TS-001
+    statement: >
+      The executor result protocol accepts a commands array whose entries
+      carry a command string and an optional touch-set of path patterns;
+      allowed commands execute with the existing timeout, output-capping
+      and redaction machinery, and their results are recorded on the task
+      outcome.
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: TS-001-A
+        type: command
+        command: pnpm -r build > /dev/null && pnpm --filter @spc/executor exec vitest run src/touchset.test.ts
+        discriminating: true
+  - id: TS-002
+    statement: >
+      Policy-denied command categories (deny or approval) refuse execution
+      with COMMAND_DENIED and the policy reason; nothing runs.
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: TS-002-A
+        type: command
+        command: pnpm --filter @spc/executor exec vitest run src/touchset.test.ts
+        discriminating: true
+  - id: TS-003
+    statement: >
+      Touch-set enforcement is fail-closed and laundering-proof: a command
+      writing a path outside its declared touch-set - or writing anything
+      with no touch-set declared - fails with TOUCH_SET_VIOLATION naming
+      the path, and the offending writes are reverted (tracked files
+      restored, undeclared untracked files removed) so a retry cannot
+      inherit them.
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: TS-003-A
+        type: command
+        command: pnpm --filter @spc/executor exec vitest run src/touchset.test.ts
+        discriminating: true
+  - id: TS-004
+    statement: >
+      A nonzero exit or timeout fails the task with COMMAND_FAILED naming
+      the exit code; declared-but-unchanged touch-set entries are reported
+      on the task outcome without failing; read-only commands run clean.
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: TS-004-A
+        type: command
+        command: pnpm --filter @spc/executor exec vitest run src/touchset.test.ts
+        discriminating: true
+  - id: TS-005
+    statement: >
+      Ordering contract: staged file changes apply first, commands run
+      after against the updated tree, so patch ops and commands compose in
+      one task and a command observes the patched content.
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: TS-005-A
+        type: command
+        command: pnpm --filter @spc/executor exec vitest run src/touchset.test.ts
+        discriminating: true
+  - id: TS-006
+    statement: >
+      Regression guard including the full-workspace build (the previous
+      transaction shipped an interface break that per-package criteria
+      could not see): the whole monorepo builds and the executor suite
+      stays green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: TS-006-A
+        type: command
+        command: pnpm -r build > /dev/null && pnpm --filter @spc/executor test
+outOfScope:
+  - interactive approval flow for approval-classified commands (still denied with an actionable reason)
+  - new configuration surface (reuses commands policy, timeout and output caps as configured)
+  - verifier-side command criteria changes
+  - parallel-execution semantics for commands (sequential per task)
