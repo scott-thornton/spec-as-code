@@ -11,3 +11,6 @@ coverage/
 /.spc/exports/
 results/
 packages/cli/skills/
+
+# local working notes, never committed
+IDEAS.md
