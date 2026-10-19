@@ -14,7 +14,9 @@ function opVariants(json: Record<string, unknown>): Record<string, Record<string
     items?: Record<string, unknown>;
   };
   const items = changes.items ?? {};
-  const variants = (items.anyOf as Record<string, unknown>[] | undefined) ?? [items as Record<string, unknown>];
+  const variants =
+    (items.anyOf as Record<string, unknown>[] | undefined) ??
+    (items.oneOf as Record<string, unknown>[] | undefined) ?? [items as Record<string, unknown>];
   const byOp = new Map<string, Record<string, unknown>>();
   for (const v of variants) {
     const op = v.properties as Record<string, { const?: string; enum?: string[] }> | undefined;
