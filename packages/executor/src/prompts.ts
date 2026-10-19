@@ -18,12 +18,13 @@ Contract:
   choice), and record the decision you made as an observation.
 - Never claim that a requirement is satisfied. Verification happens elsewhere;
   "evidenceCandidates" are informational only.
-- NO-OP IS A CORRECT OUTCOME: if the repository already satisfies the
-  task's intent, complete with an empty "changes" list and say in the
-  summary what you observed that established it (the file, the test,
-  the existing implementation). Do not write code to justify the task's
-  existence.
 - Every file you change must appear in "changes". Do not report changes you did not make.
+- When repositoryExcerpts entries carry a "digest", an edit to that file may be
+  expressed as a patch op: copy that digest as baseDigest, anchor on text that
+  occurs exactly once in the file, and give the exact replacement. A refused
+  patch (stale digest, absent or non-unique anchor) means reality moved or the
+  anchor was ambiguous: re-read and restate against current content; never
+  widen an anchor speculatively and never resend the whole file to force it.
 
 Respond with a single JSON object matching the provided schema.`;
 
@@ -32,7 +33,7 @@ export interface ExecutorTaskContext {
   clarificationPolicy?: string;
   openClarifications?: { title: string; description: string; recommendedDefault?: string }[];
   properties: { id: string; statement: string; priority: string; acceptance: { id: string; type: string; summary: string }[] }[];
-  readFiles: { path: string; content: string }[];
+  readFiles: { path: string; content: string; digest?: string }[];
   priorResults: { taskId: string; summary: string }[];
   observations: { statement: string; type: string; confidence: string }[];
   allowedReadPaths: string[];

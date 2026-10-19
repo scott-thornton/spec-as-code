@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { isPhysicallyContained, isSafeRelativePath, SpcError } from "@spc/core";
 import type { AcceptanceCriterion, ObservationDraft, RepositorySnapshot, SpecIR, Task } from "@spc/schema";
@@ -8,6 +8,7 @@ import { readExcerpt, listMatchingFiles } from "@spc/repo";
 import { enforceWriteScope, UNSAFE_PATH } from "./enforce.js";
 import { buildExecutorPrompt, EXECUTOR_SYSTEM, type ExecutorTaskContext } from "./prompts.js";
 import { executorResultSchema, type ExecutorResult } from "./result.js";
+import { fileDigest, stageChanges } from "./patch.js";
 
 export const EXECUTION_ERROR = "SPC_EXECUTION_ERROR";
 
@@ -19,7 +20,7 @@ export interface ExecuteTaskInput {
   attempt: number;
   priorResults: { taskId: string; summary: string }[];
   observations: ObservationDraft[];
-  failureContext?: { code: string; message: string };
+  failureContext?: { code: string; message: string; attempt: number };
   openClarifications?: { title: string; description: string; recommendedDefault?: string }[];
 }
 
@@ -49,6 +50,17 @@ function summarizeCriterion(c: AcceptanceCriterion): string {
   }
 }
 
+/** Digest of the file's FULL content, read the same way the patch applicator
+ * reads bases (utf8): the model copies this value into baseDigest, so it
+ * references a digest of reality rather than a hash it computed itself. */
+function digestOfWorktreeFile(worktreeRoot: string, relPath: string): string | undefined {
+  try {
+    return fileDigest(readFileSync(path.join(worktreeRoot, relPath), "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Execute one task through the provider, validate proposed changes against
  * the declared write scope, and apply them in the worktree. Actual git
@@ -74,6 +86,7 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
   const readFiles = listMatchingFiles(worktreeRoot, readPatterns, 8).map((p) => ({
     path: p,
     content: readExcerpt(worktreeRoot, p, 6144) ?? "",
+    ...(digestOfWorktreeFile(worktreeRoot, p) ? { digest: digestOfWorktreeFile(worktreeRoot, p) } : {}),
   }));
 
   const ctx: ExecutorTaskContext = {
@@ -165,17 +178,31 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
     }
   }
 
+  // Stage the entire change set before touching disk: any refusal (stale
+  // base digest, absent or non-unique anchor) fails the whole set with
+  // nothing written. No repair, no fallback to full-file rewrite.
+  const staged = stageChanges(worktreeRoot, result.changes);
+  if (!staged.ok) {
+    return {
+      taskId: task.id,
+      status: "failed",
+      summary: `change set refused: ${staged.code}`,
+      result,
+      appliedChanges: [],
+      failure: { code: staged.code, message: staged.message },
+    };
+  }
+
   const appliedChanges: { path: string; change: string }[] = [];
-  for (const change of result.changes) {
-    const full = path.join(worktreeRoot, change.path);
-    if (change.op === "delete") {
-      rmSync(full, { force: true });
-      appliedChanges.push({ path: change.path, change: "deleted" });
-    } else {
-      mkdirSync(path.dirname(full), { recursive: true });
-      writeFileSync(full, change.content, "utf8");
-      appliedChanges.push({ path: change.path, change: change.op === "create" ? "created" : "modified" });
-    }
+  for (const write of staged.writes) {
+    const full = path.join(worktreeRoot, write.path);
+    mkdirSync(path.dirname(full), { recursive: true });
+    writeFileSync(full, write.content, "utf8");
+    appliedChanges.push({ path: write.path, change: write.label });
+  }
+  for (const p of staged.deletes) {
+    rmSync(path.join(worktreeRoot, p), { force: true });
+    appliedChanges.push({ path: p, change: "deleted" });
   }
 
   return {

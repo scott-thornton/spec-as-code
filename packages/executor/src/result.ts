@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { followUpDraftSchema, observationDraftSchema } from "@spc/schema";
 
+/**
+ * The patch op carries the runtime-computed digest of the file content the
+ * model was shown (repositoryExcerpts[].digest), an anchor that must occur
+ * exactly once in that content, and its exact replacement. The applicator
+ * refuses on any mismatch - it never repairs, normalizes, or falls back to
+ * a full-file rewrite.
+ */
 export const proposedChangeSchema = z.discriminatedUnion("op", [
   z.strictObject({
     op: z.literal("create"),
@@ -11,6 +18,13 @@ export const proposedChangeSchema = z.discriminatedUnion("op", [
     op: z.literal("update"),
     path: z.string().min(1),
     content: z.string(),
+  }),
+  z.strictObject({
+    op: z.literal("patch"),
+    path: z.string().min(1),
+    baseDigest: z.string().min(1),
+    anchor: z.string().min(1),
+    replacement: z.string(),
   }),
   z.strictObject({
     op: z.literal("delete"),
