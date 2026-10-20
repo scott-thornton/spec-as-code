@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { Config, SpecIR } from "@spc/schema";
 import { compileSpecFile } from "@spc/repo";
@@ -40,24 +40,33 @@ export function lintSpec(ir: SpecIR, config: Config): LintWarning[] {
         uses.push({ criterion: criterion.id, expect: criterion.expect?.exitCode });
         commandUses.set(command, uses);
 
-        // Unprotected oracle: the command executes a test path the
-        // graded tasks may rewrite. A perfectly written test is not an
+        // Unprotected oracle: a test RUNNER executing a suite the graded
+        // tasks may rewrite. A perfectly written test is not an
         // independent oracle if the agent it grades can rewrite it.
-        const testPathMatch = command.match(/[\w./-]*(?:__tests__|tests\/|\.test\.|\.spec\.)[\w./-]*/);
-        if (testPathMatch) {
-          const referenced = testPathMatch[0].replace(/^\.?\//, "");
-          // Commands inside a filtered package reference paths relative
-          // to the package root while protectedPaths are repo-relative;
-          // cover either form before warning.
-          const covered =
-            globMatchAny(config.verification.protectedPaths, referenced) ||
-            globMatchAny(config.verification.protectedPaths, `packages/*/${referenced}`);
-          if (!covered) {
-            warnings.push({
-              rule: "LINT-UNPROTECTED-ORACLE",
-              target: criterion.id,
-              message: `executes "${referenced}" but it is not under verification.protectedPaths - the tasks this criterion grades can rewrite the suite that grades them`,
-            });
+        // Runner-gated: paths that merely APPEAR in a command (git diff
+        // exclusion regexes, grep patterns) are not executed, and firing
+        // on them was 3 false alarms on the first real corpus.
+        const RUNNER = /\b(vitest|jest|mocha|node\s+--test|pytest|\.\/node_modules\/\.bin\/\w+)\b/;
+        if (RUNNER.test(command)) {
+          const testPathMatch = command.match(/[\w./-]*(?:__tests__|tests\/|\.test\.|\.spec\.)[\w./-]*/);
+          if (testPathMatch) {
+            const referenced = testPathMatch[0].replace(/^\.?\//, "");
+            const patterns = config.verification.protectedPaths;
+            // Coverage accepts repo-relative and package-relative forms,
+            // and directory references (vitest run <dir>) as well as the
+            // files inside them.
+            const covered =
+              globMatchAny(patterns, referenced) ||
+              globMatchAny(patterns, `${referenced}/**`) ||
+              globMatchAny(patterns, `packages/*/${referenced}`) ||
+              globMatchAny(patterns, `packages/*/${referenced}/**`);
+            if (!covered) {
+              warnings.push({
+                rule: "LINT-UNPROTECTED-ORACLE",
+                target: criterion.id,
+                message: `executes "${referenced}" but it is not under verification.protectedPaths - the tasks this criterion grades can rewrite the suite that grades them`,
+              });
+            }
           }
         }
       }
@@ -140,25 +149,41 @@ export async function runSpecLint(specFile: string, cwd?: string): Promise<numbe
     // absent - fine
   }
   gitOk(repoRoot, ["worktree", "add", "--detach", worktree, "HEAD"]);
+  const passesAtBaseline: string[] = [];
+  const notExecutable: string[] = [];
+  const hasDeps = existsSync(path.join(worktree, "node_modules"));
   try {
     for (const { criterion } of discriminating) {
+      // A bare worktree has no installed dependencies: npx/pnpm/npm
+      // resolution there is unreliable (cache luck can exit 0 without
+      // running the project's tests - a false pass-at-baseline). Such
+      // commands are honestly unexecutable here, never green.
+      if (/\b(npx|pnpm|yarn|npm)\b/.test(criterion.command) && !hasDeps) {
+        notExecutable.push(criterion.id);
+        continue;
+      }
+      // Lint runs on its own tight budget: the run-timeout can be ten
+      // minutes, which is right for apply and absurd for a lint pass.
+      // Capped, and a breach classifies as not-safely-executable.
+      const lintTimeoutMs = Math.min(
+        criterion.timeoutMs ?? config.execution.commandTimeoutMs,
+        60_000,
+      );
       const run = await runCommand(criterion.command, {
         cwd: worktree,
-        timeoutMs: criterion.timeoutMs ?? config.execution.commandTimeoutMs,
+        timeoutMs: lintTimeoutMs,
         maxOutputBytes: config.execution.maxOutputBytes,
         commandsConfig: config.commands,
       });
       if (!run.allowed) {
-        console.log(`LINT-NO-RED-CAPABILITY ${criterion.id}: not-safely-executable (${run.deniedReason ?? "denied by command policy"}) - distinct from pass and fail`);
+        notExecutable.push(`${criterion.id} (${run.deniedReason ?? "denied by command policy"})`);
         continue;
       }
       if (run.timedOut) {
-        console.log(`LINT-NO-RED-CAPABILITY ${criterion.id}: not-safely-executable (timed out) - distinct from pass and fail`);
+        notExecutable.push(`${criterion.id} (timed out)`);
         continue;
       }
-      if (run.exitCode === 0) {
-        console.log(`LINT-NO-RED-CAPABILITY ${criterion.id}: discriminating criterion passes at baseline: it cannot establish red evidence - either it cannot detect the change, or it is a regression invariant mislabeled as discriminating (drop the flag)`);
-      }
+      if (run.exitCode === 0) passesAtBaseline.push(criterion.id);
       // exitCode !== 0: fails at baseline - healthy, no warning.
     }
   } finally {
@@ -167,6 +192,16 @@ export async function runSpecLint(specFile: string, cwd?: string): Promise<numbe
     } catch {
       // best effort
     }
+  }
+  if (notExecutable.length > 0) {
+    console.log(
+      `LINT-NOT-EXECUTABLE ${ir.spec.metadata.id}: ${notExecutable.length} criteria not-safely-executable by lint (distinct from pass and fail): ${notExecutable.join(", ")}`,
+    );
+  }
+  if (passesAtBaseline.length > 0) {
+    console.log(
+      `LINT-NO-RED-CAPABILITY ${ir.spec.metadata.id}: ${passesAtBaseline.length} discriminating ${passesAtBaseline.length > 1 ? "criteria pass" : "criterion passes"} at baseline (${passesAtBaseline.join(", ")}) - the work appears already in the tree; a criterion that passes where it should be red cannot establish flip evidence. Either it cannot detect the change, or these are regression invariants mislabeled as discriminating (drop the ${passesAtBaseline.length > 1 ? "flags" : "flag"})`,
+    );
   }
   return 0;
 }
