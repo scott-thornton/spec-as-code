@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { runScheduler, type SchedulerIO } from "./scheduler.js";
-import type { Task, TaskState } from "@spc/schema";
+import type { Plan, Task, TaskState } from "@spc/schema";
 
 function task(id: string, dependsOn: string[] = []): Task {
   return { id, title: id, kind: "modify", intent: "i", dependsOn };
 }
-function plan(tasks: Task[]) {
+function plan(tasks: Task[]): Plan {
   return {
     apiVersion: "spc.dev/v1alpha1",
     kind: "Plan",
@@ -13,7 +13,7 @@ function plan(tasks: Task[]) {
     spec: { id: "s", digest: `sha256:${"0".repeat(64)}` },
     repository: { revision: "r", snapshotDigest: `sha256:${"0".repeat(64)}` },
     tasks,
-  };
+  } as Plan;
 }
 function outcome(taskId: string, status: "completed" | "needs_replan", summary = "") {
   return {
