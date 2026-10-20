@@ -1,0 +1,55 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: amendment-redispatch
+  title: Amended tasks are re-dispatched
+goal: >
+  CHK3555 run 1 concluded partially_satisfied with its changeTarget-amended
+  task parked in needs_replan and two dependents blocked behind it, and
+  apply --resume refused because the run had "finished". The scheduler's
+  comment promises the runtime resets affected tasks to pending when an
+  amendment applies; the runtime reset only ADDED task ids, and a pure
+  changeTarget amendment adds none. The fix is one state transition: when
+  an amendment applies, every task still present in the amended plan that
+  sits in needs_replan returns to pending (attempt preserved), so the
+  scheduler re-dispatches it and its dependents unblock on the next pass.
+requirements:
+  - id: AR-001
+    statement: >
+      After a changeTarget amendment that adds no tasks, the triggering
+      task is re-dispatched (a second TASK_STARTED), its dependents run,
+      and the run succeeds instead of concluding with runnable work parked.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: AR-001-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/amendment-redispatch.test.ts
+        discriminating: true
+  - id: AR-002
+    statement: >
+      The reset applies in both drivers (sequential and parallel) and only
+      to tasks that remain in the amended plan - removed or replaced tasks
+      are not resurrected.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: AR-002-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/apply.test.ts
+  - id: AR-003
+    statement: >
+      Regression guard: runtime and executor suites green, workspace
+      typechecks.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: AR-003-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/runtime test && pnpm --filter @spc/executor test
+outOfScope:
+  - resuming a concluded run (resume semantics unchanged; the fix prevents the premature conclusion)
+  - scheduler refusing to conclude while runnable work exists (this fix removes the cause; a general guard is a separate card)
