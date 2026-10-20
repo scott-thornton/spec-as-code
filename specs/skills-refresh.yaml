@@ -1,0 +1,112 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: skills-refresh
+  title: Skills catch up with the shipped surface
+goal: >
+  Capability that is not in the surface agents read does not exist. The
+  in-band surfaces (schema descriptions, system prompt, harness guide,
+  CLI reference) shipped with their features; the skills - the
+  operating manuals agents actually load - predate several of them.
+  The spc skill does not start with spc brief, does not know
+  verify --run, and teaches re-orientation by archaeology; the
+  author-spec skill teaches craftsmanship prose without saying most of
+  it is now mechanized by spec lint, omits the pre-commit oracle
+  pattern for protected paths, and lacks the typecheck-not-build
+  criterion lesson; onboard does not mention brief; usage is nowhere.
+  This transaction brings the four skills current.
+requirements:
+  - id: SK-001
+    statement: >
+      The spc skill leads with spc brief as the session-orientation
+      command, mentions spc usage for economics, and its Reading
+      results section documents spc verify --run for verifying a run's
+      result revision after branch restore.
+    priority: must
+    scope:
+      include: [.agents/skills/**]
+    acceptance:
+      - id: SK-001-A
+        type: file
+        path: .agents/skills/spc/SKILL.md
+        assert:
+          contains: "spc brief"
+        discriminating: true
+      - id: SK-001-B
+        type: file
+        path: .agents/skills/spc/SKILL.md
+        assert:
+          contains: "verify --run"
+        discriminating: true
+      - id: SK-001-C
+        type: file
+        path: .agents/skills/spc/SKILL.md
+        assert:
+          contains: "spc usage"
+        discriminating: true
+  - id: SK-002
+    statement: >
+      The author-spec skill leads its craftsmanship section by pointing
+      at spc spec lint as the mechanical check, teaches the pre-commit
+      oracle pattern (criteria targeting protected paths are authored
+      and committed before apply - tasks cannot write them), and notes
+      that cross-package interface changes want a typecheck criterion
+      because build excludes test files.
+    priority: must
+    scope:
+      include: [.agents/skills/**]
+    acceptance:
+      - id: SK-002-A
+        type: file
+        path: .agents/skills/author-spec/SKILL.md
+        assert:
+          contains: "spec lint"
+        discriminating: true
+      - id: SK-002-B
+        type: file
+        path: .agents/skills/author-spec/SKILL.md
+        assert:
+          contains: "before apply"
+        discriminating: true
+      - id: SK-002-C
+        type: file
+        path: .agents/skills/author-spec/SKILL.md
+        assert:
+          contains: "typecheck"
+        discriminating: true
+  - id: SK-003
+    statement: >
+      The answer-queue skill's session-hygiene advice replaces
+      hand-orientation with spc brief, and the onboard skill tells new
+      repositories to start every session with spc brief.
+    priority: must
+    scope:
+      include: [.agents/skills/**]
+    acceptance:
+      - id: SK-003-A
+        type: file
+        path: .agents/skills/answer-queue/SKILL.md
+        assert:
+          contains: "spc brief"
+        discriminating: true
+      - id: SK-003-B
+        type: file
+        path: .agents/skills/onboard/SKILL.md
+        assert:
+          contains: "spc brief"
+        discriminating: true
+  - id: SK-004
+    statement: >
+      Regression guard: the workspace builds (skills are bundled into
+      the CLI at build time; the guard proves the bundle step holds).
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: SK-004-A
+        type: command
+        command: pnpm -r build > /dev/null
+outOfScope:
+  - changes to the bundled skill copying mechanism
+  - new skills
+  - docs/usage pages (current as of the docs-coverage transaction)
