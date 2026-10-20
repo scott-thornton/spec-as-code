@@ -767,14 +767,59 @@ async function finishRun(
     now: ctx.now,
     onUsage: usageSink,
   });
+  // Chain awareness (CHK3555): a continuation run cannot re-flip work a
+  // prior run of this spec already landed - its discriminating criteria
+  // pass at base, which the flip evaluator correctly records as
+  // indeterminate. The combined outcome is still satisfied, with the
+  // flip evidence living in the prior run's record. Inherit those
+  // statuses with provenance; nothing is inherited without a record.
+  const priorSatisfied = new Map<string, string>();
+  for (const priorId of listRunIds(paths.runsDir)) {
+    if (priorId === ctx.meta.runId) continue;
+    const priorMeta = loadRunMeta(paths.runsDir, priorId);
+    if (priorMeta?.specId !== ctx.specIr.spec.metadata.id) continue;
+    const priorStateFile = paths.stateFile(priorId);
+    if (!existsSync(priorStateFile)) continue;
+    try {
+      const priorState = JSON.parse(readFileSync(priorStateFile, "utf8")) as {
+        requirements?: Record<string, { status?: string }>;
+      };
+      for (const [propertyId, req] of Object.entries(priorState.requirements ?? {})) {
+        if (req.status === "satisfied" && !priorSatisfied.has(propertyId)) {
+          priorSatisfied.set(propertyId, priorId);
+        }
+      }
+    } catch {
+      // unreadable prior state: not evidence
+    }
+  }
+  const chainedStates =
+    priorSatisfied.size > 0
+      ? sweep.states.map((s) => {
+          if (
+            s.status === "indeterminate" &&
+            (s.reason ?? "").includes("passed at base revision") &&
+            priorSatisfied.has(s.propertyId)
+          ) {
+            const priorId = priorSatisfied.get(s.propertyId)!;
+            ctx.log(`Property ${s.propertyId}: inherited satisfied from prior run ${priorId} (criteria pass at this base)`);
+            return {
+              ...s,
+              status: "satisfied" as const,
+              reason: `established by prior run ${priorId} - criteria pass at this base; flip evidence lives in that run's record`,
+            };
+          }
+          return s;
+        })
+      : sweep.states;
   ctx.state = {
     ...ctx.state,
-    requirements: { ...ctx.state.requirements, ...Object.fromEntries(sweep.states.map((s) => [s.propertyId, s])) },
+    requirements: { ...ctx.state.requirements, ...Object.fromEntries(chainedStates.map((s) => [s.propertyId, s])) },
     resultRevision,
   };
 
   // Completion semantics: requirement satisfaction, not task completion.
-  const statesMap = new Map(sweep.states.map((s) => [s.propertyId, s]));
+  const statesMap = new Map(chainedStates.map((s) => [s.propertyId, s]));
   const blocking = ctx.followups.openBlocking();
   let status: RunStatus;
   if (blocking.length > 0) {
@@ -786,7 +831,7 @@ async function finishRun(
   } else {
     status = "partially_satisfied";
   }
-  const report = await finalize(ctx, status, sweep.states, {
+  const report = await finalize(ctx, status, chainedStates, {
     resultRevision,
     diffStat: stat || undefined,
     changedFileCount,
