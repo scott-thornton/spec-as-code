@@ -49,6 +49,20 @@ requirements:
         type: command
         command: npx vitest run tests/unit/app.spec.ts
         discriminating: true
+  - id: LF-007
+    statement: Diff-scoped guard whose exclusion regex mentions a test path.
+    priority: must
+    acceptance:
+      - id: LF-007-A
+        type: command
+        command: test "$(git diff main --name-only -- src | grep -vE 'generated/|composables/__tests__/useServer.spec.ts$')" = ""
+  - id: LF-008
+    statement: Runner executes a protected tests directory.
+    priority: must
+    acceptance:
+      - id: LF-008-A
+        type: command
+        command: npx vitest run src/composables/error/cart/__tests__
   - id: LF-004
     statement: Duplicate commands with differing expectations.
     priority: must
@@ -70,6 +84,8 @@ provider:
   name: none
 execution:
   commandTimeoutMs: 3000
+verification:
+  protectedPaths: ["src/**/__tests__/**"]
 commands:
   network: deny
 `;
@@ -96,6 +112,12 @@ describe("spc spec lint", () => {
     expect(r.stdout).toContain("LINT-UNPROTECTED-ORACLE");
     expect(r.stdout).toContain("LINT-DUPLICATE-COMMAND");
     expect(r.stdout).toContain("LINT-EMPTY-OUT-OF-SCOPE");
+    // Slerp-found false-positive classes, pinned as regressions:
+    // a test path inside a git-diff exclusion regex is not an execution
+    // (LF-007-A), and a runner over a protected DIRECTORY is covered
+    // (LF-008-A) - neither may warn.
+    expect(r.stdout).not.toContain("LF-007-A");
+    expect(r.stdout).not.toContain("LF-008-A");
   });
 
   it("flags a discriminating criterion that passes at baseline with the precise diagnostic", () => {
