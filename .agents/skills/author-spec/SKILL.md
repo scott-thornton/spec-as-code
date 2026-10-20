@@ -64,7 +64,7 @@ ladder, strongest last:
   Fence the suites your criteria execute.
 
   Authoring consequence: when criteria execute files under protected
-  paths, author and commit the failing oracle BEFORE apply - tasks
+  paths, author and commit the failing oracle before apply - tasks
   cannot write protected paths, so a plan whose tasks would create the
   oracle fails with PROTECTED_PATH_WRITE by design. Commit spec and
   oracle together; the red phase then runs the committed oracle at the
