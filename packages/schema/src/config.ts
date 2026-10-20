@@ -57,6 +57,14 @@ export const executionConfigSchema = z.strictObject({
   inPlaceBranch: z.enum(["run", "current"]).default("run"),
   /** Harness provider: how long to wait for an external agent's answer per request. */
   harnessResponseTimeoutMs: z.number().int().positive().default(900_000),
+  /**
+   * Role-specific response windows (planner/executor/replanner/
+   * verifier). Roles without an entry use harnessResponseTimeoutMs.
+   * Field case: verifier agent-review requests are the slow ones.
+   */
+  harnessTimeouts: z
+    .record(z.enum(["planner", "executor", "replanner", "verifier"]), z.number().int().positive())
+    .optional(),
   /** Extra high-risk write patterns for tiered amendment approval. */
   highRiskWritePatterns: z.array(z.string().min(1)).default([]),
   /**

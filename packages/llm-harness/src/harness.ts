@@ -32,6 +32,8 @@ export class HarnessProvider implements LLMProvider {
     private readonly timeoutMs = 900_000,
     private readonly sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
     private readonly now: () => number = () => Date.now(),
+    /** Role-specific windows; roles without an entry use timeoutMs. */
+    private readonly roleTimeouts?: Partial<Record<string, number>>,
   ) {}
 
   async generateStructured<T>(request: StructuredRequest<T>): Promise<StructuredResponse<T>> {
@@ -62,7 +64,8 @@ export class HarnessProvider implements LLMProvider {
       createdAt: new Date().toISOString(),
     });
 
-    while (this.now() < windowStart + this.timeoutMs) {
+    const windowMs = this.roleTimeouts?.[request.role ?? ""] ?? this.timeoutMs;
+    while (this.now() < windowStart + windowMs) {
       await this.sleep(POLL_INTERVAL_MS);
       if (!this.store.hasAnswer(id)) continue;
 
@@ -93,7 +96,7 @@ export class HarnessProvider implements LLMProvider {
     this.store.expirePending(id);
     throw new LLMError(
       HARNESS_RESPONSE_TIMEOUT,
-      `harness request ${id} (role ${request.role}) was not answered with a valid value within ${this.timeoutMs}ms; see .spc/harness/stale/${id}.json`,
+      `harness request ${id} (role ${request.role}) was not answered with a valid value within ${windowMs}ms; see .spc/harness/stale/${id}.json`,
     );
   }
 }

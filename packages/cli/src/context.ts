@@ -125,6 +125,9 @@ export async function createProvider(config: Config, repoRoot: string): Promise<
       return new HarnessProvider(
         new HarnessStore(repoRoot),
         config.execution.harnessResponseTimeoutMs,
+        undefined,
+        undefined,
+        config.execution.harnessTimeouts,
       );
     }
     case "anthropic": {
