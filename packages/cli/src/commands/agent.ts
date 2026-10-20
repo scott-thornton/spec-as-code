@@ -42,8 +42,16 @@ export function runAgentList(cwd: string | undefined, format: "text" | "json"): 
     console.log("No pending harness requests.");
     return 0;
   }
+  const ageOf = (createdAt: string): string => {
+    const ms = Date.now() - Date.parse(createdAt);
+    if (Number.isNaN(ms)) return "?";
+    const m = Math.floor(ms / 60000);
+    if (m < 1) return `${Math.floor(ms / 1000)}s`;
+    if (m < 60) return `${m}m`;
+    return `${Math.floor(m / 60)}h`;
+  };
   for (const r of pending) {
-    console.log(`${r.id}  [${r.role}]  ${r.schemaName}`);
+    console.log(`${r.id}  [${r.role}]  ${r.schemaName}  age ${ageOf(r.createdAt)}`);
     if (r.lastError) {
       console.log(`    retry needed - previous answer invalid: ${r.lastError.split("\n")[0]}`);
     }
@@ -123,6 +131,34 @@ export function runAgentShow(id: string, cwd: string | undefined, part?: AgentSh
   console.log(`=== SYSTEM ===\n${request.system}\n\n=== PROMPT ===\n${request.prompt}\n\n=== SCHEMA (${request.schemaName}) ===`);
   console.log(JSON.stringify(request.jsonSchema, null, 2));
   return 0;
+}
+
+/**
+ * `spc agent wait` - block until a harness request appears, then print
+ * it. The answering agent's loop becomes: answer, wait, answer - no
+ * sleep-polling (the CHK3555 agent polled all day).
+ */
+export async function runAgentWait(options: { timeoutMs?: number; cwd?: string }): Promise<number> {
+  const { store } = storeFor(options.cwd);
+  const timeoutMs = options.timeoutMs ?? 15 * 60 * 1000;
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const pending = store.listPending();
+    if (pending.length > 0) {
+      for (const r of pending) {
+        const ms = Date.now() - Date.parse(r.createdAt);
+        const m = Math.floor(ms / 60000);
+        const age = m < 1 ? `${Math.floor(ms / 1000)}s` : m < 60 ? `${m}m` : `${Math.floor(m / 60)}h`;
+        console.log(`${r.id}  [${r.role}]  ${r.schemaName}  age ${age}`);
+      }
+      return 0;
+    }
+    if (Date.now() >= deadline) {
+      console.error(`no harness request became pending within ${timeoutMs}ms`);
+      return 1;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
 }
 
 export function runAgentRespond(options: { id: string; file?: string; stdin?: boolean; by?: string; cwd?: string }): number {

@@ -87,7 +87,7 @@ export function stageChanges(worktreeRoot: string, changes: readonly ProposedCha
       return {
         ok: false,
         code: PATCH_BASE_MISMATCH,
-        message: `${PATCH_BASE_MISMATCH}: ${change.path} content digests to ${actualDigest}, but the op declared ${change.baseDigest}; the file changed since it was read - re-read and restate, nothing was applied`,
+        message: `${PATCH_BASE_MISMATCH}: ${change.path} content digests to ${actualDigest}, but the op declared ${change.baseDigest}; the file changed since it was read - re-read and restate, nothing was applied - compose chains with spc patch build --after <ops.json>`,
       };
     }
 
@@ -103,7 +103,7 @@ export function stageChanges(worktreeRoot: string, changes: readonly ProposedCha
       return {
         ok: false,
         code: PATCH_ANCHOR_NOT_UNIQUE,
-        message: `${PATCH_ANCHOR_NOT_UNIQUE}: anchor "${truncate(change.anchor)}" occurs ${occurrences} times in ${change.path}; anchor on a longer unique span instead`,
+        message: `${PATCH_ANCHOR_NOT_UNIQUE}: anchor "${truncate(change.anchor)}" occurs ${occurrences} times in ${change.path}; anchor on a longer unique span instead - compose chains with spc patch build --after <ops.json>`,
       };
     }
 

@@ -10,7 +10,7 @@ import { runReconcile } from "./commands/reconcile.js";
 import { runDiff, runStatus } from "./commands/status.js";
 import { runFollowupResolve, runFollowups } from "./commands/followups.js";
 import { runCancel, runExport, runPr, runReplay, runShow } from "./commands/run.js";
-import { runAgentList, runAgentRespond, runAgentShow, runAgentValidate, runAgentDryRun, type AgentShowPart } from "./commands/agent.js";
+import { runAgentList, runAgentRespond, runAgentShow, runAgentValidate, runAgentDryRun, runAgentWait, type AgentShowPart } from "./commands/agent.js";
 import { runSkills, runUseSkill } from "./commands/skills.js";
 import { runPolicyExplain } from "./commands/policy.js";
 import { runQuickCommand } from "./commands/quick.js";
@@ -184,6 +184,14 @@ agent
       return;
     }
     process.exitCode = runAgentShow(id, opts.cwd, part as AgentShowPart | undefined);
+  });
+agent
+  .command("wait")
+  .description("block until a harness request is pending, then print it (no sleep-polling)")
+  .option("--timeout <ms>", "give up after this many milliseconds (default 15 minutes)", "900000")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action(async (opts: { timeout: string; cwd: string }) => {
+    process.exitCode = await runAgentWait({ timeoutMs: Number(opts.timeout) || 900000, cwd: opts.cwd });
   });
 agent
   .command("respond <id>")
