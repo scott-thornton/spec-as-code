@@ -835,7 +835,7 @@ async function finishRun(
     status = "failed";
     if (schedulerOutcome === "runnable_work_remains") {
       const parked = currentPlan.tasks
-        .filter((t) => ["needs_replan", "blocked"].includes(ctx.state.tasks[t.id]?.status ?? ""))
+        .filter((t) => ctx.state.tasks[t.id]?.status === "needs_replan")
         .map((t) => t.id);
       const f = ctx.followups.create(
         {

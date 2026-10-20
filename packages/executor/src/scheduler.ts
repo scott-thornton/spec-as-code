@@ -154,9 +154,11 @@ export async function runScheduler(io: SchedulerIO): Promise<SchedulerResult> {
   // to pending; anything still sitting in needs_replan or blocked here
   // means a mechanism failed to do its job - fail loudly, exactly as
   // the audit spine fails loudly over tampering.
+  // needs_replan only: blocked-behind-failed is legitimate completion
+  // semantics, not a zombie - the blocking task already failed loudly.
   const parked = io
     .getPlan()
-    .tasks.filter((t) => ["needs_replan", "blocked"].includes(io.getTaskState(t.id)?.status ?? ""));
+    .tasks.filter((t) => io.getTaskState(t.id)?.status === "needs_replan");
   if (parked.length > 0) {
     return { outcome: "runnable_work_remains", failedTasks };
   }
