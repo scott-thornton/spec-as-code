@@ -1,0 +1,56 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: timedout-persistence
+  title: Runs killed by timeout die loudly
+goal: >
+  From the CHK3555 retro: two verify runs killed by the harness response
+  timeout left records with events and evidence but no summary and no
+  final state - half-written artifacts that brief renders as ghosts. A
+  run that dies must die loudly: final status timed_out, a summary
+  written, the pending request expired from the live queue immediately
+  (not lazily via the store sweep).
+requirements:
+  - id: TO-001
+    statement: >
+      When a verification sweep dies on the harness response timeout,
+      the run finalizes with status timed_out: state.json carries it,
+      summary.md is written, and the orphaned pending request is removed
+      from the live queue at timeout time.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**, packages/llm-harness/src/**, packages/cli/src/**]
+    acceptance:
+      - id: TO-001-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/timedout.test.ts
+        discriminating: true
+  - id: TO-002
+    statement: >
+      spc brief renders timed_out runs distinctly (not as ghosts), and
+      timed_out is a first-class RunStatus throughout the schema and
+      rendering.
+    priority: must
+    scope:
+      include: [packages/schema/src/**, packages/cli/src/**]
+    acceptance:
+      - id: TO-002-A
+        type: file
+        path: packages/schema/src/state.ts
+        assert:
+          contains: "timed_out"
+        discriminating: true
+  - id: TO-003
+    statement: >
+      Regression guard: workspace typechecks; cli, runtime and
+      llm-harness suites green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: TO-003-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli test && pnpm --filter @spc/runtime test && pnpm --filter @spc/llm-harness test
+outOfScope:
+  - resume semantics for timed_out runs (separate conversation)
+  - apply-run timeout handling beyond the shared status (verify path is the field case)
