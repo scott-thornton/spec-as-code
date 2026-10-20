@@ -32,7 +32,7 @@ export interface QuickResult {
 }
 
 export async function runQuick(
-  options: { repoRoot: string; intent: string; verifyCommand: string },
+  options: { repoRoot: string; intent: string; verifyCommand: string; writePath?: string; stay?: boolean },
   deps: { providerFactory(): Promise<LLMProvider | null>; now?(): string; log?(line: string): void },
 ): Promise<QuickResult> {
   const paths = spcPaths(options.repoRoot);
@@ -89,6 +89,38 @@ export async function runQuick(
   const planId = newPlanId(paths.plansDir);
   mkdirSync(paths.plansDir, { recursive: true });
   const usage: UsageRecord[] = [];
+  // --write: the one-task plan is mechanical (every field quick planner
+  // answer was this shape), so the planner request is skipped entirely.
+  if (options.writePath) {
+    const mustId = compiled.ir.properties.find((p) => p.priority === "must")?.id ?? compiled.ir.properties[0]!.id;
+    const mechanicalPlan = {
+      apiVersion: "spc.dev/v1alpha1" as const,
+      kind: "Plan" as const,
+      metadata: { id: planId, createdAt: deps.now?.() ?? new Date().toISOString() },
+      spec: { id: compiled.ir.spec.metadata.id, digest: compiled.ir.digest },
+      repository: { revision: snapshot.revision, snapshotDigest: snapshot.digest },
+      tasks: [{
+        id: "T001",
+        title: "Apply the quick intent",
+        kind: "modify" as const,
+        intent: options.intent,
+        dependsOn: [],
+        satisfies: [mustId],
+        targets: { write: [options.writePath] },
+      }],
+    };
+    const mechDiagnostics = validatePlan(mechanicalPlan, compiled.ir);
+    if (hasErrors(mechDiagnostics)) {
+      throw new SpcError("PLAN_INVALID", `quick --write plan failed validation:\n${formatDiagnostics(mechDiagnostics)}`);
+    }
+    writeFileSync(paths.planFile(planId), JSON.stringify(mechanicalPlan, null, 2), "utf8");
+    (deps.log ?? (() => {}))(`quick --write: spec ${specPath}, plan ${planId} (planner skipped)`);
+    const report = await applyPlan(
+      { repoRoot: options.repoRoot, planFile: paths.planFile(planId), stay: options.stay },
+      { providerFactory: async () => provider, ...(deps.now ? { now: deps.now } : {}), ...(deps.log ? { log: deps.log } : {}) },
+    );
+    return { specPath, specId, planId, report, usage, exceededQuickShape: report.status !== "succeeded" };
+  }
   const result = await generatePlan({
     specIr: compiled.ir,
     snapshot,
@@ -108,7 +140,7 @@ export async function runQuick(
   (deps.log ?? (() => {}))(`quick: spec ${specPath}, plan ${planId}`);
 
   const report = await applyPlan(
-    { repoRoot: options.repoRoot, planFile: paths.planFile(planId) },
+    { repoRoot: options.repoRoot, planFile: paths.planFile(planId), stay: options.stay },
     { providerFactory: async () => provider, ...(deps.now ? { now: deps.now } : {}), ...(deps.log ? { log: deps.log } : {}) },
   );
 
