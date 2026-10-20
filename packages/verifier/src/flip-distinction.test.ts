@@ -33,6 +33,7 @@ function evidence(id: string, outcome: "supports" | "contradicts" | "inconclusiv
 describe("red-phase outcome distinction (external review Finding C)", () => {
   it("a contradicted baseline followed by a pass IS a flip", () => {
     const result = evaluateProperty(property, [evidence("EV-1", "contradicts", "red"), evidence("EV-2", "supports")], {
+      allowAgentOnly: false,
       requireRedPhase: true,
       now: () => "2026-10-20T00:00:00.000Z",
     });
@@ -44,6 +45,7 @@ describe("red-phase outcome distinction (external review Finding C)", () => {
     // final sweep approved and passing. The old code's trailing else
     // treated this as a demonstrated flip.
     const result = evaluateProperty(property, [evidence("EV-1", "inconclusive", "red"), evidence("EV-2", "supports")], {
+      allowAgentOnly: false,
       requireRedPhase: true,
       now: () => "2026-10-20T00:00:00.000Z",
     });
