@@ -24,6 +24,8 @@ function git(args: string[]): void {
 mkdirSync(path.join(root, ".spc"), { recursive: true });
 writeFileSync(path.join(root, ".gitignore"), ".spc/\n", "utf8");
 git(["init", "-q", "-b", "main"]);
+git(["config", "user.email", "t@t"]);
+git(["config", "user.name", "t"]);
 git(["add", "."]);
 git(["commit", "-q", "-m", "base", "--allow-empty"]);
 
