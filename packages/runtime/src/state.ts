@@ -161,6 +161,19 @@ export function applyEvent(state: RunState, event: Event): RunState {
       }
       break;
     }
+    case "PROPERTY_INHERITED": {
+      // Cross-run inheritance is a first-class transition so the event log
+      // stays authoritative over state.json (external review Finding B).
+      const req = s.requirements[typeof p.propertyId === "string" ? p.propertyId : ""] as RequirementState | undefined;
+      if (req) {
+        s.requirements[req.propertyId] = {
+          ...req,
+          status: "satisfied",
+          reason: typeof p.reason === "string" ? p.reason : req.reason,
+        };
+      }
+      break;
+    }
     case "PROPERTY_VERIFIED": {
       const propertyId = typeof p.propertyId === "string" ? p.propertyId : undefined;
       if (propertyId) {

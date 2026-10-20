@@ -221,6 +221,29 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
   events.append("REPOSITORY_OBSERVED", { snapshotDigest: snapshot.digest, revision: snapshot.revision });
   events.append("PLAN_VALIDATED", { planId: meta.planId, planDigest: meta.planDigest });
 
+  // Contextual validity (external review Finding D): a plan is structurally
+  // validated against the spec, but it was authored against a specific
+  // repository revision. If the repository advanced between planning and
+  // apply, that drift is VISIBLE - an event and a non-blocking follow-up -
+  // rather than implicit (planDriftPolicy: warn default; reject hardens).
+  const planRevision = plan.repository.revision;
+  if (planRevision !== "0000" && planRevision !== snapshot.revision) {
+    events.append("PLAN_DRIFT", { planRevision, baseRevision: snapshot.revision });
+    const followups = new FollowupStore(paths.followupsFile(runId));
+    const f = followups.create(
+      {
+        type: "post_run",
+        blocking: false,
+        title: "Plan drift: repository advanced between planning and apply",
+        description: `The plan was authored against ${planRevision.slice(0, 12)} but applied at ${snapshot.revision.slice(0, 12)}. The plan is structurally valid; its contextual assumptions (file locations, responsibilities) may be stale. Executor needs_replan reports will surface mismatches.`,
+      },
+      runId,
+      now,
+    );
+    events.append("FOLLOWUP_CREATED", { followupId: f.id, blocking: false, type: f.type });
+    (deps.log ?? (() => {}))(`plan drift: planned at ${planRevision.slice(0, 12)}, applying at ${snapshot.revision.slice(0, 12)} (warned)`);
+  }
+
   const provider = await deps.providerFactory();
   const ctx: RunContext = {
     paths,
@@ -787,6 +810,9 @@ async function finishRun(
     if (priorId === ctx.meta.runId) continue;
     const priorMeta = loadRunMeta(ctx.paths.runsDir, priorId);
     if (priorMeta?.specId !== ctx.specIr.spec.metadata.id) continue;
+    // Digest binding (external review Finding A): satisfaction proven
+    // against an older contract cannot discharge this one's obligations.
+    if (priorMeta.specDigest !== ctx.specIr.digest) continue;
     const priorStateFile = ctx.paths.stateFile(priorId);
     if (!existsSync(priorStateFile)) continue;
     try {
@@ -812,6 +838,15 @@ async function finishRun(
           ) {
             const priorId = priorSatisfied.get(s.propertyId)!;
             ctx.log(`Property ${s.propertyId}: inherited satisfied from prior run ${priorId} (criteria pass at this base)`);
+            // The transition is an EVENT, not just a state mutation: the
+            // event log stays authoritative and replay reconstructs the
+            // inherited status (external review Finding B).
+            ctx.events.append("PROPERTY_INHERITED", {
+              propertyId: s.propertyId,
+              priorRunId: priorId,
+              status: "satisfied",
+              reason: `established by prior run ${priorId} - criteria pass at this base; flip evidence lives in that run's record`,
+            });
             return {
               ...s,
               status: "satisfied" as const,

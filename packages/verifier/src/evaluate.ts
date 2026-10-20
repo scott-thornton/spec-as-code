@@ -129,8 +129,18 @@ export function evaluateProperty(
           detail: "criterion passed at base revision; it does not discriminate this change",
           redPhase: "passed_at_base",
         };
-      } else {
+      } else if (red.outcome === "contradicts") {
         verdict = { ...verdict, redPhase: "flipped" };
+      } else {
+        // Inconclusive baseline (e.g. policy-denied command): absence of
+        // red is not proof of red - no flip established (external review
+        // Finding C: the trailing else used to mark this flipped).
+        verdict = {
+          ...verdict,
+          status: "indeterminate",
+          detail: "baseline evidence inconclusive; no red was demonstrated, so no flip is established",
+          redPhase: "no_red_evidence",
+        };
       }
     }
     verdicts.push(verdict);
