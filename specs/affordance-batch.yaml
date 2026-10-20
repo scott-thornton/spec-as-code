@@ -1,0 +1,78 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: affordance-batch
+  title: Affordances where agents already look
+goal: >
+  From CHK3555: the agent found agent dry-run in --help because it never
+  loaded the skill; hand-batched same-file patches burned an attempt on
+  sequential semantics it could not have known; a planner rejection read
+  as "no stated reason" because the diagnostics rendered after ~74KB of
+  repository payload; and the same agent criterion was answered ~6 times
+  per run with one missed polling window costing a 900s timeout. Four
+  small fixes, one shape: put the answer where the question is already
+  being asked.
+requirements:
+  - id: AF-001
+    statement: >
+      The spc agent list footer points at validate and dry-run
+      (De-risk with:) alongside inspect and answer, and the executor
+      contract tells the answering agent how same-file patch ops chain
+      (each op after the first anchors and digests against the content
+      after prior ops; compose with spc patch build --after).
+    priority: must
+    scope:
+      include: [packages/cli/src/**, packages/executor/src/**]
+    acceptance:
+      - id: AF-001-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/agent-footer.test.ts
+        discriminating: true
+      - id: AF-001-B
+        type: command
+        command: pnpm --filter @spc/executor exec vitest run src/agent-contract.test.ts
+        discriminating: true
+  - id: AF-002
+    statement: >
+      Repair and amendment diagnostics render BEFORE the repository
+      payload in planner and replanner prompts, so a rejection reason is
+      never buried under the dump (the instructions-before-payload fix,
+      applied to the repair channel).
+    priority: must
+    scope:
+      include: [packages/planner/src/**]
+    acceptance:
+      - id: AF-002-A
+        type: command
+        command: pnpm --filter @spc/planner exec vitest run src/repair-visibility.test.ts
+        discriminating: true
+  - id: AF-003
+    statement: >
+      Agent-verdict criteria cache per criterion per revision: repeated
+      sweeps at the same revision reuse the recorded verdict (evidence
+      still recorded per sweep, marked cachedVerdict), a different
+      revision asks again. Within a run, the cache is shared across the
+      red sweep, verify tasks and the final sweep.
+    priority: must
+    scope:
+      include: [packages/verifier/src/**, packages/runtime/src/**]
+    acceptance:
+      - id: AF-003-A
+        type: command
+        command: pnpm --filter @spc/verifier exec vitest run src/agent-verdict-cache.test.ts
+        discriminating: true
+  - id: AF-004
+    statement: >
+      Regression guard: workspace typechecks; cli, executor, verifier,
+      planner and runtime suites green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: AF-004-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli test && pnpm --filter @spc/executor test && pnpm --filter @spc/verifier test && pnpm --filter @spc/planner test && pnpm --filter @spc/runtime test
+outOfScope:
+  - harness requeue semantics (already carry zod issues)
+  - verifier verdict caching across runs (per run only; cross-run is the evidence record's job)
+  - queue TTL (separate card)
