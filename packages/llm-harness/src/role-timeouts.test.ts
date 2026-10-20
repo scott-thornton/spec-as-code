@@ -16,7 +16,7 @@ function makeProvider(roleTimeouts?: Partial<Record<string, number>>): HarnessPr
   roots.push(root);
   const store = new HarnessStore(root);
   const fastSleep = (): Promise<void> => new Promise((r) => setTimeout(r, 1));
-  return new HarnessProvider(store, 10_000, fastSleep, () => Date.now(), roleTimeouts);
+  return new HarnessProvider(store, 200, fastSleep, () => Date.now(), roleTimeouts);
 }
 
 describe("per-role harness timeouts", () => {
@@ -27,7 +27,7 @@ describe("per-role harness timeouts", () => {
       provider.generateStructured({ role: "verifier", key: "v@1", requestId: "r1", system: "s", prompt: "p", schema, schemaName: "X" }),
     ).rejects.toThrow(/not answered/);
     const elapsed = Date.now() - started;
-    expect(elapsed).toBeLessThan(5_000); // the 10s default would not have fired
+    expect(elapsed).toBeLessThan(150); // fired at the 60ms role window
   });
 
   it("roles without an override use the global window", async () => {
@@ -39,6 +39,7 @@ describe("per-role harness timeouts", () => {
       provider.generateStructured({ role: "planner", key: "p@1", requestId: "r2", system: "s", prompt: "p", schema, schemaName: "X" }),
     ).rejects.toThrow(/not answered/);
     const elapsed = Date.now() - started;
-    expect(elapsed).toBeLessThan(5_000);
+    expect(elapsed).toBeGreaterThanOrEqual(150); // the 200ms global, not the 60ms verifier window
+    expect(elapsed).toBeLessThan(2_000);
   });
 });
