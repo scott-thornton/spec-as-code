@@ -20,7 +20,7 @@ const DECORATION_COMMANDS = new Set(["true", ":", "pwd", "exit 0", "exit(0)"]);
  * skill's prose, mechanized. Pure: reads the IR and config, executes
  * nothing, writes nothing. Warnings never gate.
  */
-export function lintSpec(ir: SpecIR, config: Config): LintWarning[] {
+export function lintSpec(ir: SpecIR, config: Config, source?: string): LintWarning[] {
   const warnings: LintWarning[] = [];
   const commandUses = new Map<string, { criterion: string; expect?: number }[]>();
 
@@ -100,6 +100,17 @@ export function lintSpec(ir: SpecIR, config: Config): LintWarning[] {
     }
   }
 
+  // Double-quoted command scalars silently reinterpret backslash
+  // escapes (field case: \/ became /), so the criterion that runs is
+  // not the criterion the author wrote. Source-level rule.
+  if (source !== undefined && /command:\s*"[^"\n]*\\/.test(source)) {
+    warnings.push({
+      rule: "LINT-QUOTED-BACKSLASH",
+      target: ir.spec.metadata.id,
+      message: "double-quoted command scalar contains a backslash - YAML reinterprets escape sequences, so the command that runs may not be the command written; use a single-quoted or block scalar (spec validate --show-commands shows the parsed result)",
+    });
+  }
+
   if ((ir.spec.outOfScope ?? []).length === 0) {
     warnings.push({
       rule: "LINT-EMPTY-OUT-OF-SCOPE",
@@ -133,7 +144,7 @@ export async function runSpecLint(specFile: string, cwd?: string): Promise<numbe
     return 1;
   }
   const ir = compiled.ir;
-  printWarnings(lintSpec(ir, config));
+  printWarnings(lintSpec(ir, config, readFileSync(path.resolve(repoRoot, specFile), "utf8")));
 
   const discriminating = ir.properties.flatMap((p) =>
     p.acceptance

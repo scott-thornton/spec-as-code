@@ -14,7 +14,7 @@ function sourceOf(file: string): string {
 }
 
 /** `spc spec validate <file>` - compiler-quality diagnostics + digest. */
-export function runSpecValidate(file: string, format: "text" | "json" = "text"): number {
+export function runSpecValidate(file: string, format: "text" | "json" = "text", showCommands = false): number {
   const result = compileSpecFile(file);
   if (format === "json") {
     const ok = result.ok && result.ir !== null;
@@ -47,7 +47,7 @@ export function runSpecValidate(file: string, format: "text" | "json" = "text"):
   // Static lint warnings fold into validate; NOTHING executes here -
   // gates read. Dynamic checks live only in `spc spec lint`.
   const config = loadRepoConfig(resolveRepoRoot());
-  const lint = lintSpec(result.ir, config);
+  const lint = lintSpec(result.ir, config, sources.get(file) ?? "");
   if (lint.length > 0) {
     console.log();
     for (const w of lint) console.log(`lint warning: ${w.rule} ${w.target}: ${w.message}`);
@@ -70,6 +70,18 @@ export function runSpecValidate(file: string, format: "text" | "json" = "text"):
   console.log("");
   console.log(`Spec valid.`);
   console.log(`Digest: ${result.ir.digest}`);
+  if (showCommands) {
+    const commands = result.ir.properties.flatMap((p) =>
+      p.acceptance
+        .filter((c) => c.type === "command" && c.command !== undefined)
+        .map((c) => `  ${c.id}: ${c.command}`),
+    );
+    if (commands.length > 0) {
+      console.log("");
+      console.log("Commands (parsed, post-YAML):");
+      for (const line of commands) console.log(line);
+    }
+  }
   return 0;
 }
 

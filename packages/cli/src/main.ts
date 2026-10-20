@@ -56,8 +56,9 @@ spec
   .command("validate <file>")
   .description("validate a spec file and print its digest")
   .option("--format <format>", "text | json (machine-readable)", "text")
-  .action((file: string, opts: { format: string }) => {
-    process.exitCode = runSpecValidate(file, opts.format === "json" ? "json" : "text");
+  .option("--show-commands", "print every command criterion's parsed string (post-YAML) after validation")
+  .action((file: string, opts: { format: string; showCommands?: boolean }) => {
+    process.exitCode = runSpecValidate(file, opts.format === "json" ? "json" : "text", opts.showCommands === true);
   });
 spec
   .command("show <file>")
