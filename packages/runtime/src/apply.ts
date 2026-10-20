@@ -774,11 +774,11 @@ async function finishRun(
   // flip evidence living in the prior run's record. Inherit those
   // statuses with provenance; nothing is inherited without a record.
   const priorSatisfied = new Map<string, string>();
-  for (const priorId of listRunIds(paths.runsDir)) {
+  for (const priorId of listRunIds(ctx.paths.runsDir)) {
     if (priorId === ctx.meta.runId) continue;
-    const priorMeta = loadRunMeta(paths.runsDir, priorId);
+    const priorMeta = loadRunMeta(ctx.paths.runsDir, priorId);
     if (priorMeta?.specId !== ctx.specIr.spec.metadata.id) continue;
-    const priorStateFile = paths.stateFile(priorId);
+    const priorStateFile = ctx.paths.stateFile(priorId);
     if (!existsSync(priorStateFile)) continue;
     try {
       const priorState = JSON.parse(readFileSync(priorStateFile, "utf8")) as {
