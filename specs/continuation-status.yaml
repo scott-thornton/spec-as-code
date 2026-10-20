@@ -1,0 +1,74 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: continuation-status
+  title: Continuation runs report prior-satisfied properties truthfully
+goal: >
+  CHK3555's recovery run concluded with seven properties indeterminate -
+  "criterion passed at base revision" - because the flip evaluator is
+  correct inside its frame: work landed by run 1 cannot flip in run 2.
+  The PR draft then said 4/11 over work that was 10/10-must done, a
+  material misrepresentation of the combined outcome. The fix gives
+  continuation runs chain awareness: when a property's only obstacle is
+  passed-at-base (the work is present and its criteria pass), and a
+  prior apply run of the same spec recorded that property satisfied,
+  the property reports satisfied with its provenance named - the prior
+  run's flip evidence carries it. No prior record, no inheritance; a
+  genuinely failing criterion stays unsatisfied.
+requirements:
+  - id: CS-001
+    statement: >
+      In an apply run, a property whose final state is indeterminate
+      solely from passed-at-base discriminating criteria, where a prior
+      apply run of the same spec recorded that property satisfied,
+      reports satisfied with a reason naming the prior run. The
+      inherited status counts toward run completion.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: CS-001-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/continuation-status.test.ts
+        discriminating: true
+  - id: CS-002
+    statement: >
+      Inheritance requires the prior record: with no prior satisfied
+      run the property stays unsatisfied/indeterminate as the evidence
+      dictates - nothing is inherited from absence.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: CS-002-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/continuation-status.test.ts
+        discriminating: true
+  - id: CS-003
+    statement: >
+      The run's persisted state.json carries the inherited status and
+      prior-run reason, so status, PR drafts and downstream consumers
+      render the truthful combined outcome without changes of their own.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: CS-003-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/continuation-status.test.ts
+        discriminating: true
+  - id: CS-004
+    statement: >
+      Regression guard: runtime, verifier and executor suites green,
+      workspace typechecks.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: CS-004-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/runtime test && pnpm --filter @spc/verifier test && pnpm --filter @spc/executor test
+outOfScope:
+  - changes to the flip evaluator itself (its frame is correct; the inheritance is a run-level post-pass)
+  - PR draft or status rendering changes (they consume state, which now carries truth)
+  - cross-spec aggregation (same spec only)
