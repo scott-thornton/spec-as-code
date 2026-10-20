@@ -58,21 +58,21 @@ git(["commit", "-q", "-m", "base"]);
 // A run of brief-a whose recorded config digest NO LONGER matches (stale premise).
 const runA = path.join(root, ".spc", "runs", "run-aaa");
 mkdirSync(runA, { recursive: true });
-writeFileSync(path.join(runA, "metadata.json"), JSON.stringify({ runId: "run-aaa", kind: "apply", specId: "brief-a", configDigest: "sha256:" + "0".repeat(64), createdAt: "2026-10-19T10:00:00.000Z" }), "utf8");
+writeFileSync(path.join(runA, "metadata.json"), JSON.stringify({ runId: "run-aaa", kind: "apply", specId: "brief-a", configDigest: "sha256:" + "0".repeat(64), createdAt: new Date().toISOString() }), "utf8");
 writeFileSync(path.join(runA, "state.json"), JSON.stringify({ runId: "run-aaa", status: "succeeded", baseRevision: "x", resultRevision: "y" }), "utf8");
-writeFileSync(path.join(runA, "followups.json"), JSON.stringify([{ id: "F-1", type: "investigation", blocking: true, status: "open", title: "look at this", description: "d", createdAt: "2026-10-19T10:05:00.000Z" }]), "utf8");
+writeFileSync(path.join(runA, "followups.json"), JSON.stringify([{ id: "F-1", type: "investigation", blocking: true, status: "open", title: "look at this", description: "d", createdAt: new Date().toISOString() }]), "utf8");
 
 // A run of brief-b whose recorded digest is CURRENT (no warning).
 const actualDigest = "sha256:" + createHash("sha256").update(CONFIG, "utf8").digest("hex");
 const runB = path.join(root, ".spc", "runs", "run-bbb");
 mkdirSync(runB, { recursive: true });
-writeFileSync(path.join(runB, "metadata.json"), JSON.stringify({ runId: "run-bbb", kind: "apply", specId: "brief-b", configDigest: actualDigest, createdAt: "2026-10-19T11:00:00.000Z" }), "utf8");
+writeFileSync(path.join(runB, "metadata.json"), JSON.stringify({ runId: "run-bbb", kind: "apply", specId: "brief-b", configDigest: actualDigest, createdAt: new Date().toISOString() }), "utf8");
 writeFileSync(path.join(runB, "state.json"), JSON.stringify({ runId: "run-bbb", status: "partially_satisfied", baseRevision: "x", resultRevision: "y" }), "utf8");
 
 // One pending harness request.
 writeFileSync(
   path.join(root, ".spc", "harness", "pending", "planner-planner@1-1.json"),
-  JSON.stringify({ id: "planner-planner@1-1", role: "planner", key: "planner@1", schemaName: "PlannerOutput", jsonSchema: { type: "object" }, system: "s", prompt: "p", createdAt: "2026-10-19T12:00:00.000Z" }),
+  JSON.stringify({ id: "planner-planner@1-1", role: "planner", key: "planner@1", schemaName: "PlannerOutput", jsonSchema: { type: "object" }, system: "s", prompt: "p", createdAt: new Date().toISOString() }),
   "utf8",
 );
 
