@@ -1,0 +1,43 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: role-timeouts
+  title: Per-role harness response windows
+goal: >
+  From the CHK3555 retro: verifier agent-review requests are the slow
+  ones, but one global harnessResponseTimeoutMs shapes every role. A
+  config map gives each role its own window, defaulting to the global.
+requirements:
+  - id: RT-001
+    statement: >
+      execution.harnessTimeouts (optional map of planner/executor/
+      replanner/verifier to milliseconds) overrides the global
+      harnessResponseTimeoutMs per role in the harness provider;
+      roles without an entry use the global window.
+    priority: must
+    scope:
+      include: [packages/schema/src/**, packages/llm-harness/src/**, packages/cli/src/**]
+    acceptance:
+      - id: RT-001-A
+        type: command
+        command: pnpm --filter @spc/llm-harness exec vitest run src/role-timeouts.test.ts
+        discriminating: true
+      - id: RT-001-B
+        type: file
+        path: packages/schema/src/config.ts
+        assert:
+          contains: "harnessTimeouts"
+        discriminating: true
+  - id: RT-002
+    statement: >
+      Regression guard: workspace typechecks; llm-harness, schema and
+      cli suites green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: RT-002-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/llm-harness test && pnpm --filter @spc/schema test && pnpm --filter @spc/cli test
+outOfScope:
+  - per-criterion or per-task timeouts (role granularity is the field ask)
