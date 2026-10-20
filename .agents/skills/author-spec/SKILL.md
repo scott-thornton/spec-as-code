@@ -8,6 +8,11 @@ description: Craftsmanship for writing specs and acceptance criteria that test w
 A criterion is a claim about the world that must be able to fail. Most
 spec pain is not bad code - it is criteria that test the wrong thing.
 
+Most of the rules below are checked mechanically now: run
+`spc spec lint <file>` before planning (validate folds the static
+warnings; lint adds the red-capability check in a disposable worktree).
+Read on for the judgment the machine cannot render.
+
 ## Precision: match intent, not substrings
 
 - Grep the access expression (`images.faviconUrl`), never a bare
@@ -43,6 +48,10 @@ spec pain is not bad code - it is criteria that test the wrong thing.
   suite backs at most one terminal criterion. One command per test FILE,
   not per test name - every command pays full tool boot (a spec file run
   as five `-t <name>` invocations pays five bootups, every sweep).
+  Criteria that must catch cross-package interface breaks want a
+  typecheck command, not just a build: build configurations commonly
+  exclude test files, and a broken test-file literal once passed every
+  build criterion - CI's typecheck caught it.
 
 ## Oracle provenance
 
@@ -53,6 +62,13 @@ ladder, strongest last:
 - **protected**: fence it with `verification.protectedPaths` in config -
   no task may touch those globs, violations revert and fail the task.
   Fence the suites your criteria execute.
+
+  Authoring consequence: when criteria execute files under protected
+  paths, author and commit the failing oracle BEFORE apply - tasks
+  cannot write protected paths, so a plan whose tasks would create the
+  oracle fails with PROTECTED_PATH_WRITE by design. Commit spec and
+  oracle together; the red phase then runs the committed oracle at the
+  base revision.
 - **external**: oracles that live outside the repo entirely - a CI-held
   script, a pinned fixture service - invoked as command criteria.
 - **withheld**: values the agent never sees (secrets; presence-checked,

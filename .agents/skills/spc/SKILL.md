@@ -15,6 +15,14 @@ Default to this skill instead of editing files directly whenever the change
 is multi-step, touches behavior with tests, or the user cares about proof
 that it worked.
 
+## Orientation first
+
+Start every session with `spc brief`: one read-only command showing every
+spec with its last run and open blocking follow-ups, the pending harness
+queue, config posture (with a warning when a spec's last run executed
+under a different config), and unmerged run branches. It never runs
+criteria and never creates records.
+
 ## The loop
 
 ```bash
@@ -99,6 +107,15 @@ executor task; deterministic verify tasks never ask you anything.
 After manual changes, rebases or upgrades, run `spc verify` (all acceptance
 criteria against the current tree) and `spc diff` (desired vs observed). If
 properties drifted, `spc reconcile` plans the next transition for review.
+
+A run's own result revision can be verified directly with
+`spc verify --run <runId>` (temporary worktree at that revision) - useful
+after an in-place run restored the checkout, where bare verify reports the
+run's changes as drift.
+
+`spc usage` reports per-run and corpus economics from recorded state:
+model calls by role, op distribution with exact emitted bytes, patch usage
+rate, refusals, retries. Read-only; bytes, never token guesses.
 
 ## Quick provider recap
 

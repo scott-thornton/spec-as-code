@@ -55,3 +55,9 @@ Add a verify job so requirement status appears on every PR:
 
 Unsatisfied musts become error annotations; the summary gets a
 per-property table. Humans still decide merges - spc only reports.
+
+Start every session in an spc repository with `spc brief` - the
+one-command orientation: specs with their last runs and blocking
+follow-ups, the pending harness queue, config posture, unmerged run
+branches. Read-only, instant, and it replaces the opening minutes of
+git archaeology.

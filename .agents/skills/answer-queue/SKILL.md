@@ -80,4 +80,6 @@ keep it that way. Start a fresh session per major run: compaction
 rewrites history mid-session, which simultaneously destroys the cache
 economics and summarizes away your early answers. If you feel the
 context ceiling approaching, finish the current request, then start
-clean and re-orient from `.spc/` state rather than pushing through.
+clean and re-orient with one command - `spc brief` shows every spec's
+last run and blocking follow-ups, the pending queue, and config
+posture - rather than pushing through.
