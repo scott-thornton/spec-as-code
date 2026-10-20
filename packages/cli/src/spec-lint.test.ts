@@ -102,18 +102,23 @@ describe("spc spec lint", () => {
     // LF-003's command fails at baseline (no vitest/test file) - not the pass case.
     // Add one that passes: a discriminating criterion over an existing behavior.
     const spec = BAD_SPEC.replace(`  - id: LF-004`, `  - id: LF-005
-    statement: Passes at baseline while discriminating.
+    statement: Passes at baseline while a sibling fails.
     priority: must
     acceptance:
       - id: LF-005-A
         type: command
         command: node -e "console.log('ok')"
         discriminating: true
+      - id: LF-005-B
+        type: command
+        command: node -e "process.exit(1)"
+        discriminating: true
   - id: LF-004`);
     writeFileSync(path.join(root, "specs", "lint-fixture.yaml"), spec, "utf8");
     const r = sh(["spec", "lint", "specs/lint-fixture.yaml"]);
     expect(r.stdout).toContain("LINT-NO-RED-CAPABILITY");
-    expect(r.stdout).toMatch(/discriminating criterion passes at baseline/i);
+    expect(r.stdout).toMatch(/criterion passes at baseline/i);
+    expect(r.stdout).toMatch(/while 1 still fails/i);
   });
 
   it("reports not-safely-executable distinctly from pass and fail", () => {

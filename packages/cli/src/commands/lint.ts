@@ -150,6 +150,7 @@ export async function runSpecLint(specFile: string, cwd?: string): Promise<numbe
   }
   gitOk(repoRoot, ["worktree", "add", "--detach", worktree, "HEAD"]);
   const passesAtBaseline: string[] = [];
+  const failsAtBaseline: string[] = [];
   const notExecutable: string[] = [];
   const hasDeps = existsSync(path.join(worktree, "node_modules"));
   try {
@@ -184,7 +185,11 @@ export async function runSpecLint(specFile: string, cwd?: string): Promise<numbe
         continue;
       }
       if (run.exitCode === 0) passesAtBaseline.push(criterion.id);
-      // exitCode !== 0: fails at baseline - healthy, no warning.
+      else failsAtBaseline.push(criterion.id);
+      // A spec whose work is DONE has every right to pass at baseline:
+      // red-capability is an authoring-time question. It only becomes a
+      // finding when sibling criteria still fail - proof the work is
+      // incomplete - making a passing criterion genuinely suspect.
     }
   } finally {
     try {
@@ -198,10 +203,12 @@ export async function runSpecLint(specFile: string, cwd?: string): Promise<numbe
       `LINT-NOT-EXECUTABLE ${ir.spec.metadata.id}: ${notExecutable.length} criteria not-safely-executable by lint (distinct from pass and fail): ${notExecutable.join(", ")}`,
     );
   }
-  if (passesAtBaseline.length > 0) {
+  if (passesAtBaseline.length > 0 && failsAtBaseline.length > 0) {
     console.log(
-      `LINT-NO-RED-CAPABILITY ${ir.spec.metadata.id}: ${passesAtBaseline.length} discriminating ${passesAtBaseline.length > 1 ? "criteria pass" : "criterion passes"} at baseline (${passesAtBaseline.join(", ")}) - the work appears already in the tree; a criterion that passes where it should be red cannot establish flip evidence. Either it cannot detect the change, or these are regression invariants mislabeled as discriminating (drop the ${passesAtBaseline.length > 1 ? "flags" : "flag"})`,
+      `LINT-NO-RED-CAPABILITY ${ir.spec.metadata.id}: ${passesAtBaseline.length} discriminating ${passesAtBaseline.length > 1 ? "criteria pass" : "criterion passes"} at baseline (${passesAtBaseline.join(", ")}) while ${failsAtBaseline.length} still ${failsAtBaseline.length > 1 ? "fail" : "fails"} - the work is incomplete, so a criterion passing where it should be red cannot establish flip evidence. Either it cannot detect the change, or it is a regression invariant mislabeled as discriminating (drop the ${passesAtBaseline.length > 1 ? "flags" : "flag"})`,
     );
   }
+  // All green: the spec's work is in the tree. An old spec is an old
+  // spec - authoring-time questions are not retroactive findings.
   return 0;
 }
