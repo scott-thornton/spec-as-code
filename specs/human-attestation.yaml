@@ -1,0 +1,56 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: human-attestation
+  title: spc attest - the human tier gets its recording ceremony
+goal: >
+  From the CHK3555 retro: agent-only should properties are indeterminate
+  forever - there is no way to record a human sign-off, so DESIGN-001
+  can never close. Every evidence tier has a ceremony except the human
+  one. spc attest records it: a human-review evidence record with the
+  attestor's name and optional note, produced under a fresh verify run
+  whose state then shows the property satisfied with human provenance.
+requirements:
+  - id: HA-001
+    statement: >
+      `spc attest <PROPERTY-ID> --by <name> [--note <text>]` resolves the
+      property in the repo's specs (by id across all compiled specs),
+      runs a verification pass, and writes a human-review evidence
+      record (kind human, outcome supports, producer identity = the
+      attestor, note in the payload) for the property; the run's state
+      reports the property satisfied with human-review provenance.
+    priority: must
+    scope:
+      include: [packages/cli/src/**, packages/runtime/src/**, packages/verifier/src/**, packages/schema/src/**]
+    acceptance:
+      - id: HA-001-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/attest.test.ts
+        discriminating: true
+  - id: HA-002
+    statement: >
+      Attesting an unknown property id fails with a named error naming
+      the id; attestation never touches protected paths or writes
+      outside .spc.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: HA-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/attest.test.ts
+        discriminating: true
+  - id: HA-003
+    statement: >
+      Regression guard: workspace typechecks; cli, verifier and runtime
+      suites green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: HA-003-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli test && pnpm --filter @spc/verifier test && pnpm --filter @spc/runtime test
+outOfScope:
+  - counter-attestation or revocation (a later contradicting record simply supersedes in the log)
+  - cryptographic signatures on the attestor name (the git commit already carries identity)
