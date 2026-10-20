@@ -16,7 +16,7 @@ function makeProvider(roleTimeouts?: Partial<Record<string, number>>): HarnessPr
   roots.push(root);
   const store = new HarnessStore(root);
   const fastSleep = (): Promise<void> => new Promise((r) => setTimeout(r, 1));
-  return new HarnessProvider(store, 10_000, fastSleep, roleTimeouts);
+  return new HarnessProvider(store, 10_000, fastSleep, () => Date.now(), roleTimeouts);
 }
 
 describe("per-role harness timeouts", () => {
