@@ -15,6 +15,7 @@ import { runSkills, runUseSkill } from "./commands/skills.js";
 import { runPolicyExplain } from "./commands/policy.js";
 import { runQuickCommand } from "./commands/quick.js";
 import { runRectify } from "./commands/rectify.js";
+import { runAttest } from "./commands/attest.js";
 import { runPatchBuild } from "./commands/patch.js";
 import { runBrief } from "./commands/brief.js";
 import { runUsage } from "./commands/usage.js";
@@ -285,6 +286,16 @@ run
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action((runId: string, opts: { cwd: string; out?: string }) => {
     process.exitCode = runExport(runId, opts);
+  });
+
+program
+  .command("attest <propertyId>")
+  .description("record a human-review evidence record for a property (the human tier's ceremony)")
+  .requiredOption("--by <name>", "the attestor's identity")
+  .option("--note <text>", "context recorded with the attestation")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action(async (propertyId: string, opts: { by: string; note?: string; cwd: string }) => {
+    process.exitCode = await runAttest({ propertyId, by: opts.by, note: opts.note, cwd: opts.cwd });
   });
 
 program
