@@ -1,0 +1,66 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: containment-guards
+  title: Queue hygiene and the conclusion guard
+goal: >
+  Two containment fixes from the CHK3555 aftermath. The harness pending
+  queue accumulates dead requests forever - Oct-7 stragglers, orphans
+  from a missed polling window - taxing every session's agent list and
+  inviting a new session to answer an old request into a live run. And
+  the scheduler can conclude done while a plan task sits in a
+  non-terminal state - the parked-zombie shape the amendment re-dispatch
+  fix removed the cause of; this guard makes the class unable to
+  SURVIVE silently, the same standard the audit spine set for tampering.
+requirements:
+  - id: CG-001
+    statement: >
+      HarnessStore.listPending excludes stale requests (older than a
+      one-hour default window, far beyond any response timeout);
+      listPendingIncludingStale surfaces everything; sweepStale(maxAgeMs)
+      moves stale request files to a stale/ sibling directory - filed
+      as records, never deleted - and the store self-heals by sweeping
+      on construction, so no provider dispatches a dead request.
+    priority: must
+    scope:
+      include: [packages/llm-harness/src/**]
+    acceptance:
+      - id: CG-001-A
+        type: command
+        command: pnpm --filter @spc/llm-harness exec vitest run src/queue-hygiene.test.ts
+        discriminating: true
+  - id: CG-002
+    statement: >
+      runScheduler refuses to conclude done while any task in the
+      current plan sits in needs_replan or blocked - outcome
+      runnable_work_remains, failed loudly - and the runtime treats
+      that outcome as a failed run with a named blocking follow-up
+      rather than partially_satisfied.
+    priority: must
+    scope:
+      include: [packages/executor/src/**, packages/runtime/src/**]
+    acceptance:
+      - id: CG-002-A
+        type: command
+        command: pnpm --filter @spc/executor exec vitest run src/conclusion-guard.test.ts
+        discriminating: true
+      - id: CG-002-B
+        type: file
+        path: packages/runtime/src/apply.ts
+        assert:
+          contains: "runnable_work_remains"
+  - id: CG-003
+    statement: >
+      Regression guard: workspace typechecks; executor, llm-harness and
+      runtime suites green (including the existing amendment and
+      replanning tests).
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: CG-003-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/executor test && pnpm --filter @spc/llm-harness test && pnpm --filter @spc/runtime test
+outOfScope:
+  - CLI flags for stale listing (store-level surface is the contract)
+  - deleting anything (stale requests are records)
