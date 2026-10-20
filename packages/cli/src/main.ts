@@ -312,7 +312,6 @@ program
     process.exitCode = runBrief(opts.cwd, opts.format === "json" ? "json" : "text");
   });
 
-const spec = program.command("spec").description("specification compilation");
 spec
   .command("lint <file>")
   .description("craftsmanship warnings: static rules plus the red-capability check in a disposable worktree (warnings never gate)")

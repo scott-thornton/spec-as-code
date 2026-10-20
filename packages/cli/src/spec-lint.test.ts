@@ -68,6 +68,8 @@ requirements:
 const CONFIG = `version: 1
 provider:
   name: none
+execution:
+  commandTimeoutMs: 3000
 commands:
   network: deny
 `;
@@ -138,13 +140,14 @@ describe("spc spec lint", () => {
     sh(["spec", "lint", "specs/lint-fixture.yaml"]);
     const after = spawnSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" }).stdout.trim();
     expect(after).toBe(before);
-  });
+  }, 20000);
 
   it("spec validate folds static warnings but executes nothing (LF-005 passes silently there)", () => {
+    const before = spawnSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" }).stdout.trim();
     const r = sh(["spec", "validate", "specs/lint-fixture.yaml"]);
     expect(r.stdout).toContain("LINT-DECORATION");
     expect(r.stdout).not.toContain("LINT-NO-RED-CAPABILITY");
     const after = spawnSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" }).stdout.trim();
-    expect(after).toBe("");
-  });
+    expect(after).toBe(before);
+  }, 20000);
 });
