@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { formatDiagnostics } from "@spc/core";
 import { renderSpecMarkdown, renderSpecText } from "@spc/renderer";
 import { jsonSpecValidation } from "./json-views.js";
-import { compileSpecFile } from "../context.js";
+import { compileSpecFile, loadRepoConfig, resolveRepoRoot } from "../context.js";
+import { lintSpec } from "./lint.js";
 
 function sourceOf(file: string): string {
   try {
@@ -42,6 +43,14 @@ export function runSpecValidate(file: string, format: "text" | "json" = "text"):
     const errors = result.diagnostics.filter((d) => d.severity === "error").length;
     console.log(`Spec invalid: ${errors} error(s).`);
     return 1;
+  }
+  // Static lint warnings fold into validate; NOTHING executes here -
+  // gates read. Dynamic checks live only in `spc spec lint`.
+  const config = loadRepoConfig(resolveRepoRoot());
+  const lint = lintSpec(result.ir, config);
+  if (lint.length > 0) {
+    console.log();
+    for (const w of lint) console.log(`lint warning: ${w.rule} ${w.target}: ${w.message}`);
   }
   const propertyCount = result.ir.properties.length;
   const mustCount = result.ir.properties.filter((p) => p.priority === "must").length;

@@ -18,6 +18,7 @@ import { runRectify } from "./commands/rectify.js";
 import { runPatchBuild } from "./commands/patch.js";
 import { runBrief } from "./commands/brief.js";
 import { runUsage } from "./commands/usage.js";
+import { runSpecLint } from "./commands/lint.js";
 
 const program = new Command();
 
@@ -309,6 +310,15 @@ program
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action((opts: { format: string; cwd: string }) => {
     process.exitCode = runBrief(opts.cwd, opts.format === "json" ? "json" : "text");
+  });
+
+const spec = program.command("spec").description("specification compilation");
+spec
+  .command("lint <file>")
+  .description("craftsmanship warnings: static rules plus the red-capability check in a disposable worktree (warnings never gate)")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action(async (file: string, opts: { cwd: string }) => {
+    process.exitCode = await runSpecLint(file, opts.cwd);
   });
 
 const patch = program.command("patch").description("anchored patch composition (verifies, never decides)");
