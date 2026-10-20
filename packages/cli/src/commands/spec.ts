@@ -73,7 +73,7 @@ export function runSpecValidate(file: string, format: "text" | "json" = "text", 
   if (showCommands) {
     const commands = result.ir.properties.flatMap((p) =>
       p.acceptance
-        .filter((c) => c.type === "command" && c.command !== undefined)
+        .filter((c) => c.type === "command")
         .map((c) => `  ${c.id}: ${c.command}`),
     );
     if (commands.length > 0) {
