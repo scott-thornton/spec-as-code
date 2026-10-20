@@ -11,7 +11,7 @@ afterAll(() => rmSync(root, { recursive: true, force: true }));
 mkdirSync(path.join(root, ".spc", "harness", "pending"), { recursive: true });
 writeFileSync(
   path.join(root, ".spc", "harness", "pending", "executor-T001@1-1.json"),
-  JSON.stringify({ id: "executor-T001@1-1", role: "executor", key: "T001@1", schemaName: "ExecutorResult", jsonSchema: { type: "object" }, system: "s", prompt: "p", createdAt: "2026-10-20T00:00:00.000Z" }),
+  JSON.stringify({ id: "executor-T001@1-1", role: "executor", key: "T001@1", schemaName: "ExecutorResult", jsonSchema: { type: "object" }, system: "s", prompt: "p", createdAt: new Date().toISOString() }),
   "utf8",
 );
 const r0 = spawnSync("git", ["init", "-q", "-b", "main"], { cwd: root });

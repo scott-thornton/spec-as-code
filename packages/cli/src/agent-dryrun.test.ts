@@ -90,7 +90,7 @@ writeFileSync(
     jsonSchema: { type: "object" },
     system: "sys",
     prompt: `--- harness instructions ---\nanswer\n\nExecute the following task. Respond with JSON only.\n\n${JSON.stringify(promptPayload, null, 2)}`,
-    createdAt: "2026-10-19T00:00:00.000Z",
+    createdAt: new Date().toISOString(),
   }),
   "utf8",
 );

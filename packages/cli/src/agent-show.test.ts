@@ -17,7 +17,7 @@ const REQUEST = {
   jsonSchema: { type: "object", properties: { status: { type: "string" } }, required: ["status"] },
   system: "THE SYSTEM CONTRACT",
   prompt: 'Execute the following task. Respond with JSON only.\n\n{"task":{"id":"T001","title":"wire it"},"repositoryExcerpts":[{"path":"src/a.ts"}]}',
-  createdAt: "2026-10-19T00:00:00.000Z",
+  createdAt: new Date().toISOString(),
 };
 
 mkdirSync(path.join(root, ".spc", "harness", "pending"), { recursive: true });

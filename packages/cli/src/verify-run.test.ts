@@ -67,7 +67,7 @@ const runDir = path.join(root, ".spc", "runs", "run-evidence");
 mkdirSync(runDir, { recursive: true });
 writeFileSync(
   path.join(runDir, "metadata.json"),
-  JSON.stringify({ runId: "run-evidence", kind: "apply", specId: "evidence-run", specDigest: "sha256:" + "0".repeat(64), planId: "plan-x", baseRevision: "main", createdAt: "2026-10-19T00:00:00.000Z" }),
+  JSON.stringify({ runId: "run-evidence", kind: "apply", specId: "evidence-run", specDigest: "sha256:" + "0".repeat(64), planId: "plan-x", baseRevision: "main", createdAt: new Date().toISOString() }),
   "utf8",
 );
 writeFileSync(
@@ -93,7 +93,7 @@ describe("spc verify --run", () => {
   it("errors cleanly when the run has no result revision", () => {
     const bareDir = path.join(root, ".spc", "runs", "run-bare");
     mkdirSync(bareDir, { recursive: true });
-    writeFileSync(path.join(bareDir, "metadata.json"), JSON.stringify({ runId: "run-bare", kind: "verify", specId: "evidence-run", createdAt: "2026-10-19T00:00:00.000Z" }), "utf8");
+    writeFileSync(path.join(bareDir, "metadata.json"), JSON.stringify({ runId: "run-bare", kind: "verify", specId: "evidence-run", createdAt: new Date().toISOString() }), "utf8");
     const r = sh(["verify", "--run", "run-bare"]);
     expect(r.status).not.toBe(0);
     expect(r.stderr).toMatch(/result/i);
