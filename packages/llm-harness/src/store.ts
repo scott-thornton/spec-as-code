@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 /**
@@ -41,9 +41,12 @@ export class HarnessStore {
 
   constructor(rootDir: string) {
     this.base = path.join(rootDir, ".spc", "harness");
-    for (const sub of ["counters", "pending", "answered"]) {
+    for (const sub of ["counters", "pending", "answered", "stale"]) {
       mkdirSync(path.join(this.base, sub), { recursive: true });
     }
+    // Self-heal: dead requests leave the live queue the moment any
+    // process opens the store, so no provider ever dispatches one.
+    this.sweepStale(HarnessStore.STALE_MS);
   }
 
   /** Allocate the next invocation number for a role+key pair. */
@@ -72,12 +75,63 @@ export class HarnessStore {
     return JSON.parse(readFileSync(file, "utf8")) as HarnessRequest;
   }
 
+  /**
+   * Stale threshold: one hour, far beyond any response-timeout window.
+   * Anything older is a dead request (abandoned run, missed polling
+   * window) - it must not tax every session's queue or get answered
+   * into a live run by mistake.
+   */
+  static readonly STALE_MS = 60 * 60 * 1000;
+
   listPending(): HarnessRequest[] {
     const dir = path.join(this.base, "pending");
+    if (!existsSync(dir)) return [];
+    const cutoff = Date.now() - HarnessStore.STALE_MS;
     return readdirSync(dir)
       .filter((f) => f.endsWith(".json"))
       .sort()
-      .map((f) => JSON.parse(readFileSync(path.join(dir, f), "utf8")) as HarnessRequest);
+      .map((f) => JSON.parse(readFileSync(path.join(dir, f), "utf8")) as HarnessRequest)
+      .filter((r) => Date.parse(r.createdAt) > cutoff);
+  }
+
+  /** Everything ever pending, including swept-stale requests (records). */
+  listPendingIncludingStale(): HarnessRequest[] {
+    const read = (dir: string): HarnessRequest[] => {
+      if (!existsSync(dir)) return [];
+      return readdirSync(dir)
+        .filter((f) => f.endsWith(".json"))
+        .sort()
+        .map((f) => JSON.parse(readFileSync(path.join(dir, f), "utf8")) as HarnessRequest);
+    };
+    return [...read(path.join(this.base, "pending")), ...read(path.join(this.base, "stale"))];
+  }
+
+  /**
+   * Move requests older than maxAgeMs out of the live queue into
+   * stale/. Filed, never deleted - they are decision records. Returns
+   * the number moved. Idempotent.
+   */
+  sweepStale(maxAgeMs: number): number {
+    const dir = path.join(this.base, "pending");
+    if (!existsSync(dir)) return 0;
+    const cutoff = Date.now() - maxAgeMs;
+    const staleDir = path.join(this.base, "stale");
+    mkdirSync(staleDir, { recursive: true });
+    let moved = 0;
+    for (const f of readdirSync(dir)) {
+      if (!f.endsWith(".json")) continue;
+      const full = path.join(dir, f);
+      try {
+        const request = JSON.parse(readFileSync(full, "utf8")) as HarnessRequest;
+        if (Date.parse(request.createdAt) <= cutoff) {
+          renameSync(full, path.join(staleDir, f));
+          moved += 1;
+        }
+      } catch {
+        // unreadable request file: leave it alone
+      }
+    }
+    return moved;
   }
 
   getAnswer(id: string): HarnessAnswer | null {

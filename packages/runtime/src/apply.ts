@@ -526,7 +526,7 @@ async function driveRun(ctx: RunContext): Promise<ApplyReport> {
 
   let currentPlan = ctx.plan;
   let schedulerFailedTasks: string[] = [];
-  let schedulerOutcome: "done" | "deadlocked" | "replan_failed" = "done";
+  let schedulerOutcome: "done" | "deadlocked" | "replan_failed" | "runnable_work_remains" = "done";
 
   const transition = (taskId: string, next: TaskState, summary?: string): void => {
     const previous = ctx.state.tasks[taskId];
@@ -704,7 +704,7 @@ async function finishRun(
   ctx: RunContext,
   currentPlan: Plan,
   usageSink: (record: UsageRecord) => void,
-  schedulerOutcome: "done" | "deadlocked" | "replan_failed",
+  schedulerOutcome: "done" | "deadlocked" | "replan_failed" | "runnable_work_remains",
   schedulerFailedTasks: readonly string[],
 ): Promise<ApplyReport> {
   const worktree = ctx.worktreePath!;
@@ -831,8 +831,24 @@ async function finishRun(
     status = "blocked";
   } else if (mustPropertiesSatisfied(ctx.specIr.properties, statesMap)) {
     status = "succeeded";
-  } else if (schedulerOutcome === "replan_failed" || schedulerFailedTasks.length > 0) {
+  } else if (schedulerOutcome === "replan_failed" || schedulerOutcome === "runnable_work_remains" || schedulerFailedTasks.length > 0) {
     status = "failed";
+    if (schedulerOutcome === "runnable_work_remains") {
+      const parked = currentPlan.tasks
+        .filter((t) => ["needs_replan", "blocked"].includes(ctx.state.tasks[t.id]?.status ?? ""))
+        .map((t) => t.id);
+      const f = ctx.followups.create(
+        {
+          type: "replan",
+          blocking: true,
+          title: "Run concluded with runnable work remaining",
+          description: `Scheduler exit runnable_work_remains: tasks ${parked.join(", ")} sit in non-terminal states. A mechanism failed to re-dispatch them - this is a defect, not a partial result; inspect the event log before retrying.`,
+        },
+        ctx.meta.runId,
+        ctx.now,
+      );
+      ctx.events.append("FOLLOWUP_CREATED", { followupId: f.id, blocking: true, type: f.type });
+    }
   } else {
     status = "partially_satisfied";
   }
@@ -1225,7 +1241,7 @@ async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
   };
 
   let currentPlan = ctx.plan;
-  let schedulerOutcome: "done" | "deadlocked" | "replan_failed" = "done";
+  let schedulerOutcome: "done" | "deadlocked" | "replan_failed" | "runnable_work_remains" = "done";
   const failedTasks: string[] = [];
   const inFlight = new Map<string, Promise<void>>();
   const inFlightWrites = new Map<string, string[]>();
