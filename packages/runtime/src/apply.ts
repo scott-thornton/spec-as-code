@@ -52,6 +52,8 @@ export interface ApplyOptions {
   resumeRunId?: string;
   allowDirty?: boolean;
   force?: boolean;
+  /** Leave the checkout on the run branch instead of restoring (in-place run-branch mode). */
+  stay?: boolean;
 }
 
 export interface ApplyReport {
@@ -93,6 +95,7 @@ export interface RunContext {
   worktreeBranch: string | null;
   modelCalls: number;
   agentVerdicts: Map<string, { outcome: "supports" | "contradicts" | "inconclusive"; justification: string }>;
+  stay?: boolean;
   now(): string;
   log(line: string): void;
 }
@@ -237,6 +240,7 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
     worktreeBranch: null,
     modelCalls: 0,
     agentVerdicts: new Map(),
+    stay: options.stay,
     now,
     log: deps.log ?? (() => {}),
   };
@@ -864,7 +868,8 @@ async function finishRun(
     ctx.meta.worktree &&
     path.resolve(ctx.meta.worktree) === path.resolve(ctx.paths.repoRoot) &&
     ctx.meta.originalBranch &&
-    ctx.meta.originalBranch !== "HEAD"
+    ctx.meta.originalBranch !== "HEAD" &&
+    !ctx.stay
   ) {
     try {
       checkoutBranch(ctx.paths.repoRoot, ctx.meta.originalBranch);

@@ -119,7 +119,7 @@ export async function runQuick(
       { repoRoot: options.repoRoot, planFile: paths.planFile(planId), stay: options.stay },
       { providerFactory: async () => provider, ...(deps.now ? { now: deps.now } : {}), ...(deps.log ? { log: deps.log } : {}) },
     );
-    return { specPath, specId, planId, report, usage, exceededQuickShape: report.status !== "succeeded" };
+    return { specPath, report, exceededQuickShape: report.status !== "succeeded" };
   }
   const result = await generatePlan({
     specIr: compiled.ir,

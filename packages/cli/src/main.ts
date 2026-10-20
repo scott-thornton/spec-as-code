@@ -106,17 +106,19 @@ program
   .option("--resume <runId>", "resume an interrupted run")
   .option("--allow-dirty", "skip the clean-worktree preflight")
   .option("--force", "proceed despite open blocking follow-ups")
+  .option("--stay", "leave the checkout on the run branch instead of restoring (in-place run-branch mode)")
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action(
     async (
       planFile: string | undefined,
-      opts: { resume?: string; allowDirty?: boolean; force?: boolean; cwd: string },
+      opts: { resume?: string; allowDirty?: boolean; force?: boolean; stay?: boolean; cwd: string },
     ) => {
       process.exitCode = await runApply({
         planFile,
         resumeRunId: opts.resume,
         allowDirty: opts.allowDirty,
         force: opts.force,
+        stay: opts.stay,
         cwd: opts.cwd,
       });
     },
@@ -290,7 +292,9 @@ program
   .description("compressed SPC transaction: ephemeral spec + one gate (--verify), same machinery")
   .requiredOption("--verify <command>", "the gate you author: a side-effect-free check command")
   .option("--cwd <dir>", "repository directory", process.cwd())
-  .action(async (intent: string[], opts: { verify: string; cwd: string }) => {
+  .option("--write <path>", "skip the planner: one mechanical task with this write target")
+  .option("--stay", "leave the checkout on the run branch instead of restoring")
+  .action(async (intent: string[], opts: { verify: string; cwd: string; write?: string; stay?: boolean }) => {
     process.exitCode = await runQuickCommand(intent, opts);
   });
 

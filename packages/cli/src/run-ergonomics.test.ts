@@ -16,7 +16,7 @@ function git(cwd: string, args: string[]): string {
   return spawnSync("git", args, { cwd, encoding: "utf8" }).stdout.trim();
 }
 
-function repo(name: string): string {
+function repo(name: string, branchMode: "current" | "run" = "current"): string {
   const root = mkdtempSync(path.join(tmpdir(), `spc-${name}-`));
   roots.push(root);
   mkdirSync(path.join(root, "specs"), { recursive: true });
@@ -28,6 +28,7 @@ function repo(name: string): string {
     "  script: .spc/fake.yaml",
     "execution:",
     "  inPlace: true",
+    ...(branchMode === "current" ? ['  inPlaceBranch: current'] : []),
     "",
   ].join("\n"), "utf8");
   writeFileSync(path.join(root, ".spc", "fake.yaml"), [
@@ -61,7 +62,7 @@ describe("run ergonomics", () => {
   });
 
   it("apply --stay leaves the checkout on the run branch", () => {
-    const root = repo("stay");
+    const root = repo("stay", "run");
     // An apply needs a plan; quick IS apply machinery and honors --stay.
     const r = sh(root, ["quick", "marker", "--verify", "test -f out.txt", "--write", "out.txt", "--stay"]);
     expect(r.stderr).toContain("succeeded");
@@ -70,7 +71,7 @@ describe("run ergonomics", () => {
   });
 
   it("without --stay the checkout returns to the original branch", () => {
-    const root = repo("nostay");
+    const root = repo("nostay", "run");
     const r = sh(root, ["quick", "marker", "--verify", "test -f out.txt", "--write", "out.txt"]);
     expect(r.stderr).toContain("succeeded");
     expect(git(root, ["branch", "--show-current"])).toBe("main");

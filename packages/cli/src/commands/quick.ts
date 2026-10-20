@@ -14,13 +14,13 @@ import { printReport } from "./apply.js";
  */
 export async function runQuickCommand(
   intentParts: string[],
-  options: { verify: string; cwd?: string },
+  options: { verify: string; cwd?: string; write?: string; stay?: boolean },
 ): Promise<number> {
   const repoRoot = resolveRepoRoot(options.cwd);
   const config = loadRepoConfig(repoRoot);
   const intent = intentParts.join(" ");
   const result = await runQuick(
-    { repoRoot, intent, verifyCommand: options.verify },
+    { repoRoot, intent, verifyCommand: options.verify, ...(options.write ? { writePath: options.write } : {}), ...(options.stay ? { stay: true } : {}) },
     {
       providerFactory: async () => createProvider(config, repoRoot),
       log: (line) => console.log(line),
