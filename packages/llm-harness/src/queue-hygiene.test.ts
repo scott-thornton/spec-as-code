@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { HarnessStore } from "@spc/llm-harness";
+import { HarnessStore } from "./store.js";
 
 const root = mkdtempSync(path.join(tmpdir(), "spc-queuehygiene-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -43,11 +43,16 @@ describe("harness queue hygiene", () => {
 
   it("the provider never dispatches a stale request again once swept", () => {
     const store = new HarnessStore(root);
-    expect(store.sweepStale(24 * 60 * 60 * 1000)).toBe(1);
+    // The constructor's self-heal already swept the original stale
+    // request; a NEW dead request (say, a fresh timeout orphan) is
+    // swept on demand and lands with its predecessor in stale/.
+    writeRequest("executor-ORPHAN@1-1", new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString());
+    expect(store.listPending().map((r) => r.id)).toEqual(["executor-LIVE@1-1", "executor-ORPHAN@1-1"].filter((x) => x !== "executor-ORPHAN@1-1"));
+    expect(store.sweepStale(60 * 60 * 1000)).toBe(1);
     // Swept requests are not deleted - they are records - but they are
     // out of the live queue, filed where nothing dispatches them.
     expect(store.listPending().map((r) => r.id)).toEqual(["executor-LIVE@1-1"]);
-    expect(store.listPendingIncludingStale().length).toBe(2);
+    expect(store.listPendingIncludingStale().map((r) => r.id).sort()).toEqual(["executor-LIVE@1-1", "executor-OLD@1-1", "executor-ORPHAN@1-1"]);
   });
 
   it("a fresh request is never swept regardless of count", () => {

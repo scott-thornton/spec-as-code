@@ -19,7 +19,7 @@ export interface SchedulerIO {
 }
 
 export interface SchedulerResult {
-  outcome: "done" | "deadlocked" | "replan_failed";
+  outcome: "done" | "deadlocked" | "replan_failed" | "runnable_work_remains";
   failedTasks: string[];
 }
 
@@ -147,6 +147,18 @@ export async function runScheduler(io: SchedulerIO): Promise<SchedulerResult> {
     }
 
     if (replanFailed) return { outcome: "replan_failed", failedTasks };
+  }
+
+  // Conclusion guard: a run must not conclude politely over work that
+  // is neither finished nor failed. The amendment path resets its tasks
+  // to pending; anything still sitting in needs_replan or blocked here
+  // means a mechanism failed to do its job - fail loudly, exactly as
+  // the audit spine fails loudly over tampering.
+  const parked = io
+    .getPlan()
+    .tasks.filter((t) => ["needs_replan", "blocked"].includes(io.getTaskState(t.id)?.status ?? ""));
+  if (parked.length > 0) {
+    return { outcome: "runnable_work_remains", failedTasks };
   }
 
   return { outcome: "done", failedTasks };
