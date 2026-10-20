@@ -1,0 +1,52 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: oracle-integrity
+  title: Quoting safety and command visibility
+goal: >
+  From the CHK3555 retro: a double-quoted YAML command scalar silently
+  reinterpreted a backslash escape (\/ became /), the criterion that ran
+  was not the criterion written, it failed at base and result looking
+  like an implementation bug, and spec validate passed it. Silent oracle
+  corruption. Two fixes: lint warns on backslashes in double-quoted
+  command scalars (folded into validate), and --show-commands prints the
+  exact parsed strings that will execute so authors see what they wrote
+  become.
+requirements:
+  - id: OI-001
+    statement: >
+      spec lint and spec validate warn (LINT-QUOTED-BACKSLASH) when the
+      spec source contains a double-quoted command scalar with a
+      backslash escape, advising single-quoted or block scalars.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: OI-001-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/oracle-integrity.test.ts
+        discriminating: true
+  - id: OI-002
+    statement: >
+      spec validate --show-commands prints every command criterion id
+      with its parsed command string after YAML processing.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: OI-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/oracle-integrity.test.ts
+        discriminating: true
+  - id: OI-003
+    statement: >
+      Regression guard: workspace typechecks, CLI suite green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: OI-003-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli test
+outOfScope:
+  - YAML library behavior (the rule surfaces the hazard, it does not change parsing)
