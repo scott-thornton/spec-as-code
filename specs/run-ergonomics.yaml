@@ -1,0 +1,53 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: run-ergonomics
+  title: --stay and quick --write
+goal: >
+  From the CHK3555 retro: in-place runs always restore the previous
+  branch, so a quick-run chain means checking out each new run branch
+  by hand; and every quick planner answer was boilerplate - one task
+  mirroring the intent with one write target. --stay leaves the
+  checkout on the run branch; quick --write derives the one-task plan
+  mechanically and skips the planner request entirely.
+requirements:
+  - id: RE-001
+    statement: >
+      quick (and apply) accept --stay: with in-place run-branch mode,
+      the checkout is left on the run branch instead of being restored;
+      without the flag, restore behavior is unchanged.
+    priority: must
+    scope:
+      include: [packages/cli/src/**, packages/runtime/src/**]
+    acceptance:
+      - id: RE-001-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/run-ergonomics.test.ts
+        discriminating: true
+  - id: RE-002
+    statement: >
+      quick --write <path> synthesizes the one-task plan mechanically
+      (single modify task, write target the given path, intent from the
+      command line) and makes NO planner model call.
+    priority: must
+    scope:
+      include: [packages/cli/src/**, packages/runtime/src/**]
+    acceptance:
+      - id: RE-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/run-ergonomics.test.ts
+        discriminating: true
+  - id: RE-003
+    statement: >
+      Regression guard: workspace typechecks; cli and runtime suites
+      green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: RE-003-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli test && pnpm --filter @spc/runtime test
+outOfScope:
+  - allowDirty (held for design discussion)
+  - --stay as a config default
