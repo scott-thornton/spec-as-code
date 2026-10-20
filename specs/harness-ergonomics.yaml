@@ -1,0 +1,69 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: harness-ergonomics
+  title: Waiting, not polling - harness ergonomics
+goal: >
+  From the CHK3555 retro: the answering agent polled agent list in sleep
+  loops all day. And mechanical patch refusals burned the single retry
+  without the error naming the tool that prevents them. Three fixes:
+  spc agent wait blocks until a request appears; agent list shows each
+  request's age; the applicator's refusal messages point at spc patch
+  build --after.
+requirements:
+  - id: HE-001
+    statement: >
+      `spc agent wait [--timeout <ms>]` blocks until a harness request is
+      pending, prints it (id, role, schema, age), exit 0; on timeout with
+      none pending, exits nonzero with a clear message. Default timeout
+      15 minutes.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: HE-001-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/harness-ergonomics.test.ts
+        discriminating: true
+  - id: HE-002
+    statement: >
+      agent list shows each pending request's age (e.g. 5m) alongside id
+      and role.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: HE-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/harness-ergonomics.test.ts
+        discriminating: true
+  - id: HE-003
+    statement: >
+      The applicator's PATCH_BASE_MISMATCH and PATCH_ANCHOR_NOT_UNIQUE
+      refusal messages name the composition tool ("compose chains with
+      spc patch build --after") so the fix is discoverable from the
+      error alone.
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: HE-003-A
+        type: file
+        path: packages/executor/src/patch.ts
+        assert:
+          contains: "patch build --after"
+        discriminating: true
+  - id: HE-004
+    statement: >
+      Regression guard: workspace typechecks, CLI and executor suites
+      green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: HE-004-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli test && pnpm --filter @spc/executor test
+outOfScope:
+  - per-role harness timeouts (separate slice)
+  - blocking behavior changes in spc plan/apply themselves
