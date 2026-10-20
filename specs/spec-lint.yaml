@@ -1,0 +1,106 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: spec-lint
+  title: spc spec lint - craftsmanship rules made executable
+goal: >
+  Every criterion-craftsmanship rule lives as prose in the author-spec
+  skill; prose rules only work on authors who read, remember and apply
+  them - and the tool's own author authored six broken oracles in one
+  day. spec lint mechanizes the rules: static checks over the compiled
+  spec (decoration commands, bare-identifier greps, unprotected oracles,
+  duplicate commands with differing expectations, unwritten outOfScope
+  promises) fold into spec validate without executing anything; the
+  dynamic red-capability check runs ONLY in the explicitly-invoked
+  lint, inside a disposable worktree under the command policy, with
+  three outcome classes - fails at baseline, passes at baseline (the
+  warning, precisely worded for mislabeled regression invariants), and
+  not-safely-executable, never conflated with pass or fail. Gates read;
+  linting grants no execution authority over the real tree.
+requirements:
+  - id: SL-001
+    statement: >
+      `spc spec lint <file>` fires the five static rules with stable
+      identifiers (LINT-DECORATION, LINT-BARE-IDENTIFIER,
+      LINT-UNPROTECTED-ORACLE, LINT-DUPLICATE-COMMAND,
+      LINT-EMPTY-OUT-OF-SCOPE) and exits 0 - warnings never gate.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: SL-001-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/spec-lint.test.ts
+        discriminating: true
+  - id: SL-002
+    statement: >
+      The unprotected-oracle rule cross-references command criteria that
+      execute test paths against verification.protectedPaths from the
+      repository config, warning when the graded context can rewrite
+      the suite that grades it.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: SL-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/spec-lint.test.ts
+        discriminating: true
+  - id: SL-003
+    statement: >
+      The dynamic red-capability check executes discriminating criteria
+      once in a disposable detached worktree at HEAD under the command
+      policy with timeouts, classifying each as fails-at-baseline,
+      passes-at-baseline (warning: the criterion cannot establish red
+      evidence - either broken or a regression invariant mislabeled as
+      discriminating), or not-safely-executable (policy-denied, timed
+      out, or failed to stage) - the third class never reported as pass
+      or fail.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: SL-003-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/spec-lint.test.ts
+        discriminating: true
+  - id: SL-004
+    statement: >
+      Trust boundary pinned: neither lint nor validate mutates the
+      working tree - dynamic checks run only in the disposable
+      worktree, which is removed afterwards.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: SL-004-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/spec-lint.test.ts
+        discriminating: true
+  - id: SL-005
+    statement: >
+      spec validate folds the STATIC warnings into its output but
+      executes no criteria; the dynamic checks exist only in spec lint.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: SL-005-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/spec-lint.test.ts
+        discriminating: true
+  - id: SL-006
+    statement: >
+      Regression guard: workspace builds AND typechecks (the CI lesson
+      - typecheck includes test files, build does not); CLI suite green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: SL-006-A
+        type: command
+        command: pnpm -r build > /dev/null && pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli test
+outOfScope:
+  - lint warnings as errors or gates (warnings by design)
+  - authoring-skill rewriting beyond a pointer to the lint command
+  - semantic correctness judgments about criterion content
