@@ -1,0 +1,104 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: review-fixes
+  title: External-review findings C, B, A, D and scope forwarding
+goal: >
+  External source review (2026-10-20) found five issues, two P0. C: the
+  red-phase evaluator's trailing else treats an INCONCLUSIVE baseline
+  (policy-denied command) as a demonstrated flip. B: continuation-run
+  satisfaction inheritance mutates state after PROPERTY_VERIFIED events
+  were appended, so the event-log projection diverges from state.json -
+  replay, a foundational guarantee, flags it. A: inheritance matches
+  prior runs by specId only, not specDigest, so an amended contract can
+  inherit old satisfaction. D: no revision check between plan and apply.
+  Scope: authored property scope never reaches the planner prompt.
+  Fixed in that order, each with its regression oracle first.
+requirements:
+  - id: RF-001
+    statement: >
+      A discriminating criterion whose baseline evidence is inconclusive
+      and whose final evidence supports reports indeterminate (no flip
+      established), never satisfied; a contradicted baseline followed by
+      support remains a genuine flip.
+    priority: must
+    scope:
+      include: [packages/verifier/src/**]
+    acceptance:
+      - id: RF-001-A
+        type: command
+        command: pnpm --filter @spc/verifier exec vitest run src/flip-distinction.test.ts
+        discriminating: true
+  - id: RF-002
+    statement: >
+      Continuation-run satisfaction inheritance is replayable: an
+      explicit PROPERTY_INHERITED event carries the transition
+      (propertyId, priorRunId, status), the state reducer interprets it,
+      and replay of a continuation run reconstructs exactly the persisted
+      requirement states.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: RF-002-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/continuation-replay.test.ts
+        discriminating: true
+  - id: RF-003
+    statement: >
+      Cross-run inheritance requires the prior run's specDigest to match
+      the current spec's digest - an amended contract cannot inherit
+      satisfaction established against an older one.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: RF-003-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/continuation-replay.test.ts
+        discriminating: true
+  - id: RF-004
+    statement: >
+      Apply compares the plan's recorded repository revision to the
+      observed base revision; on drift a PLAN_DRIFT event and a
+      non-blocking follow-up make contextual drift visible (config
+      planDriftPolicy: warn (default) | reject).
+    priority: must
+    scope:
+      include: [packages/runtime/src/**, packages/schema/src/**]
+    acceptance:
+      - id: RF-004-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/plan-drift.test.ts
+        discriminating: true
+  - id: RF-005
+    statement: >
+      The planner prompt's property projection includes the authored
+      scope patterns.
+    priority: must
+    scope:
+      include: [packages/planner/src/**]
+    acceptance:
+      - id: RF-005-A
+        type: file
+        path: packages/planner/src/prompts.ts
+        assert:
+          contains: "scope"
+        discriminating: true
+      - id: RF-005-B
+        type: command
+        command: pnpm --filter @spc/planner test
+  - id: RF-006
+    statement: >
+      Regression guard: workspace typechecks; verifier, runtime, planner
+      and cli suites green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: RF-006-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/verifier test && pnpm --filter @spc/runtime test && pnpm --filter @spc/planner test && pnpm --filter @spc/cli test
+outOfScope:
+  - property-and-criterion equivalence for inheritance (digest match is the minimum; equivalence is a follow-up)
+  - evidence lineage model (review section 6 - a direction, not a fix)
