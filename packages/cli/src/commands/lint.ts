@@ -46,7 +46,12 @@ export function lintSpec(ir: SpecIR, config: Config): LintWarning[] {
         const testPathMatch = command.match(/[\w./-]*(?:__tests__|tests\/|\.test\.|\.spec\.)[\w./-]*/);
         if (testPathMatch) {
           const referenced = testPathMatch[0].replace(/^\.?\//, "");
-          const covered = globMatchAny(config.verification.protectedPaths, referenced);
+          // Commands inside a filtered package reference paths relative
+          // to the package root while protectedPaths are repo-relative;
+          // cover either form before warning.
+          const covered =
+            globMatchAny(config.verification.protectedPaths, referenced) ||
+            globMatchAny(config.verification.protectedPaths, `packages/*/${referenced}`);
           if (!covered) {
             warnings.push({
               rule: "LINT-UNPROTECTED-ORACLE",
