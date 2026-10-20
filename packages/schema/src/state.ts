@@ -33,6 +33,7 @@ export const runStatusSchema = z.enum([
   "blocked",
   "failed",
   "cancelled",
+  "timed_out",
 ]);
 
 export const taskFailureSchema = z.strictObject({

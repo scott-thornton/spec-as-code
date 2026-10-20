@@ -260,7 +260,9 @@ export async function createVerifyRun(options: StandaloneVerifyOptions): Promise
 
   const evidence = new EvidenceStore(paths.evidenceFile(runId));
   const followups = new FollowupStore(paths.followupsFile(runId));
-  const sweep = await verifyStandalone({
+  let sweep: Awaited<ReturnType<typeof verifyStandalone>>;
+  try {
+  sweep = await verifyStandalone({
     repoRoot: options.repoRoot,
     ...(options.executionRoot ? { executionRoot: options.executionRoot } : {}),
     specIr: options.specIr,
@@ -273,6 +275,18 @@ export async function createVerifyRun(options: StandaloneVerifyOptions): Promise
     revision,
     now,
   });
+  } catch (e) {
+    // A sweep killed by the harness response timeout must not leave a
+    // half-written run (the CHK3555 field case: events and evidence but
+    // no summary - a ghost in every later rendering). Finalize loudly.
+    const code = (e as { code?: string }).code ?? "";
+    if (!/HARNESS_RESPONSE_TIMEOUT/.test(code) && !/not answered with a valid value/.test((e as Error).message)) throw e;
+    events.append("RUN_COMPLETED", { status: "timed_out", requirements: {} });
+    const timedOutState = { ...initialState(meta, null), status: "timed_out" as const };
+    writeFileSync(paths.stateFile(runId), JSON.stringify(timedOutState, null, 2), "utf8");
+    writeFileSync(paths.summaryFile(runId), `# Run ${runId}: timed out\n\nKilled by the harness response timeout while awaiting an answer.\nPartial evidence is in evidence.jsonl; the pending request was\nexpired out of the live queue.\n`, "utf8");
+    throw e;
+  }
 
   const statesMap = new Map(sweep.states.map((s) => [s.propertyId, s]));
   const blocking = followups.openBlocking();

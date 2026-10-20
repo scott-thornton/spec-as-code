@@ -87,9 +87,13 @@ export class HarnessProvider implements LLMProvider {
         windowStart = this.now();
       }
     }
+    // Die loudly: expire the orphaned request out of the live queue
+    // immediately (a later session must never answer a dead request),
+    // then surface the timeout.
+    this.store.expirePending(id);
     throw new LLMError(
       HARNESS_RESPONSE_TIMEOUT,
-      `harness request ${id} (role ${request.role}) was not answered with a valid value within ${this.timeoutMs}ms; see .spc/harness/pending/${id}.json`,
+      `harness request ${id} (role ${request.role}) was not answered with a valid value within ${this.timeoutMs}ms; see .spc/harness/stale/${id}.json`,
     );
   }
 }

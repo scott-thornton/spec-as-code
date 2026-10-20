@@ -107,6 +107,18 @@ export class HarnessStore {
   }
 
   /**
+   * Expire one request immediately (timeout path): out of the live
+   * queue into stale/, recorded, never deleted.
+   */
+  expirePending(id: string): void {
+    const from = path.join(this.base, "pending", `${id}.json`);
+    if (!existsSync(from)) return;
+    const staleDir = path.join(this.base, "stale");
+    mkdirSync(staleDir, { recursive: true });
+    renameSync(from, path.join(staleDir, `${id}.json`));
+  }
+
+  /**
    * Move requests older than maxAgeMs out of the live queue into
    * stale/. Filed, never deleted - they are decision records. Returns
    * the number moved. Idempotent.
