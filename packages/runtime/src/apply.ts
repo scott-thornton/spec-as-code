@@ -633,6 +633,21 @@ async function driveRun(ctx: RunContext): Promise<ApplyReport> {
     for (const id of added) {
       ctx.state = { ...ctx.state, tasks: { ...ctx.state.tasks, [id]: { taskId: id, status: "pending", attempt: 0 } } };
     }
+    // The scheduler's contract: affected tasks reset to pending when an
+    // amendment applies. A changeTarget amendment adds nothing, so until
+    // this reset existed its triggering task parked in needs_replan
+    // forever, blocked its dependents, and concluded the run with
+    // runnable work (CHK3555 run 1).
+    for (const t of result.amendedPlan.tasks) {
+      const prior = ctx.state.tasks[t.id];
+      if (prior?.status === "needs_replan") {
+        ctx.state = {
+          ...ctx.state,
+          tasks: { ...ctx.state.tasks, [t.id]: { ...prior, status: "pending" } },
+        };
+        ctx.events.append("TASK_READY", { taskId: t.id, attempt: prior.attempt, redispatch: "amended" });
+      }
+    }
     currentPlan = result.amendedPlan;
     ctx.plan = result.amendedPlan;
     ctx.events.append("PLAN_AMENDED", {
@@ -1227,6 +1242,19 @@ async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
     const added = amended.tasks.filter((t) => !oldIds.has(t.id)).map((t) => t.id);
     for (const id of added) {
       ctx.state = { ...ctx.state, tasks: { ...ctx.state.tasks, [id]: { taskId: id, status: "pending", attempt: 0 } } };
+    }
+    // Same reset as the sequential driver: needs_replan tasks that
+    // survive the amendment return to pending so the scheduler
+    // re-dispatches them (changeTarget amendments add nothing).
+    for (const t of amended.tasks) {
+      const prior = ctx.state.tasks[t.id];
+      if (prior?.status === "needs_replan") {
+        ctx.state = {
+          ...ctx.state,
+          tasks: { ...ctx.state.tasks, [t.id]: { ...prior, status: "pending" } },
+        };
+        ctx.events.append("TASK_READY", { taskId: t.id, attempt: prior.attempt, redispatch: "amended" });
+      }
     }
     currentPlan = amended;
     ctx.plan = amended;
