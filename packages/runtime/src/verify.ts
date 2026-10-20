@@ -35,6 +35,8 @@ export interface VerifySweepInput {
   enforceRedPhase?: boolean;
   now?: () => string;
   onUsage?: (record: UsageRecord) => void;
+  /** Run-owned agent-verdict cache shared across sweeps (apply runs). */
+  agentVerdicts?: Map<string, { outcome: "supports" | "contradicts" | "inconclusive"; justification: string }>;
 }
 
 export interface VerifySweepResult {
@@ -76,6 +78,7 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
         ...(approvedCommands.size > 0 ? { approvedCommands } : {}),
         ...(input.phase ? { phase: input.phase } : {}),
         commandRuns,
+        ...(input.agentVerdicts ? { agentVerdicts: input.agentVerdicts } : {}),
         now,
       });
       const evidence = input.evidence.add({

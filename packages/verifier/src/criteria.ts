@@ -39,6 +39,13 @@ export interface CriterionContext {
    * every criterion that names it. Created by the sweep, not per criterion.
    */
   commandRuns?: Map<string, CommandRunResult>;
+  /**
+   * Agent-verdict cache, keyed by revision + property + criterion: a
+   * judgment at a fixed revision is reusable across the sweeps of one
+   * run (the field asked the same question ~6 times per run). Owned by
+   * the RUN, not the sweep, when the caller provides one.
+   */
+  agentVerdicts?: Map<string, { outcome: "supports" | "contradicts" | "inconclusive"; justification: string }>;
   /** "red" marks the base-revision sweep of discriminating criteria. */
   phase?: "red";
 }
@@ -315,6 +322,32 @@ async function verifyAgent(
     null,
     2,
   );
+  const cacheKey = `${ctx.repositoryRevision}\u0000${property.id}\u0000${criterion.id}`;
+  const cached = ctx.agentVerdicts?.get(cacheKey);
+  if (cached) {
+    return {
+      evidence: makeEvidence(
+        {
+          id: "pending",
+          runId: ctx.runId,
+          ...(ctx.taskId ? { taskId: ctx.taskId } : {}),
+          criterionId: criterion.id,
+          propertyRefs: [property.id],
+          kind: "agent",
+          outcome: cached.outcome,
+          producer: { type: "agent", identity: ctx.provider.name },
+          timestamp,
+          repositoryRevision: ctx.repositoryRevision,
+          payload: {
+            instruction: criterion.instruction,
+            justification: cached.justification,
+            cachedVerdict: true,
+          },
+        },
+        ctx.now,
+      ),
+    };
+  }
   const requestId = crypto.randomUUID();
   const started = Date.now();
   const response = await ctx.provider.generateStructured({
@@ -332,6 +365,7 @@ async function verifyAgent(
       durationMs: Date.now() - started,
     }, { taskId: ctx.taskId }),
   );
+  ctx.agentVerdicts?.set(cacheKey, response.value);
   return {
     evidence: makeEvidence(
       {

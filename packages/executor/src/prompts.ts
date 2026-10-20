@@ -19,6 +19,10 @@ Contract:
 - Never claim that a requirement is satisfied. Verification happens elsewhere;
   "evidenceCandidates" are informational only.
 - Every file you change must appear in "changes". Do not report changes you did not make.
+- Multiple patch ops for the same file chain: each op after the first must anchor
+  and digest against the file's content AFTER the prior ops applied - compose
+  chains with `spc patch build --after <ops.json>` rather than hand-sequencing
+  digests.
 - When repositoryExcerpts entries carry a "digest", prefer patch ops for edits to that
   file, copying that digest as baseDigest, anchoring on text that
   occurs exactly once in the file, and give the exact replacement. A refused

@@ -50,6 +50,7 @@ export function runAgentList(cwd: string | undefined, format: "text" | "json"): 
   }
   console.log("\nInspect with:  spc agent show <id>");
   console.log("Answer with:   spc agent respond <id> --file <answer.json>");
+  console.log("De-risk with:  spc agent validate <id> --file <draft.json>  |  spc agent dry-run <id> --file <draft.json>");
   return 1;
 }
 

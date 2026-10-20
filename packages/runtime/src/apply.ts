@@ -92,6 +92,7 @@ export interface RunContext {
   worktreePath: string | null;
   worktreeBranch: string | null;
   modelCalls: number;
+  agentVerdicts: Map<string, { outcome: "supports" | "contradicts" | "inconclusive"; justification: string }>;
   now(): string;
   log(line: string): void;
 }
@@ -235,6 +236,7 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
     worktreePath: null,
     worktreeBranch: null,
     modelCalls: 0,
+    agentVerdicts: new Map(),
     now,
     log: deps.log ?? (() => {}),
   };
@@ -367,6 +369,7 @@ async function runRedPhaseSweep(ctx: RunContext): Promise<void> {
     followups: ctx.followups,
     events: ctx.events,
     phase: "red",
+    agentVerdicts: ctx.agentVerdicts,
     now: ctx.now,
   });
   ctx.state = {
@@ -463,6 +466,7 @@ export async function resumeRun(options: ApplyOptions & { resumeRunId: string },
     worktreePath: meta.worktree ?? null,
     worktreeBranch: meta.branch ?? null,
     modelCalls: state.modelCalls,
+    agentVerdicts: new Map(),
     now,
     log: deps.log ?? (() => {}),
   };
@@ -764,6 +768,7 @@ async function finishRun(
     evidence: ctx.evidence,
     followups: ctx.followups,
     events: ctx.events,
+    agentVerdicts: ctx.agentVerdicts,
     now: ctx.now,
     onUsage: usageSink,
   });
@@ -930,6 +935,7 @@ export async function executeTaskInRun(
       followups: ctx.followups,
       events: ctx.events,
       taskId: task.id,
+      agentVerdicts: ctx.agentVerdicts,
       now: ctx.now,
       onUsage: usageSink,
     });

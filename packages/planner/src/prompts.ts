@@ -87,10 +87,13 @@ export function buildPlannerPrompt(input: PlannerContextInput, repair?: string):
     },
     repositoryExcerpts: input.excerpts,
   };
-  const parts = ["Plan the transition for the following specification. Respond with JSON only.", "", JSON.stringify(payload, null, 2)];
+  const parts = ["Plan the transition for the following specification. Respond with JSON only."];
   if (repair) {
+    // Diagnostics lead: a rejection reason buried after ~74KB of
+    // repository payload reads as "no stated reason" (CHK3555).
     parts.push("", "Your previous plan failed deterministic validation. Diagnostics:", "", repair, "", "Produce a corrected plan.");
   }
+  parts.push("", JSON.stringify(payload, null, 2));
   return parts.join("\n");
 }
 
@@ -132,9 +135,11 @@ export function buildReplannerPrompt(input: ReplannerContextInput): string {
       "the amended plan must still pass full validation",
     ],
   };
-  const parts = ["Propose a plan amendment. Respond with JSON only.", "", JSON.stringify(payload, null, 2)];
+  const parts = ["Propose a plan amendment. Respond with JSON only."];
   if (input.amendmentDiagnostics) {
+    // Diagnostics lead the payload, as in the planner prompt.
     parts.push("", "Your previous amendment failed validation. Diagnostics:", "", input.amendmentDiagnostics);
   }
+  parts.push("", JSON.stringify(payload, null, 2));
   return parts.join("\n");
 }
