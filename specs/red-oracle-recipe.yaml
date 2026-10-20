@@ -1,0 +1,48 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: red-oracle-recipe
+  title: The red-oracle-then-quick recipe, written down
+goal: >
+  From the CHK3555 retro (P3): the red oracle then quick pattern worked
+  cleanly in the field - commit the protected failing test first, gate
+  the quick run on that test file, grep-only gates for pure values -
+  and should be documented as the default recipe for small logic
+  changes rather than remaining field folklore.
+requirements:
+  - id: RO-001
+    statement: >
+      The author-spec skill carries a 'Red oracle, then quick' section:
+      commit the protected failing test first, gate spc quick on that
+      test file (--write to skip the planner when the target is known,
+      --stay to stay on the run branch), grep-only gates reserved for
+      pure values.
+    priority: must
+    scope:
+      include: [.agents/skills/**]
+    acceptance:
+      - id: RO-001-A
+        type: file
+        path: .agents/skills/author-spec/SKILL.md
+        assert:
+          contains: "Red oracle, then quick"
+        discriminating: true
+      - id: RO-001-B
+        type: file
+        path: .agents/skills/author-spec/SKILL.md
+        assert:
+          contains: "--write"
+        discriminating: true
+  - id: RO-002
+    statement: >
+      Regression guard: the workspace builds (skills bundle into the
+      CLI at build time).
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: RO-002-A
+        type: command
+        command: pnpm -r build > /dev/null
+outOfScope:
+  - new skills or workflow choreography
