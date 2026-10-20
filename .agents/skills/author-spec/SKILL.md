@@ -91,3 +91,22 @@ The red phase lives in the spec, not the code: author discriminating
 criteria before implementation so the red -> green flip is provable.
 If you cannot write a criterion that fails today for a behavior claim,
 that is a signal about the claim, not the mechanism.
+
+## Red oracle, then quick (the small-change recipe)
+
+For a small, well-understood change, the cheapest honest path is to
+commit the protected failing test FIRST, then gate a `spc quick` run on
+that same test file:
+
+1. Write the test; make it fail for the right reason; commit it (it
+   lives under protectedPaths, so no run task may touch it).
+2. `spc quick "<intent>" --verify "vitest run <that test file>"
+   [--write <path>] [--stay]` - the gate is the oracle you already
+   trust, the planner is skipped with --write, and the flip is provable
+   because the test was red at the commit before the run.
+3. Reserve grep-only gates for pure values (CSS literals, config
+   constants) where a test file would be ceremony.
+
+This worked cleanly in the field (CHK3555 quick chain, 4/4 green first
+time once dry-run adoption kicked in) and should be the default shape
+for logic changes that fit one task.
