@@ -1,0 +1,113 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: run-chain
+  title: Run chains - explicit lineage, effective status, truthful PRs
+goal: >
+  Approved rulings (2026-10-20): chain-aware status (effective state,
+  not historical union; --run for single; exit reflects effective
+  verdict; documented as a CLI change), chain-aware PR draft (verdict
+  first, contributing runs exposed, cumulative verdict separated from
+  the actual diff), and explicit parentRunId (recorded and validated at
+  apply time - parent exists, same spec digest, git-ancestor eligible
+  predecessor, acyclic; chronology is not causality, two independent
+  runs never chain). Inheritance follows the chain; the aggregator
+  never creates inheritance from historical successes and never
+  reinterprets failed evidence as success via ancestors.
+requirements:
+  - id: RC-001
+    statement: >
+      RunMeta carries optional parentRunId, recorded at apply creation
+      (RUN_CREATED event payload included). Default: the latest prior
+      apply run of the same specId AND specDigest whose resultRevision
+      is a git ancestor of this run's base revision; no eligible
+      predecessor means unset. spc apply --parent <runId> overrides
+      explicitly with the same validation.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**, packages/schema/src/**, packages/cli/src/**]
+    acceptance:
+      - id: RC-001-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/chain-lineage.test.ts
+        discriminating: true
+  - id: RC-002
+    statement: >
+      finishRun inheritance walks the parent chain only; runs with no
+      parent inherit nothing (chronology is not causality). The
+      effective chain state for a spec is the chain-head run's
+      persisted requirement states, which already encode inherited
+      provenance.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: RC-002-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/chain-lineage.test.ts
+        discriminating: true
+      - id: RC-002-B
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/continuation-replay.test.ts
+  - id: RC-003
+    statement: >
+      spc status renders the effective chain state by default with a
+      provenance breakdown (newly satisfied in the head run, inherited
+      from prior chain runs, unresolved); --run <id> shows one run;
+      exit code reflects the effective verdict; CHANGELOG.md documents
+      the semantics change.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: RC-003-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/status-chain.test.ts
+        discriminating: true
+      - id: RC-003-B
+        type: file
+        path: CHANGELOG.md
+        assert:
+          contains: "status"
+        discriminating: true
+  - id: RC-004
+    statement: >
+      spc run pr leads with the chain verdict (linked runs count,
+      combined musts), lists per-run contribution, and separates the
+      cumulative verdict from the actual diff - including a check that
+      linked runs' resultRevisions are ancestors of the PR head, noting
+      any that are not.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: RC-004-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/status-chain.test.ts
+        discriminating: true
+  - id: RC-005
+    statement: >
+      spc brief shows chain depth for specs with continuations (e.g.
+      "2 runs · chain").
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: RC-005-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/status-chain.test.ts
+        discriminating: true
+  - id: RC-006
+    statement: >
+      Regression guard: workspace typecheck; runtime and cli suites
+      green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: RC-006-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/runtime test && pnpm --filter @spc/cli test
+outOfScope:
+  - chronological fallback for legacy runs without parentRunId (they form single-run chains by design)
+  - spec lifecycle open/standing (deferred ruling)
