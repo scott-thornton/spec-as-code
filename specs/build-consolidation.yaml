@@ -1,0 +1,58 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: build-consolidation
+  title: One workspace gate, not twelve
+goal: >
+  Twelve specs carry a full pnpm -r build composite as insurance -
+  my own cost-model violation at repo scale (every criterion executes
+  on every sweep). Approved consolidation: ONE workspace-level gate
+  (self-hosting) carries the single terminal build-and-typecheck
+  criterion; feature specs drop to their cheap package-scoped checks
+  and never reference workspace build, so individually verifying a
+  feature spec cannot claim the global condition. The global gate
+  stays mandatory - it now lives exactly once.
+requirements:
+  - id: BC-001
+    statement: >
+      No spec under specs/ other than self-hosting references
+      `pnpm -r build` in any criterion.
+    priority: must
+    scope:
+      include: [specs/**]
+    acceptance:
+      - id: BC-001-A
+        type: command
+        command: test "$(grep -l 'pnpm -r build' specs/*.yaml | grep -v self-hosting | wc -l)" -eq 0
+        discriminating: true
+  - id: BC-002
+    statement: >
+      self-hosting carries one workspace gate property: full build AND
+      typecheck, not discriminating (regression guard).
+    priority: must
+    scope:
+      include: [specs/**]
+    acceptance:
+      - id: BC-002-A
+        type: file
+        path: specs/self-hosting.yaml
+        assert:
+          contains: "pnpm -r typecheck"
+        discriminating: true
+      - id: BC-002-B
+        type: command
+        command: pnpm -r build > /dev/null && pnpm -r typecheck > /dev/null
+  - id: BC-003
+    statement: >
+      Feature specs' regression criteria still run their own
+      package-scoped suites (nothing was dropped, only the duplicate
+      global build).
+    priority: must
+    scope:
+      include: [specs/**]
+    acceptance:
+      - id: BC-003-A
+        type: command
+        command: pnpm --filter @spc/cli test > /dev/null && pnpm --filter @spc/executor test > /dev/null && pnpm --filter @spc/runtime test > /dev/null
+outOfScope:
+  - scoped per-package build prefixes (needed by dist-spawning tests)
