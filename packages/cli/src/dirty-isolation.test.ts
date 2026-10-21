@@ -155,7 +155,9 @@ describe("allowDirtyPaths: the strengthened contract", () => {
       "satisfies: [DI-001, DI-002]",
     );
     writeFileSync(path.join(repo, ".spc", "fake.yaml"), fake, "utf8");
-    git(repo, ["add", "."]);
+    // Stage ONLY the spec - `git add .` would sweep the dirty .env into
+    // this commit, and the contamination scenario requires it UNCOMMITTED.
+    git(repo, ["add", "specs/dirty.yaml"]);
     git(repo, ["commit", "-q", "-m", "contaminated spec"]);
     planFor(repo);
     // The hand-written plan must cover the new property too.
