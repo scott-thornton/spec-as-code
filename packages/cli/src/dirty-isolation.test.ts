@@ -79,12 +79,17 @@ function setup(allowDirtyPaths?: string[]): string {
   return repo;
 }
 
+function digestOfSpec(repo: string): string {
+  const out = spawnSync(process.execPath, [CLI, "spec", "validate", "specs/dirty.yaml"], { cwd: repo, encoding: "utf8" });
+  return (out.stdout ?? "").match(/Digest: (sha256:\S+)/)?.[1] ?? "sha256:" + "0".repeat(64);
+}
+
 function planFor(repo: string): void {
   mkdirSync(path.join(repo, ".spc", "plans"), { recursive: true });
   writeFileSync(path.join(repo, ".spc", "plans", "plan-dirty.json"), JSON.stringify({
     apiVersion: "spc.dev/v1alpha1", kind: "Plan",
     metadata: { id: "plan-dirty", createdAt: "2026-10-21T00:00:00.000Z" },
-    spec: { id: "dirty", digest: "sha256:" + "0".repeat(64) },
+    spec: { id: "dirty", digest: digestOfSpec(repo) },
     repository: { revision: "0000", snapshotDigest: "sha256:" + "0".repeat(64) },
     tasks: [{ id: "T001", title: "Work", kind: "modify", intent: "write", dependsOn: [], satisfies: ["DI-001"], targets: { write: ["marker.txt"] } }],
   }), "utf8");
@@ -101,7 +106,9 @@ describe("allowDirtyPaths: the strengthened contract", () => {
     // Preserved exactly as it was.
     expect(readFileSync(path.join(repo, ".env"), "utf8")).toBe("VITE_KEY=changed\n");
     // Never committed: the run's commits do not touch .env.
-    const touched = git(repo, ["log", "--name-only", "--pretty=format:", "main", "--", ".env"]);
+    // Only the run's commits (after the init baseline) must not touch .env.
+    const init = git(repo, ["rev-list", "--max-parents=0", "HEAD"]);
+    const touched = git(repo, ["log", "--name-only", "--pretty=format:", `${init}..HEAD`, "--", ".env"]);
     expect(touched).toBe("");
   });
 
@@ -110,7 +117,7 @@ describe("allowDirtyPaths: the strengthened contract", () => {
     writeFileSync(path.join(repo, "src.ts"), "dirty\n", "utf8");
     planFor(repo);
     const r = sh(repo, ["apply"]);
-    expect(r.status).not().toBe(0);
+    expect(r.status).not.toBe(0);
     expect(r.stderr).toMatch(/dirty|clean/i);
   });
 
@@ -119,7 +126,7 @@ describe("allowDirtyPaths: the strengthened contract", () => {
     writeFileSync(path.join(repo, "marker.txt"), "pre-existing dirt\n", "utf8");
     planFor(repo);
     const r = sh(repo, ["apply"]);
-    expect(r.status).not().toBe(0);
+    expect(r.status).not.toBe(0);
     expect(r.stderr).toMatch(/DIRTY_PATH_SCOPE|overlap/i);
   });
 
@@ -142,14 +149,25 @@ describe("allowDirtyPaths: the strengthened contract", () => {
       "        command: node -e \"require('fs').writeFileSync('marker.txt','x')\"\n  - id: DI-002\n    statement: The env marker is committed.\n    priority: must\n    acceptance:\n      - id: DI-002-A\n        type: command\n        command: grep -q contaminating .env",
     );
     writeFileSync(path.join(repo, "specs", "dirty.yaml"), contaminated, "utf8");
+    // The fake plan must cover both properties.
+    const fake = readFileSync(path.join(repo, ".spc", "fake.yaml"), "utf8").replace(
+      "satisfies: [DI-001]",
+      "satisfies: [DI-001, DI-002]",
+    );
+    writeFileSync(path.join(repo, ".spc", "fake.yaml"), fake, "utf8");
     git(repo, ["add", "."]);
     git(repo, ["commit", "-q", "-m", "contaminated spec"]);
     planFor(repo);
+    // The hand-written plan must cover the new property too.
+    const planFile = path.join(repo, ".spc", "plans", "plan-dirty.json");
+    const plan = JSON.parse(readFileSync(planFile, "utf8"));
+    plan.tasks[0].satisfies = ["DI-001", "DI-002"];
+    writeFileSync(planFile, JSON.stringify(plan, null, 2), "utf8");
     const r = sh(repo, ["apply"]);
     // The grep passes in the live tree (dirt present) but the committed
     // tree does not contain it - the strengthened contract requires the
     // conclusion NOT be drawn from excluded dirt.
     expect(r.stderr).not.toContain("DI-002.*satisfied");
-    expect(r.stderr).toMatch(/partially|unsatisfied|contaminat|indeterminate/);
+    expect(r.stderr + r.stdout).toMatch(/partially|unsatisfied|contaminat|indeterminate/);
   });
 });

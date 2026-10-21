@@ -58,6 +58,14 @@ export const executionConfigSchema = z.strictObject({
   /** Harness provider: how long to wait for an external agent's answer per request. */
   harnessResponseTimeoutMs: z.number().int().positive().default(900_000),
   /**
+   * Scoped dirt exemptions (strengthened contract): listed paths may be
+   * dirty at preflight, but must remain unchanged, must never appear in
+   * run commits, must not overlap task write scopes, and must not
+   * contribute uncommitted state to verification evidence. Permission
+   * to preserve dirt is never permission to incorporate it.
+   */
+  allowDirtyPaths: z.array(z.string().min(1)).optional(),
+  /**
    * Role-specific response windows (planner/executor/replanner/
    * verifier). Roles without an entry use harnessResponseTimeoutMs.
    * Field case: verifier agent-review requests are the slow ones.

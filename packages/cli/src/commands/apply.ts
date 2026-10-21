@@ -14,6 +14,9 @@ export async function runApply(options: {
 }): Promise<number> {
   const repoRoot = resolveRepoRoot(options.cwd);
   const config = loadRepoConfig(repoRoot);
+  if (options.allowDirty) {
+    console.log("warning: --allow-dirty is a blanket bypass; prefer execution.allowDirtyPaths for scoped exemptions that are excluded from commits and validated against task scopes");
+  }
   const deps = {
     providerFactory: async () => createProvider(config, repoRoot),
     log: (line: string) => console.log(line),

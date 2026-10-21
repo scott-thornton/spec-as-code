@@ -153,9 +153,21 @@ export function commitEmpty(cwd: string, message: string, trailers?: Record<stri
   return currentRevision(cwd);
 }
 
-export function commitAll(cwd: string, message: string, trailers?: Record<string, string>): string | null {
+export function commitAll(cwd: string, message: string, trailers?: Record<string, string>, exclude?: readonly string[]): string | null {
   const status = statusPorcelain(cwd);
   if (!status.dirty) return null;
+  if (exclude !== undefined && exclude.length > 0) {
+    // Exclusion BY CONSTRUCTION: stage only the tree's actual changes,
+    // never the excluded paths. No add -A then unstage - the excluded
+    // dirt is never staged at all.
+    const changed = [...status.entries].filter(([p]) => !exclude.includes(p) && !p.startsWith(".spc/"));
+    if (changed.length === 0) return null;
+    const paths = changed.map(([p]) => p);
+    gitOk(cwd, ["add", "--", ...paths]);
+    if (git(cwd, ["diff", "--cached", "--quiet"]).ok) return null;
+    gitOk(cwd, ["commit", "-m", commitMessage(message, trailers)], { identity: true });
+    return currentRevision(cwd);
+  }
   // Identity matters only for operations that create commits; add/reset
   // never do.
   gitOk(cwd, ["add", "-A"]);

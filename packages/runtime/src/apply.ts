@@ -9,6 +9,8 @@ import {
   SpcError,
   validatePlan,
   planDigest as computePlanDigest,
+
+  globMatchAny,
 } from "@spc/core";
 import type { FollowUp, Observation, Plan, RequirementState, RunState, RunStatus, SpecIR, Task, TaskState } from "@spc/schema";
 import type { LLMProvider, UsageRecord } from "@spc/llm";
@@ -137,11 +139,28 @@ function checkPreflight(options: ApplyOptions, paths: SpcPaths, plan: Plan, spec
   const humanChanges = [...status.entries].filter(
     ([p, xy]) => !(p.startsWith(".spc/") && xy.includes("?")),
   );
-  if (humanChanges.length > 0 && !options.allowDirty) {
+  const allowDirty = config.execution.allowDirtyPaths ?? [];
+  const dirtyAllowed = humanChanges.filter(([p]) => globMatchAny(allowDirty, p));
+  const dirtyOffenders = humanChanges.filter(([p]) => !globMatchAny(allowDirty, p));
+  if (dirtyOffenders.length > 0 && !options.allowDirty) {
     throw new SpcError(
       "DIRTY_REPOSITORY",
-      `working tree is dirty (${humanChanges.length} changed paths); commit or stash first, or pass --allow-dirty`,
+      `working tree is dirty (${dirtyOffenders.length} changed paths not covered by execution.allowDirtyPaths: ${dirtyOffenders.slice(0, 5).map(([p]) => p).join(", ")}); commit or stash first, scope them via allowDirtyPaths, or pass --allow-dirty (blanket, deprecated)`,
     );
+  }
+  // The exemption never overrides task scope: an actually-dirty allowlisted
+  // path overlapping a validated write target is a hard reject (the plan's
+  // scope check would silently pass writes the dirt already occupies).
+  if (dirtyAllowed.length > 0) {
+    const writePatterns = plan.tasks.flatMap((t) => t.targets?.write ?? []);
+    for (const [p] of dirtyAllowed) {
+      if (globMatchAny(writePatterns, p)) {
+        throw new SpcError(
+          "DIRTY_PATH_SCOPE",
+          `allowlisted dirty path "${p}" overlaps the plan's declared write targets; the exemption must never override task scope - commit or stash the path, or narrow the write targets`,
+        );
+      }
+    }
   }
   if (config.execution.requirePlanApproval && !isPlanApproved(paths, plan.metadata.id)) {
     throw new SpcError(
@@ -799,7 +818,7 @@ async function finishRun(
       "SPC-Run-Id": ctx.meta.runId,
       "SPC-Plan-Id": currentPlan.metadata.id,
       "SPC-Spec-Digest": ctx.specIr.digest,
-    }) ??
+    }, ctx.config.execution.allowDirtyPaths) ??
     currentRevision(worktree);
   const stat = diffStat(worktree, baseRev, resultRevision);
   const changedFileCount = countChanged(worktree, baseRev, resultRevision);
@@ -851,6 +870,68 @@ async function finishRun(
     now: ctx.now,
     onUsage: usageSink,
   });
+  // Verification contamination guard (strengthened allowDirtyPaths
+  // contract): a criterion that passed only because excluded dirt was
+  // present in the live tree did not describe the committed result.
+  // Re-verify criteria whose commands reference an actually-dirty
+  // excluded path, against the result revision, in a temp worktree.
+  const dirtyExcluded = ((): string[] => {
+    const allow = ctx.config.execution.allowDirtyPaths ?? [];
+    if (allow.length === 0) return [];
+    try {
+      const st = statusPorcelain(worktree);
+      return [...st.entries].map(([p]) => p).filter((p) => allow.includes(p));
+    } catch {
+      return [];
+    }
+  })();
+  if (dirtyExcluded.length > 0) {
+    const contaminated = sweep.states.filter((st) => {
+      if (st.status !== "satisfied") return false;
+      const evIds = st.evidenceIds ?? [];
+      return evIds.some((id) => {
+        const ev = ctx.evidence.all().find((e) => e.id === id);
+        if (!ev) return false;
+        const cmd = (ev.payload as { command?: string }).command ?? "";
+        return dirtyExcluded.some((p) => cmd.includes(p));
+      });
+    });
+    if (contaminated.length > 0) {
+      // Verify against the COMMITTED result, not the live tree: a
+      // temporary worktree at resultRevision contains no dirt.
+      const guardWt = path.join(ctx.paths.worktreesDir, `contamination-${ctx.meta.runId}`);
+      try { gitOk(ctx.paths.repoRoot, ["worktree", "remove", "--force", guardWt]); } catch { /* absent */ }
+      gitOk(ctx.paths.repoRoot, ["worktree", "add", "--detach", guardWt, resultRevision]);
+      let guard: Awaited<ReturnType<typeof verifyProperties>>;
+      try {
+        guard = await verifyProperties({
+        properties: ctx.specIr.properties.filter((p) => contaminated.some((c) => c.propertyId === p.id)),
+        runId: ctx.meta.runId,
+        cwd: guardWt,
+        revision: currentRevision(worktree),
+        config: ctx.config,
+        provider: ctx.provider,
+        evidence: ctx.evidence,
+        followups: ctx.followups,
+        events: ctx.events,
+        now: ctx.now,
+        });
+      } finally {
+        try { gitOk(ctx.paths.repoRoot, ["worktree", "remove", "--force", guardWt]); } catch { /* best effort */ }
+      }
+      const guarded = new Map(guard.states.map((g) => [g.propertyId, g]));
+      sweep.states = sweep.states.map((st) => {
+        if (st.status !== "satisfied") return st;
+        const g = guarded.get(st.propertyId);
+        if (g && g.status !== "satisfied" && g.status !== "waived") {
+          ctx.log(`Property ${st.propertyId}: verification contamination - criterion passed only with excluded dirt (${dirtyExcluded.join(", ")}); downgraded to ${g.status}`);
+          return { ...g, reason: `verification contamination: the criterion passed only with excluded dirt present (strengthened allowDirtyPaths contract); re-verified against the committed result: ${g.reason ?? g.status}` };
+        }
+        return st;
+      });
+    }
+  }
+
   // Chain awareness (CHK3555): a continuation run cannot re-flip work a
   // prior run of this spec already landed - its discriminating criteria
   // pass at base, which the flip evaluator correctly records as
