@@ -1,0 +1,72 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: ratchet-provenance
+  title: Lint rules carry their lineage
+goal: >
+  The ratchet's discipline, made structural (approved ruling): every
+  active lint rule ships a provenance record - the motivating finding,
+  a NEGATIVE fixture (the rule catches the original defect) AND a
+  POSITIVE fixture (the rule permits acceptable criteria), the human
+  approver, and optional supersession. Superseded rules stay in the
+  registry, marked, and never fire - the ratchet is not a one-way
+  accumulation of increasingly restrictive mistakes.
+requirements:
+  - id: RP-001
+    statement: >
+      packages/cli/src/commands/lint.ts exports LINT_RULES: one record
+      per active rule with id, motivation, negativeFixture,
+      positiveFixture, approvedBy, and optional supersededBy; every
+      active rule id emitted by lintSpec appears in the registry.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: RP-001-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/lint-provenance.test.ts
+        discriminating: true
+  - id: RP-002
+    statement: >
+      A superseded rule stays in the registry marked supersededBy and
+      never fires; the original narrow UNPROTECTED-ORACLE rule (the
+      slerp false-positive saga) is recorded as superseded by its
+      runner-gated successor.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: RP-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/lint-provenance.test.ts
+        discriminating: true
+  - id: RP-003
+    statement: >
+      spec lint --provenance prints the registry (rule id, motivation
+      summary, fixture descriptions, approver, supersession).
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: RP-003-A
+        type: file
+        path: packages/cli/src/commands/lint.ts
+        assert:
+          contains: "provenance"
+        discriminating: true
+      - id: RP-003-B
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli test
+  - id: RP-004
+    statement: >
+      Regression guard: workspace typecheck, CLI suite green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: RP-004-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli test
+outOfScope:
+  - automatic rule promotion (human-gated by design)
+  - rule version history beyond supersession pointers (git history carries it)
