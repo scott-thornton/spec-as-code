@@ -1,0 +1,60 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: criterion-chain
+  title: Criterion-level flip inheritance across run chains
+goal: >
+  Field case (slerp CHK3555 continuation, 2026-10-21): LIST-001's
+  criteria flipped in different runs of a chain - A/B/D in run 1, C in
+  run 2 - and run 2's ledger read the property indeterminate, blocking
+  whole-run success, because inheritance operates at property level
+  (requires the WHOLE property satisfied in an ancestor). The external
+  reviewer's Finding A anticipated this: equivalence belongs at the
+  property-AND-CRITERION level. Fix: the final sweep accepts a map of
+  inherited flips (criterionId -> prior run id) computed from the
+  digest-bound parent chain's evidence; a discriminating criterion that
+  passed at base with an ancestor flip counts as flipped (provenance
+  named), so a property whose every criterion flipped SOMEWHERE in the
+  chain aggregates to satisfied naturally - replay-consistent, since
+  the verdict flows through PROPERTY_VERIFIED like any other.
+requirements:
+  - id: CCI-001
+    statement: >
+      A property whose discriminating criteria flip in different runs of
+      a validated chain reports satisfied in the chain head, with reason
+      naming the chain inheritance; replay reconstructs the verdict.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**, packages/verifier/src/**]
+    acceptance:
+      - id: CCI-001-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/criterion-chain.test.ts
+        discriminating: true
+  - id: CCI-002
+    statement: >
+      A criterion passing at base with NO ancestor flip stays
+      indeterminate/unsatisfied - inheritance requires the flip evidence
+      in the chain's own records, never mere historical success.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: CCI-002-A
+        type: command
+        command: pnpm --filter @spc/runtime exec vitest run src/criterion-chain.test.ts
+        discriminating: true
+  - id: CCI-003
+    statement: >
+      Regression guard: workspace typecheck; runtime and verifier suites
+      green (including continuation-replay and chain-lineage).
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: CCI-003-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/runtime test && pnpm --filter @spc/verifier test
+outOfScope:
+  - cross-spec criterion matching (same digest + criterionId only)
+  - changes to the property-level post-pass (both mechanisms coexist)
