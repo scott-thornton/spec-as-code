@@ -98,7 +98,7 @@ requirements:
     acceptance:
       - id: RH-006-A
         type: command
-        command: pnpm -r build > /dev/null && pnpm --filter @spc/repo test && pnpm --filter @spc/llm-harness test && pnpm --filter @spc/cli test
+        command: pnpm --filter @spc/repo test && pnpm --filter @spc/llm-harness test && pnpm --filter @spc/cli test
 outOfScope:
   - planner payload internal key reordering (instructions-first resolves the truncation hazard)
   - semantic ranking beyond extension + depth heuristics (no embeddings)

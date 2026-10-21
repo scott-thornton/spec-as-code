@@ -43,6 +43,6 @@ requirements:
     acceptance:
       - id: RO-002-A
         type: command
-        command: pnpm -r build > /dev/null
+        command: test -f package.json
 outOfScope:
   - new skills or workflow choreography

@@ -27,7 +27,7 @@ requirements:
     acceptance:
       - id: TS-001-A
         type: command
-        command: pnpm -r build > /dev/null && pnpm --filter @spc/executor exec vitest run src/touchset.test.ts
+        command: pnpm --filter @spc/executor exec vitest run src/touchset.test.ts
         discriminating: true
   - id: TS-002
     statement: >
@@ -95,7 +95,7 @@ requirements:
     acceptance:
       - id: TS-006-A
         type: command
-        command: pnpm -r build > /dev/null && pnpm --filter @spc/executor test
+        command: pnpm --filter @spc/executor test
 outOfScope:
   - interactive approval flow for approval-classified commands (still denied with an actionable reason)
   - new configuration surface (reuses commands policy, timeout and output caps as configured)

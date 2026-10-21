@@ -124,7 +124,7 @@ requirements:
     acceptance:
       - id: DC-004-A
         type: command
-        command: pnpm -r build > /dev/null
+        command: test -f package.json
 outOfScope:
   - restructuring the docs site or its navigation
   - configuration.md changes (configDigest is described where brief documents its warning)

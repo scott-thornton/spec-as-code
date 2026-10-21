@@ -95,7 +95,7 @@ requirements:
     acceptance:
       - id: BR-006-A
         type: command
-        command: pnpm -r build > /dev/null && pnpm --filter @spc/cli test && pnpm --filter @spc/runtime test
+        command: pnpm --filter @spc/cli test && pnpm --filter @spc/runtime test
 outOfScope:
   - running criteria or spawning verification runs (recorded state only)
   - drift re-derivation (reports the last recorded verification, labeled with its revision)

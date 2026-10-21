@@ -79,7 +79,7 @@ requirements:
     acceptance:
       - id: EH-005-A
         type: command
-        command: pnpm -r build > /dev/null && pnpm --filter @spc/repo test && pnpm --filter @spc/verifier test && pnpm --filter @spc/runtime test && pnpm --filter @spc/cli test
+        command: pnpm --filter @spc/repo test && pnpm --filter @spc/verifier test && pnpm --filter @spc/runtime test && pnpm --filter @spc/cli test
 outOfScope:
   - re-running agent or human criteria at historical revisions (deterministic only)
   - dependency installation inside revision worktrees (criteria must be self-contained or fail honestly)

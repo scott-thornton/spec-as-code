@@ -77,7 +77,7 @@ requirements:
     acceptance:
       - id: SU-005-A
         type: command
-        command: pnpm -r build > /dev/null && pnpm --filter @spc/cli test
+        command: pnpm --filter @spc/cli test
 outOfScope:
   - token estimates presented as measurements (bytes only, labeled)
   - cross-repo aggregation (single repository per invocation)

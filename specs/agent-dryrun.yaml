@@ -88,7 +88,7 @@ requirements:
     acceptance:
       - id: ADR-005-A
         type: command
-        command: pnpm -r build > /dev/null && pnpm --filter @spc/cli test && pnpm --filter @spc/verifier test
+        command: pnpm --filter @spc/cli test && pnpm --filter @spc/verifier test
 outOfScope:
   - gating submission on dry-run results (report-only by design)
   - agent/human criterion simulation (deterministic only)

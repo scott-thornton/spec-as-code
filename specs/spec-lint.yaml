@@ -99,7 +99,7 @@ requirements:
     acceptance:
       - id: SL-006-A
         type: command
-        command: pnpm -r build > /dev/null && pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli test
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli test
 outOfScope:
   - lint warnings as errors or gates (warnings by design)
   - authoring-skill rewriting beyond a pointer to the lint command

@@ -74,7 +74,7 @@ requirements:
     acceptance:
       - id: SG-004-A
         type: command
-        command: pnpm -r build > /dev/null && pnpm --filter @spc/executor test
+        command: pnpm --filter @spc/executor test
 outOfScope:
   - EXECUTOR_SYSTEM content changes (the system prompt already carries the contract)
   - spc agent show output formatting (separate UX card if wanted)

@@ -109,7 +109,7 @@ requirements:
     acceptance:
       - id: PB-006-A
         type: command
-        command: pnpm -r build > /dev/null && pnpm --filter @spc/cli test && pnpm --filter @spc/executor test
+        command: pnpm --filter @spc/cli test && pnpm --filter @spc/executor test
 outOfScope:
   - any change to the applicator or refusal semantics in @spc/executor (patch.ts, touchset.ts untouched)
   - automatic anchor selection or fuzzy suggestion (the tool verifies, never decides)

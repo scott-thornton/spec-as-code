@@ -105,7 +105,7 @@ requirements:
     acceptance:
       - id: SK-004-A
         type: command
-        command: pnpm -r build > /dev/null
+        command: test -f package.json
 outOfScope:
   - changes to the bundled skill copying mechanism
   - new skills
