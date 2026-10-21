@@ -1,0 +1,102 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: dirty-isolation
+  title: allowDirtyPaths under the strengthened contract
+goal: >
+  Conditionally approved feature (ruling 2026-10-20). The invariant:
+  pre-existing changes on allowlisted paths may coexist with execution,
+  but must remain unchanged, must not be included in run commits, must
+  not overlap task writes (hard preflight reject when actually dirty),
+  and must not contribute uncommitted state to successful verification
+  evidence - verification contamination is the correctness case the
+  commit-exclusion alone does not cover. Dirt is excluded from commits
+  by CONSTRUCTION (explicit path-scoped staging, never add -A-then-
+  unstage), preserved exactly across success and failure, baseline
+  hashes (not contents) recorded for audit, and the blanket
+  --allow-dirty flag is deprecated in favor of scoped exemptions.
+requirements:
+  - id: DI-001
+    statement: >
+      execution.allowDirtyPaths (optional string array) permits dirt on
+      listed paths at preflight; non-listed dirt still rejects. Listed
+      paths that are CLEAN do not interfere.
+    priority: must
+    scope:
+      include: [packages/schema/src/**, packages/runtime/src/**]
+    acceptance:
+      - id: DI-001-A
+        type: command
+        command: pnpm --filter @spc/schema exec vitest run src/dirty-paths.test.ts
+        discriminating: true
+      - id: DI-001-B
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/dirty-isolation.test.ts
+        discriminating: true
+  - id: DI-002
+    statement: >
+      A dirty allowlisted path overlapping the validated plan's
+      targets.write hard-rejects at preflight (the exemption never
+      overrides task scope).
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: DI-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/dirty-isolation.test.ts
+        discriminating: true
+  - id: DI-003
+    statement: >
+      Run commits exclude allowlisted dirt BY CONSTRUCTION (explicit
+      staging from the run's own delta, never add -A then unstage) and
+      the dirt is preserved exactly through success and failure.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**, packages/repo/src/**]
+    acceptance:
+      - id: DI-003-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/dirty-isolation.test.ts
+        discriminating: true
+  - id: DI-004
+    statement: >
+      Verification contamination: a criterion that passes only because
+      of excluded dirt does not produce a satisfied conclusion for the
+      committed result.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: DI-004-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/dirty-isolation.test.ts
+        discriminating: true
+  - id: DI-005
+    statement: >
+      spc apply --allow-dirty prints a deprecation warning steering to
+      allowDirtyPaths (behavior unchanged this release).
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: DI-005-A
+        type: file
+        path: packages/cli/src/commands/apply.ts
+        assert:
+          contains: "allowDirtyPaths"
+        discriminating: true
+  - id: DI-006
+    statement: >
+      Regression guard: workspace typecheck; schema, runtime, repo and
+      cli suites green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: DI-006-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/schema test && pnpm --filter @spc/runtime test && pnpm --filter @spc/repo test && pnpm --filter @spc/cli test
+outOfScope:
+  - worktree-mode handling (in-place modes only this release)
+  - baseline hash persistence in the run record (follow-up once the semantics bed in)
