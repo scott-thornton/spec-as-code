@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lintSpec, LINT_RULES } from "./lint.js";
+import { lintSpec, LINT_RULES } from "./commands/lint.js";
 import { configSchema } from "@spc/schema";
 
 const DEFAULT_CONFIG = configSchema.parse({});
