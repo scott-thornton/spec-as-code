@@ -854,6 +854,43 @@ async function finishRun(
     ctx.log(`budget signal: ${signal.kind} ${signal.actual} ${signal.unit} > ${signal.budget}`);
   }
 
+  // Criterion-level chain flips (LIST-001 field case): a criterion that
+  // merely passes at this base counts as flipped when a digest-bound
+  // ancestor's evidence records the red -> green transition for THAT
+  // criterion - properties whose criteria flip in different chain runs
+  // aggregate to satisfied instead of hanging indeterminate.
+  const inheritedFlips = new Map<string, string>();
+  const ancestorIds: string[] = [];
+  {
+    const visited = new Set<string>([ctx.meta.runId]);
+    let cursor: string | undefined = ctx.meta.parentRunId;
+    while (cursor && !visited.has(cursor)) {
+      visited.add(cursor);
+      ancestorIds.push(cursor);
+      cursor = loadRunMeta(ctx.paths.runsDir, cursor)?.parentRunId;
+    }
+  }
+  for (const priorId of ancestorIds) {
+    const evidenceFile = path.join(ctx.paths.runsDir, priorId, "evidence.jsonl");
+    if (!existsSync(evidenceFile)) continue;
+    try {
+      const lines = readFileSync(evidenceFile, "utf8").split("\n").filter(Boolean);
+      const sawRed = new Set<string>();
+      const sawGreen = new Set<string>();
+      for (const line of lines) {
+        const e = JSON.parse(line) as { criterionId?: string; outcome?: string; phase?: string };
+        if (!e.criterionId) continue;
+        if (e.phase === "red" && e.outcome === "contradicts") sawRed.add(e.criterionId);
+        if (e.phase !== "red" && e.outcome === "supports") sawGreen.add(e.criterionId);
+      }
+      for (const c of sawGreen) {
+        if (sawRed.has(c) && !inheritedFlips.has(c)) inheritedFlips.set(c, priorId);
+      }
+    } catch {
+      // unreadable ancestor evidence: not a source of flips
+    }
+  }
+
   // Final verification sweep over every property, in the worktree.
   const sweep = await verifyProperties({
     properties: ctx.specIr.properties,
@@ -869,6 +906,7 @@ async function finishRun(
     agentVerdicts: ctx.agentVerdicts,
     now: ctx.now,
     onUsage: usageSink,
+    ...(inheritedFlips.size > 0 ? { inheritedFlips } : {}),
   });
   // Verification contamination guard (strengthened allowDirtyPaths
   // contract): a criterion that passed only because excluded dirt was

@@ -37,6 +37,8 @@ export interface VerifySweepInput {
   onUsage?: (record: UsageRecord) => void;
   /** Run-owned agent-verdict cache shared across sweeps (apply runs). */
   agentVerdicts?: Map<string, { outcome: "supports" | "contradicts" | "inconclusive"; justification: string }>;
+  /** Criterion-level chain flips (criterionId -> prior runId), final sweep only. */
+  inheritedFlips?: ReadonlyMap<string, string>;
 }
 
 export interface VerifySweepResult {
@@ -79,6 +81,7 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
         ...(input.phase ? { phase: input.phase } : {}),
         commandRuns,
         ...(input.agentVerdicts ? { agentVerdicts: input.agentVerdicts } : {}),
+        ...(input.inheritedFlips ? { inheritedFlips: input.inheritedFlips } : {}),
         now,
       });
       const evidence = input.evidence.add({
@@ -128,6 +131,7 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
     const state = evaluateProperty(p, input.evidence.all(), {
       allowAgentOnly: input.config.verification.allowAgentOnlyMustRequirements,
       ...(input.enforceRedPhase && input.config.verification.requireRedPhase ? { requireRedPhase: true } : {}),
+      ...(input.inheritedFlips ? { inheritedFlips: input.inheritedFlips } : {}),
       now,
     });
     input.events.append("PROPERTY_VERIFIED", {

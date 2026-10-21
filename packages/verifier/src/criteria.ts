@@ -48,6 +48,13 @@ export interface CriterionContext {
   agentVerdicts?: Map<string, { outcome: "supports" | "contradicts" | "inconclusive"; justification: string }>;
   /** "red" marks the base-revision sweep of discriminating criteria. */
   phase?: "red";
+  /**
+   * Chain inheritance (criterion-level): criterionId -> prior runId whose
+   * evidence records the red -> green flip, when the criterion merely
+   * passes at this run's base. Digest-bound by construction (computed
+   * from the parentRunId chain only).
+   */
+  inheritedFlips?: ReadonlyMap<string, string>;
 }
 
 export interface CriterionResult {

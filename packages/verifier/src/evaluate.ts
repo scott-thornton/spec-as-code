@@ -13,6 +13,8 @@ export interface EvaluationOptions {
   now?: () => string;
   /** Enforce the red -> green flip for criteria marked discriminating. */
   requireRedPhase?: boolean;
+  /** Criterion-level chain flips (criterionId -> prior runId). */
+  inheritedFlips?: ReadonlyMap<string, string>;
 }
 
 interface CriterionVerdict {
@@ -123,12 +125,25 @@ export function evaluateProperty(
           redPhase: "no_red_evidence",
         };
       } else if (red.outcome === "supports") {
-        verdict = {
-          ...verdict,
-          status: "indeterminate",
-          detail: "criterion passed at base revision; it does not discriminate this change",
-          redPhase: "passed_at_base",
-        };
+        const inheritedFrom = options.inheritedFlips?.get(criterion.id);
+        if (inheritedFrom !== undefined) {
+          // Criterion-level chain inheritance (the LIST-001 field case):
+          // the criterion passed at THIS base, and the red -> green flip
+          // is recorded in a digest-bound ancestor's evidence - the
+          // property aggregates naturally instead of hanging indeterminate.
+          verdict = {
+            ...verdict,
+            redPhase: "flipped",
+            detail: `flip established in prior run ${inheritedFrom} (chain inheritance); criterion passed at this base and the transition is recorded in that run's evidence`,
+          };
+        } else {
+          verdict = {
+            ...verdict,
+            status: "indeterminate",
+            detail: "criterion passed at base revision; it does not discriminate this change",
+            redPhase: "passed_at_base",
+          };
+        }
       } else if (red.outcome === "contradicts") {
         verdict = { ...verdict, redPhase: "flipped" };
       } else {
@@ -209,11 +224,15 @@ export function evaluateProperty(
       ...redPhaseField,
     };
   }
+  const inherited = verdicts.filter((v) => typeof v.detail === "string" && v.detail.includes("chain inheritance"));
   return {
     propertyId: property.id,
     status: "satisfied",
     evidenceIds: used,
     updatedAt: now,
+    ...(inherited.length > 0
+      ? { reason: `${inherited.length} criterion flip${inherited.length > 1 ? "s" : ""} established in prior chain run${inherited.length > 1 ? "s" : ""} (${inherited.map((v) => v.criterionId).join(", ")})` }
+      : {}),
     ...(anyDeterministicPass ? {} : { weakEvidence: true }),
     ...redPhaseField,
   };

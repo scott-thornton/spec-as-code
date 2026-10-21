@@ -141,14 +141,14 @@ executor:
 
     const ct = run2.requirements.find((r) => r.propertyId === "CT-001");
     expect(ct?.status).toBe("satisfied");
-    expect(ct?.reason ?? "").toMatch(/prior run/);
+    expect(ct?.reason ?? "").toMatch(/prior (chain )?run/);
     expect(run2.status).toBe("succeeded");
 
     const state = JSON.parse(readFileSync(paths.stateFile(run2.runId), "utf8")) as {
       requirements: Record<string, { status: string; reason?: string }>;
     };
     expect(state.requirements["CT-001"]?.status).toBe("satisfied");
-    expect(state.requirements["CT-001"]?.reason ?? "").toMatch(/prior run/);
+    expect(state.requirements["CT-001"]?.reason ?? "").toMatch(/prior (chain )?run/);
   });
 
   it("does not inherit when no prior run recorded the property satisfied", async () => {

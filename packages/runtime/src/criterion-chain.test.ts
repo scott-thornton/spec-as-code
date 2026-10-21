@@ -40,9 +40,9 @@ function setup(): string {
   mkdirSync(path.join(repo, ".spc"), { recursive: true });
   writeFileSync(path.join(repo, "specs", "spec.yaml"), specYaml);
   writeFileSync(path.join(repo, "tests", "a.test.mjs"),
-    ['import test from "node:test";', 'import assert from "node:assert/strict";', 'import { readFileSync, existsSync } from "node:fs";', 'test("a", () => { assert.ok(existsSync("../src/module.mjs") && readFileSync("../src/module.mjs","utf8").includes("alpha")); });', ""].join("\n"));
+    ['import test from "node:test";', 'import assert from "node:assert/strict";', 'import { readFileSync, existsSync } from "node:fs";', 'test("a", () => { const u = new URL("../src/module.mjs", import.meta.url); assert.ok(existsSync(u) && readFileSync(u, "utf8").includes("alpha")); });', ""].join("\n"));
   writeFileSync(path.join(repo, "tests", "b.test.mjs"),
-    ['import test from "node:test";', 'import assert from "node:assert/strict";', 'import { readFileSync, existsSync } from "node:fs";', 'test("b", () => { assert.ok(existsSync("../src/module2.mjs") && readFileSync("../src/module2.mjs","utf8").includes("beta")); });', ""].join("\n"));
+    ['import test from "node:test";', 'import assert from "node:assert/strict";', 'import { readFileSync, existsSync } from "node:fs";', 'test("b", () => { const u = new URL("../src/module2.mjs", import.meta.url); assert.ok(existsSync(u) && readFileSync(u, "utf8").includes("beta")); });', ""].join("\n"));
   writeFileSync(path.join(repo, ".spc", "config.yaml"), "version: 1\nprovider:\n  name: fake\n  script: .spc/fake.yaml\nexecution:\n  inPlace: true\n  inPlaceBranch: current\nverification:\n  requireRedPhase: true\n");
   writeFileSync(path.join(repo, ".gitignore"), ".spc/\n", "utf8");
   git(repo, ["init", "-q", "-b", "main"]);
