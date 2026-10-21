@@ -14,7 +14,7 @@ import type { FollowUp, Observation, Plan, RequirementState, RunState, RunStatus
 import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { enforceProtectedPaths, executeTask, enforceWriteScope, revertPaths, runScheduler, type ExecutionOutcome } from "@spc/executor";
 import { classifyAmendmentRisk, generateAmendment } from "@spc/planner";
-import { commitAll, compileSpecFile, contentDelta, contentSnapshot, currentBranch, currentRevision, diffStat, git, statusDelta, statusPorcelain, type ContentSnapshot, type WorktreeStatus } from "@spc/repo";
+import { commitAll, compileSpecFile, contentDelta, contentSnapshot, currentBranch, currentRevision, diffStat, git, gitOk, statusDelta, statusPorcelain, type ContentSnapshot, type WorktreeStatus } from "@spc/repo";
 import { checkoutBranch, checkoutRunBranch, createWorktree, removeWorktree } from "@spc/repo";
 import { observeRepository } from "@spc/repo";
 import { renderRunSummary } from "@spc/renderer";
@@ -54,6 +54,8 @@ export interface ApplyOptions {
   force?: boolean;
   /** Leave the checkout on the run branch instead of restoring (in-place run-branch mode). */
   stay?: boolean;
+  /** Explicit chain parent (validated like the default). */
+  parentRunId?: string;
 }
 
 export interface ApplyReport {
@@ -201,6 +203,55 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
     const content = existsSync(configPath) ? readFileSync(configPath, "utf8") : JSON.stringify(loadConfig(configPath));
     return "sha256:" + createHash("sha256").update(content, "utf8").digest("hex");
   };
+  // Chain lineage (approved ruling): the default parent is the latest
+  // prior apply run of the SAME specId AND specDigest whose committed
+  // result is a git ancestor of this run's base - validated causality,
+  // not chronology. Two independent runs never link.
+  const resolveDefaultParent = (): string | undefined => {
+    const candidates = [...listRunIds(paths.runsDir)]
+      .map((id) => ({ id, createdAt: loadRunMeta(paths.runsDir, id)?.createdAt ?? "" }))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    for (const { id: priorId } of candidates) {
+      if (priorId === runId) continue;
+      const priorMeta = loadRunMeta(paths.runsDir, priorId);
+      if (priorMeta?.kind !== "apply") continue;
+      if (priorMeta.specId !== specIr.spec.metadata.id) continue;
+      if (priorMeta.specDigest !== specIr.digest) continue;
+      const priorStateFile = path.join(paths.runsDir, priorId, "state.json");
+      if (!existsSync(priorStateFile)) continue;
+      let priorResult: string | undefined;
+      try {
+        priorResult = (JSON.parse(readFileSync(priorStateFile, "utf8")) as { resultRevision?: string }).resultRevision;
+      } catch {
+        continue;
+      }
+      if (!priorResult) continue;
+      if (git(options.repoRoot, ["merge-base", "--is-ancestor", priorResult, snapshot.revision]).ok) {
+        return priorId;
+      }
+    }
+    return undefined;
+  };
+  const validateParent = (parentId: string): string | undefined => {
+    const priorMeta = loadRunMeta(paths.runsDir, parentId);
+    if (!priorMeta || priorMeta.kind !== "apply") {
+      throw new SpcError("RUN_PARENT_INVALID", `parent ${parentId} is not an apply run`);
+    }
+    if (priorMeta.specId !== specIr.spec.metadata.id || priorMeta.specDigest !== specIr.digest) {
+      throw new SpcError("RUN_PARENT_INVALID", `parent ${parentId} belongs to a different spec contract`);
+    }
+    const priorStateFile = path.join(paths.runsDir, parentId, "state.json");
+    if (!existsSync(priorStateFile)) {
+      throw new SpcError("RUN_PARENT_INVALID", `parent ${parentId} has no recorded state`);
+    }
+    const priorResult = (JSON.parse(readFileSync(priorStateFile, "utf8")) as { resultRevision?: string }).resultRevision;
+    if (!priorResult || !git(options.repoRoot, ["merge-base", "--is-ancestor", priorResult, snapshot.revision]).ok) {
+      throw new SpcError("RUN_PARENT_INVALID", `parent ${parentId}'s result is not a git ancestor of this run's base - not in its lineage`);
+    }
+    return parentId;
+  };
+  const parentRunId = options.parentRunId !== undefined ? validateParent(options.parentRunId) : resolveDefaultParent();
+
   const meta: RunMeta = {
     runId,
     kind: "apply",
@@ -210,12 +261,13 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
     planId: plan.metadata.id,
     planDigest: computePlanDigest(plan),
     baseRevision: snapshot.revision,
+    ...(parentRunId ? { parentRunId } : {}),
     createdAt: now(),
   } as RunMeta & { configDigest: string };
   writeFileSync(paths.metadataFile(runId), JSON.stringify(meta, null, 2), "utf8");
 
   const events = new EventStore(paths.eventsFile(runId), runId, now);
-  events.append("RUN_CREATED", { runId, specId: meta.specId, specDigest: meta.specDigest, planId: meta.planId, baseRevision: meta.baseRevision });
+  events.append("RUN_CREATED", { runId, specId: meta.specId, specDigest: meta.specDigest, planId: meta.planId, baseRevision: meta.baseRevision, ...(parentRunId ? { parentRunId } : {}) });
   events.append("SPEC_LOADED", { specId: meta.specId, digest: meta.specDigest });
   events.append("SPEC_VALIDATED", { digest: meta.specDigest });
   events.append("REPOSITORY_OBSERVED", { snapshotDigest: snapshot.digest, revision: snapshot.revision });
@@ -806,12 +858,24 @@ async function finishRun(
   // flip evidence living in the prior run's record. Inherit those
   // statuses with provenance; nothing is inherited without a record.
   const priorSatisfied = new Map<string, string>();
-  for (const priorId of listRunIds(ctx.paths.runsDir)) {
-    if (priorId === ctx.meta.runId) continue;
+  // Chain walk (approved ruling): inheritance follows parentRunId links
+  // only - chronology is not causality, and the runtime's own validated
+  // lineage replaces the same-spec scan. Digest binding still applies at
+  // every hop (Finding A).
+  const chainIds: string[] = [];
+  {
+    const visited = new Set<string>([ctx.meta.runId]);
+    let cursor = ctx.meta.parentRunId;
+    while (cursor && !visited.has(cursor)) {
+      visited.add(cursor);
+      chainIds.push(cursor);
+      const m = loadRunMeta(ctx.paths.runsDir, cursor);
+      cursor = m?.parentRunId;
+    }
+  }
+  for (const priorId of chainIds) {
     const priorMeta = loadRunMeta(ctx.paths.runsDir, priorId);
     if (priorMeta?.specId !== ctx.specIr.spec.metadata.id) continue;
-    // Digest binding (external review Finding A): satisfaction proven
-    // against an older contract cannot discharge this one's obligations.
     if (priorMeta.specDigest !== ctx.specIr.digest) continue;
     const priorStateFile = ctx.paths.stateFile(priorId);
     if (!existsSync(priorStateFile)) continue;

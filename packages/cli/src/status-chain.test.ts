@@ -83,7 +83,7 @@ describe("chain-aware surfaces", () => {
 
     const status = sh(repo, ["status"]);
     expect(status.status).toBe(0);
-    expect(status.stdout).toContain("effective chain status");
+    expect(status.stdout).toMatch(/effective chain status/i);
     expect(status.stdout).toMatch(/inherited/i);
     // Single-run view still available and honest.
     const single = sh(repo, ["status", "--run", run2.runId]);
@@ -114,6 +114,6 @@ describe("chain-aware surfaces", () => {
     writeFileSync(paths.planFile("p2"), JSON.stringify(planFor("p2", ir.digest, "T101", run1.resultRevision!), null, 2));
     await applyPlan({ repoRoot: repo }, { providerFactory: async () => fake("T101", false), log: () => {} });
     const brief = sh(repo, ["brief"]);
-    expect(brief.stdout).toMatch(/2 runs|chain/);
+    expect(brief.stdout).toMatch(/\(chain\)|2 runs \(chain\)/);
   });
 });

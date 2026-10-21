@@ -224,6 +224,31 @@ export interface StandaloneVerifyReport {
 }
 
 /** `spc verify`: a verify-only run against the current working tree. */
+/**
+ * Walk the validated parentRunId chain from a run to its root, newest
+ * first, cycle-guarded. Rendering uses this; it never creates lineage.
+ */
+export function resolveChain(runsDir: string, runId: string): { runId: string }[] {
+  const out: { runId: string }[] = [{ runId }];
+  const visited = new Set<string>([runId]);
+  let cursor: string | undefined = runId;
+  for (;;) {
+    const metaFile = path.join(runsDir, cursor, "metadata.json");
+    if (!existsSync(metaFile)) break;
+    let parent: string | undefined;
+    try {
+      parent = (JSON.parse(readFileSync(metaFile, "utf8")) as { parentRunId?: string }).parentRunId;
+    } catch {
+      break;
+    }
+    if (!parent || visited.has(parent)) break;
+    visited.add(parent);
+    out.push({ runId: parent });
+    cursor = parent;
+  }
+  return out;
+}
+
 export async function createVerifyRun(options: StandaloneVerifyOptions): Promise<StandaloneVerifyReport> {
   const now = options.now ?? (() => new Date().toISOString());
   const paths = spcPaths(options.repoRoot);

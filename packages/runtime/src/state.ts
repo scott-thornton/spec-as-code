@@ -23,6 +23,10 @@ export interface RunMeta {
   worktree?: string;
   /** In-place runs: branch the checkout was on before the run switched it. */
   originalBranch?: string;
+  /** Chain lineage: the prior apply run this one continues (validated:
+   *  same spec digest, git-ancestor predecessor). Chronology is not
+   *  causality - two independent runs never link. */
+  parentRunId?: string;
   createdAt: string;
 }
 

@@ -108,6 +108,7 @@ program
   .option("--allow-dirty", "skip the clean-worktree preflight")
   .option("--force", "proceed despite open blocking follow-ups")
   .option("--stay", "leave the checkout on the run branch instead of restoring (in-place run-branch mode)")
+  .option("--parent <runId>", "explicit chain parent (validated: same spec digest, git-ancestor predecessor)")
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action(
     async (
@@ -148,11 +149,12 @@ program
 
 program
   .command("status [specFile]")
-  .description("requirement-oriented status from the latest run (every spec in specs/ when no file is given)")
+  .description("effective chain status by default (head run's persisted requirements with provenance); --run <id> for a single run's own view")
   .option("--cwd <dir>", "repository directory", process.cwd())
   .option("--format <format>", "text | json (machine-readable)", "text")
-  .action((specFile: string | undefined, opts: { cwd: string; format: string }) => {
-    process.exitCode = runStatus(specFile, opts.cwd, opts.format === "json" ? "json" : "text");
+  .option("--run <runId>", "render exactly this run's own states (single-run view, no chain aggregation)")
+  .action((specFile: string | undefined, opts: { cwd: string; format: string; run?: string }) => {
+    process.exitCode = runStatus(specFile, opts.cwd, opts.format === "json" ? "json" : "text", opts.run);
   });
 
 program

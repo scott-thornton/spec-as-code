@@ -1,9 +1,9 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { SpcError } from "@spc/core";
-import { compileSpecFile, diffStat } from "@spc/repo";
+import { compileSpecFile, diffStat, git } from "@spc/repo";
 import { renderPrDraft } from "@spc/renderer";
-import { cancelRun, exportRun, loadRunView, replayRun } from "@spc/runtime";
+import { cancelRun, exportRun, loadRunView, replayRun, resolveChain } from "@spc/runtime";
 import { loadRunMeta as loadRunMetaFromRuntime } from "@spc/runtime";
 import { resolveRepoRoot } from "../context.js";
 
@@ -36,6 +36,43 @@ export function runPr(runId: string, options: { cwd?: string; out?: string }): n
   if (!specIr) {
     throw new SpcError("SPEC_NOT_FOUND", `spec ${view.meta.specId} not found under ${path.join(repoRoot, "specs")}`);
   }
+  // Chain verdict first (approved ruling): the PR claims what the CHAIN
+  // establishes, then the diff - and the two are separated, with any
+  // linked-run result not contained in this branch flagged.
+  const chain = resolveChain(path.join(repoRoot, ".spc", "runs"), runId);
+  let chainHeader = "";
+  if (chain.length > 1) {
+    const musts = specIr.properties.filter((pp) => pp.priority === "must");
+    const ok = musts.filter((pp) => {
+      const r = view.state.requirements?.[pp.id];
+      return r?.status === "satisfied" || r?.status === "waived";
+    }).length;
+    const inherited = Object.values(view.state.requirements ?? {}).filter((r) => (r.reason ?? "").includes("established by prior run")).length;
+    const lines = [
+      `**Chain: ${chain.length} linked runs, combined ${ok}/${musts.length} must satisfied** (${ok - inherited} newly in this run, ${inherited} inherited from chain)`,
+      "",
+      "| Run | Contribution |",
+      "| --- | --- |",
+    ];
+    for (const c of chain) {
+      lines.push(`| ${c.runId} | ${c.runId === runId ? "this PR" : "prior evidence"} |`);
+    }
+    const missing = chain
+      .filter((c) => c.runId !== runId)
+      .filter((c) => {
+        const st = path.join(repoRoot, ".spc", "runs", c.runId, "state.json");
+        try {
+          const rev = (JSON.parse(readFileSync(st, "utf8")) as { resultRevision?: string }).resultRevision;
+          return !rev || !git(repoRoot, ["merge-base", "--is-ancestor", rev, "HEAD"]).ok;
+        } catch {
+          return true;
+        }
+      });
+    if (missing.length > 0) {
+      lines.push("", `> Note: chain evidence includes ${missing.map((m) => m.runId).join(", ")} whose result revisions are NOT contained in this branch - the cumulative verdict and this diff are not the same claim.`);
+    }
+    chainHeader = lines.join("\n") + "\n\n";
+  }
   const draft = renderPrDraft({
     specIr,
     runState: view.state,
@@ -45,7 +82,7 @@ export function runPr(runId: string, options: { cwd?: string; out?: string }): n
       ? { diffStat: diffStat(repoRoot, view.state.baseRevision, view.state.resultRevision).trim() || undefined }
       : {}),
   });
-  const body = `# ${draft.title}\n\n${draft.body}\n`;
+  const body = `# ${draft.title}\n\n${chainHeader}${draft.body}\n`;
   if (options.out) {
     writeFileSync(options.out, body, "utf8");
     console.log(`PR draft written to ${options.out}`);

@@ -9,6 +9,7 @@ export async function runApply(options: {
   allowDirty?: boolean;
   force?: boolean;
   stay?: boolean;
+  parent?: string;
   cwd?: string;
 }): Promise<number> {
   const repoRoot = resolveRepoRoot(options.cwd);
@@ -19,7 +20,8 @@ export async function runApply(options: {
   };
   const report = options.resumeRunId
     ? await resumeRun({ repoRoot, resumeRunId: options.resumeRunId, allowDirty: options.allowDirty, force: options.force }, deps)
-    : await applyPlan({ repoRoot, planFile: options.planFile, allowDirty: options.allowDirty, force: options.force, stay: options.stay }, deps);
+    : await applyPlan({ repoRoot, planFile: options.planFile, allowDirty: options.allowDirty, force: options.force, stay: options.stay,
+    parentRunId: options.parent }, deps);
   printReport(report);
   return report.status === "succeeded" ? 0 : 1;
 }

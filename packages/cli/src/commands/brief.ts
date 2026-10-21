@@ -3,6 +3,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { git } from "@spc/repo";
 import { HarnessStore } from "@spc/llm-harness";
+import { resolveChain } from "@spc/runtime";
 import { loadRepoConfig, resolveAllSpecs, resolveRepoRoot } from "../context.js";
 
 interface LastRun {
@@ -16,6 +17,7 @@ interface BriefSpec {
   id: string;
   lastRun: LastRun | null;
   configChanged: boolean;
+  chainDepth?: number;
 }
 
 /**
@@ -78,10 +80,17 @@ export function runBrief(cwd: string | undefined, format: "text" | "json" = "tex
 
   const specs: BriefSpec[] = resolveAllSpecs(path.join(repoRoot, "specs")).map(({ ir }) => {
     const lastRun = lastBySpec.get(ir.spec.metadata.id) ?? null;
+    // Chain depth: walk the validated parent links from the head run.
+    let chainDepth = 1;
+    if (lastRun) {
+      const chain = resolveChain(runsDir, lastRun.id);
+      chainDepth = chain.length;
+    }
     return {
       id: ir.spec.metadata.id,
       lastRun,
       configChanged: lastRun !== null && lastRun.configDigest !== undefined && lastRun.configDigest !== configDigest,
+      ...(chainDepth > 1 ? { chainDepth } : {}),
     };
   });
 
@@ -100,6 +109,7 @@ export function runBrief(cwd: string | undefined, format: "text" | "json" = "tex
         lastRun: s.lastRun ? { id: s.lastRun.id, status: s.lastRun.status } : null,
         configChanged: s.configChanged,
         openBlockingFollowups: s.lastRun?.openBlocking ?? [],
+        ...(s.chainDepth ? { chainDepth: s.chainDepth } : {}),
       })),
       pendingHarness,
       unmergedRunBranches,
@@ -114,7 +124,7 @@ export function runBrief(cwd: string | undefined, format: "text" | "json" = "tex
     const blockers = s.lastRun && s.lastRun.openBlocking.length > 0
       ? `   ${s.lastRun.openBlocking.map((f) => f.id).join(", ")}`
       : "";
-    console.log(`  ${s.id.padEnd(34)} ${run}${blockers}`);
+    console.log(`  ${s.id.padEnd(34)} ${run}${blockers}${s.chainDepth ? ` · ${s.chainDepth} runs (chain)` : ""}`);
     if (s.configChanged) {
       console.log(`    ⚠ config changed since ${s.id}'s last run - authored assumptions may be stale`);
     }
