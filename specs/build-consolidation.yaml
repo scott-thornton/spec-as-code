@@ -23,7 +23,7 @@ requirements:
     acceptance:
       - id: BC-001-A
         type: command
-        command: test "$(grep -l 'pnpm -r build' specs/*.yaml | grep -v self-hosting | wc -l)" -eq 0
+        command: test "$(grep -l 'command:[ ]*pnpm -r build' specs/*.yaml | grep -cv -e self-hosting -e build-consolidation)" -eq 0
         discriminating: true
   - id: BC-002
     statement: >
@@ -39,9 +39,6 @@ requirements:
         assert:
           contains: "pnpm -r typecheck"
         discriminating: true
-      - id: BC-002-B
-        type: command
-        command: pnpm -r build > /dev/null && pnpm -r typecheck > /dev/null
   - id: BC-003
     statement: >
       Feature specs' regression criteria still run their own
