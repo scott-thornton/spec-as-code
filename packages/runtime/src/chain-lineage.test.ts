@@ -81,7 +81,7 @@ describe("parentRunId lineage (approved ruling: validated ancestry at creation)"
     expect(meta2.parentRunId).toBe(run1.runId);
 
     // The chain resolves: run2 -> run1.
-    const chain = resolveChain(repo, run2.runId);
+    const chain = resolveChain(paths.runsDir, run2.runId);
     expect(chain.map((r) => r.runId)).toEqual([run2.runId, run1.runId]);
   });
 
@@ -103,7 +103,7 @@ describe("parentRunId lineage (approved ruling: validated ancestry at creation)"
     const run2 = await applyPlan({ repoRoot: repo }, { providerFactory: async () => fake("T101", true), log: () => {} });
     const meta2 = JSON.parse(readFileSync(path.join(paths.runsDir, run2.runId, "metadata.json"), "utf8"));
     expect(meta2.parentRunId ?? null).toBeNull();
-    const chain = resolveChain(repo, run2.runId);
+    const chain = resolveChain(paths.runsDir, run2.runId);
     expect(chain.map((r) => r.runId)).toEqual([run2.runId]);
   });
 

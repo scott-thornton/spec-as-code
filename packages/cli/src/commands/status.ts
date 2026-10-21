@@ -45,6 +45,8 @@ export function runStatus(specFile: string | undefined, cwd?: string, format: "t
     }
     if (view === null) {
       if (multi) { console.log(`### ${ir.spec.metadata.id}`); console.log(""); }
+      console.log(`Effective chain status: no run recorded for this spec (0/${ir.properties.filter((pp) => pp.priority === "must").length} must established)`);
+      console.log("");
       console.log(renderStatus({ specIr: ir, runState: null, followups: [], evidence: [] }));
       continue;
     }

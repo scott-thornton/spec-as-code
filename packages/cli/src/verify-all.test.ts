@@ -78,12 +78,16 @@ describe("bare spc verify with multiple specs", () => {
 });
 
 describe("bare spc status and diff with multiple specs", () => {
-  it("status with no file reports every spec", () => {
+  it("status with no file reports every spec (effective chain status; exit reflects effective verdict)", () => {
     const repo = setupRepo("statusall", ["alpha", "beta"]);
     const r = spc(repo, ["status"]);
-    expect(r.status).toBe(0);
+    // No runs exist in this fixture: no recorded evidence, so the
+    // effective verdict is unsatisfied - the new semantics (documented
+    // CLI change). The specs still report.
+    expect(r.status).toBe(1);
     expect(r.stdout).toContain("alpha");
     expect(r.stdout).toContain("beta");
+    expect(r.stdout).toMatch(/effective chain status|no run/i);
   });
 
   it("diff with no file reports every spec; explicit file selects one", () => {
@@ -100,12 +104,13 @@ describe("bare spc status and diff with multiple specs", () => {
   it("json status with multiple specs wraps as an array; single spec stays bare", () => {
     const repo = setupRepo("statusjson", ["alpha", "beta"]);
     const r = spc(repo, ["status", "--format", "json"]);
-    expect(r.status).toBe(0);
+    expect(r.status).toBe(1); // no runs recorded: effective verdict unsatisfied (documented change)
     const parsed = JSON.parse(r.stdout) as unknown[];
     expect(Array.isArray(parsed)).toBe(true);
     expect(parsed).toHaveLength(2);
     const single = setupRepo("statusjson1", ["only"]);
     const r1 = spc(single, ["status", "--format", "json"]);
+    expect(r1.status).toBe(1);
     const parsed1 = JSON.parse(r1.stdout) as { spec?: unknown };
     expect(Array.isArray(parsed1)).toBe(false);
   });
