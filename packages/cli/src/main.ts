@@ -339,11 +339,12 @@ program
   });
 
 spec
-  .command("lint <file>")
-  .description("craftsmanship warnings: static rules plus the red-capability check in a disposable worktree (warnings never gate)")
+  .command("lint [file]")
+  .description("craftsmanship warnings: static rules plus the red-capability check in a disposable worktree (warnings never gate); --provenance prints the rule registry")
   .option("--cwd <dir>", "repository directory", process.cwd())
-  .action(async (file: string, opts: { cwd: string }) => {
-    process.exitCode = await runSpecLint(file, opts.cwd);
+  .option("--provenance", "print the lint rule registry (lineage, fixtures, approver, supersession) and exit")
+  .action(async (file: string | undefined, opts: { cwd: string; provenance?: boolean }) => {
+    process.exitCode = await runSpecLint(file, opts.cwd, opts.provenance === true);
   });
 
 const patch = program.command("patch").description("anchored patch composition (verifies, never decides)");

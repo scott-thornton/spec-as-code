@@ -13,6 +13,76 @@ export interface LintWarning {
   message: string;
 }
 
+/**
+ * Provenance registry (the ratchet's lineage record): every active rule
+ * carries its motivating finding, BOTH fixtures (negative: catches the
+ * original defect; positive: permits acceptable criteria), the human
+ * approver, and optional supersession. Superseded rules stay, marked,
+ * and never fire - the ratchet is not a one-way accumulation of
+ * increasingly restrictive mistakes.
+ */
+export interface LintRuleProvenance {
+  id: string;
+  motivation: string;
+  negativeFixture: string;
+  positiveFixture: string;
+  approvedBy: string;
+  supersededBy?: string;
+}
+
+export const LINT_RULES: LintRuleProvenance[] = [
+  {
+    id: "LINT-DECORATION",
+    motivation: "A criterion whose command trivially succeeds cannot fail, so it tests nothing; the field's first broken oracle included exactly such a tautology.",
+    negativeFixture: "A command criterion running bare 'true' warns LINT-DECORATION.",
+    positiveFixture: "A command criterion running a real check (vitest, node --test, grep) does not warn.",
+    approvedBy: "scott",
+  },
+  {
+    id: "LINT-BARE-IDENTIFIER",
+    motivation: "Bare-identifier greps match fixtures, generated code and docs that merely mention the thing; slerp's merged specs carried 'localStorage' and 'csrf' as full-criterion greps.",
+    negativeFixture: "A file criterion contains:'faviconUrl' (single token, no structure) warns.",
+    positiveFixture: "An access expression like 'images.faviconUrl' or a structural assertion does not warn.",
+    approvedBy: "scott",
+  },
+  {
+    id: "LINT-UNPROTECTED-ORACLE",
+    motivation: "A test RUNNER executing a suite the graded tasks may rewrite is not an independent oracle; slerp's original config gap let tasks author their own guard test. Runner-gated after the first corpus run fired on git-diff exclusion strings.",
+    negativeFixture: "npx vitest run on a path not under protectedPaths warns.",
+    positiveFixture: "Test paths inside git-diff exclusion regexes, and directory references already covered by protectedPaths globs, do NOT warn.",
+    approvedBy: "scott",
+  },
+  {
+    id: "LINT-UNPROTECTED-ORACLE-V1",
+    motivation: "The original narrow form: substring-matched test paths anywhere in a command. Fired on git-diff exclusion regexes and a protected directory - 0-for-3 true positives on the first real corpus.",
+    negativeFixture: "Any command merely containing a .spec.ts substring warned, executed or not.",
+    positiveFixture: "N/A - the rule could not distinguish execution from mention; superseded for this reason.",
+    approvedBy: "scott",
+    supersededBy: "LINT-UNPROTECTED-ORACLE",
+  },
+  {
+    id: "LINT-DUPLICATE-COMMAND",
+    motivation: "Identical commands with differing expected exit codes pay full tool boot per differing expectation on every sweep.",
+    negativeFixture: "Two criteria naming the same command with expect exitCode 0 and 1 warn.",
+    positiveFixture: "The same command with the same expectation (the sweep's internal cache handles it) does not warn.",
+    approvedBy: "scott",
+  },
+  {
+    id: "LINT-EMPTY-OUT-OF-SCOPE",
+    motivation: "outOfScope is the promise about what will not change; unwritten, plans wander without a boundary to respect.",
+    negativeFixture: "A spec declaring no outOfScope entries warns.",
+    positiveFixture: "Any declared exclusion silences the rule.",
+    approvedBy: "scott",
+  },
+  {
+    id: "LINT-QUOTED-BACKSLASH",
+    motivation: "YAML double-quoted scalars reinterpret backslash escapes, so the criterion that runs is not the criterion written (CHK3555: \\/ became /, failed at base and result, validate passed it).",
+    negativeFixture: "A double-quoted command scalar containing a backslash warns LINT-QUOTED-BACKSLASH.",
+    positiveFixture: "Single-quoted or block scalars, and double-quoted commands without backslashes, do not warn.",
+    approvedBy: "scott",
+  },
+];
+
 const DECORATION_COMMANDS = new Set(["true", ":", "pwd", "exit 0", "exit(0)"]);
 
 /**
@@ -135,7 +205,30 @@ function printWarnings(warnings: LintWarning[]): void {
  * command policy. Three outcome classes; not-safely-executable is
  * never reported as pass or fail. The working tree is never touched.
  */
-export async function runSpecLint(specFile: string, cwd?: string): Promise<number> {
+/**
+ * `spc spec lint --provenance`: print the rule registry - lineage,
+ * fixtures, approver, supersession - without linting anything.
+ */
+export function runSpecLintProvenance(): number {
+  for (const rule of LINT_RULES) {
+    const status = rule.supersededBy ? `SUPERSEDED by ${rule.supersededBy}` : "active";
+    console.log(`${rule.id}  [${status}]  approved by ${rule.approvedBy}`);
+    console.log(`  motivation: ${rule.motivation}`);
+    console.log(`  negative fixture: ${rule.negativeFixture}`);
+    console.log(`  positive fixture: ${rule.positiveFixture}`);
+    console.log("");
+  }
+  return 0;
+}
+
+export async function runSpecLint(specFile: string | undefined, cwd?: string, provenance = false): Promise<number> {
+  if (provenance) {
+    return runSpecLintProvenance();
+  }
+  if (!specFile) {
+    console.error("spec lint requires a file (or --provenance for the registry)");
+    return 2;
+  }
   const repoRoot = resolveRepoRoot(cwd);
   const config = loadRepoConfig(repoRoot);
   const compiled = compileSpecFile(path.resolve(repoRoot, specFile));
