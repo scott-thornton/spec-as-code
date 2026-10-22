@@ -1,0 +1,51 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: run-exclusion
+  title: One live process per run, and evidence appends that survive one
+goal: >
+  run-mvix4mfx (composition-hardening) wrote a self-breaking evidence
+  log: the original apply process was still alive when apply --resume
+  started, both drove the same run id, and each appended evidence
+  through an independently-seeded EvidenceStore - duplicate EV ids and
+  chain pointers that reference an in-memory tail instead of the file
+  tail. The hash chain refused the log exactly as designed, but the run
+  became permanently unloadable and verification for its spec
+  brickwalled behind the damage. Two root causes, two fences: a run
+  execution lock (a live second process is refused, a stale lock is
+  taken over), and append continuity (every append adopts the on-disk
+  tail, so even a writer that missed earlier records continues the
+  chain and the id sequence instead of corrupting the log).
+requirements:
+  - id: RX-001
+    statement: >
+      Starting or resuming a run acquires an execution lock
+      (.spc/runs/<runId>/execution.lock carrying pid and timestamp) and
+      refuses with RUN_LOCK_HELD when a live process holds it; a lock
+      whose pid is dead or whose timestamp is older than 15 minutes is
+      taken over. The lock is released when the run process exits its
+      execution path.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: RX-001-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/run-exclusion.test.ts
+        discriminating: true
+  - id: RX-002
+    statement: >
+      EvidenceStore.add adopts the on-disk tail before appending: when
+      the file holds records the store instance has not seen, the new
+      record's chain pointer references the file's last stored digest
+      and its id continues the file's sequence - so concurrent or
+      late-joining writers serialize onto one valid chain instead of
+      producing duplicate ids and a permanently unloadable log.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: RX-002-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/run-exclusion.test.ts
+        discriminating: true
