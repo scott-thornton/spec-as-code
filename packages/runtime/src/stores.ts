@@ -109,6 +109,12 @@ export class EvidenceStore {
   }
 
   add(record: Omit<Evidence, "digest">): Evidence {
+    // Adopt the on-disk tail first: a competing or late-joining writer
+    // (a resume whose store never saw the original process's records)
+    // must continue the FILE's chain and id sequence, not its in-memory
+    // one - run-mvix4mfx corrupted exactly this way: two writers, two
+    // chains, one permanently unloadable log.
+    record = this.adoptDiskTail(record);
     // Chain pointer mirrors the event chain: the digest of the previous
     // record as stored. Legacy logs stay legacy on append - a resumed
     // run must not produce a mixed log.
@@ -123,6 +129,37 @@ export class EvidenceStore {
     if (this.chainState === null) this.chainState = "chained";
     appendFileSync(this.file, `${JSON.stringify(full)}\n`, "utf8");
     return full;
+  }
+
+  /**
+   * Read the file's last stored record (if any) and, when this instance
+   * has not seen it, adopt it as the chaining predecessor and continue
+   * its id sequence. Ids minted by callers reflect in-memory counts; the
+   * file is the truth.
+   */
+  private adoptDiskTail(record: Omit<Evidence, "digest">): Omit<Evidence, "digest"> {
+    if (!existsSync(this.file)) return record;
+    let tail: Evidence | null = null;
+    try {
+      const lines = readFileSync(this.file, "utf8").split("\n");
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const t = lines[i]!.trim();
+        if (t === "") continue;
+        const parsed = evidenceSchema.safeParse(JSON.parse(t));
+        if (parsed.success) tail = parsed.data;
+        break;
+      }
+    } catch {
+      return record;
+    }
+    if (!tail) return record;
+    const seen = this.records[this.records.length - 1];
+    if (seen && seen.digest === tail.digest) return record;
+    this.records.push(tail);
+    if (tail.chain === undefined) this.chainState = "legacy";
+    else if (this.chainState !== "legacy") this.chainState = "chained";
+    const m = /^EV-(\d+)$/.exec(tail.id);
+    return m ? { ...record, id: `EV-${String(Number(m[1]) + 1).padStart(4, "0")}` } : record;
   }
 
   all(): readonly Evidence[] {

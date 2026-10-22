@@ -36,6 +36,7 @@ import {
 } from "./run.js";
 import { initialState, persistState, projectState } from "./state.js";
 import { appendUsageRecord, EvidenceStore, FollowupStore, ObservationStore } from "./stores.js";
+import { acquireExecutionLock, releaseExecutionLock, RUN_LOCK_HELD } from "./lock.js";
 import { verifyProperties } from "./verify.js";
 import { attestRun } from "./attestation.js";
 import { computePlanDrift } from "./drift.js";
@@ -212,6 +213,13 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
   const now = deps.now ?? (() => new Date().toISOString());
   const runId = newRunId();
   const runDir = paths.runDir(runId);
+  const startLock = acquireExecutionLock(runDir, process.pid, now, "spc apply");
+  if (!startLock.ok) {
+    throw new SpcError(
+      RUN_LOCK_HELD,
+      `run ${runId} is executing in process ${startLock.holderPid} (since ${startLock.holderAt}); one live process per run`,
+    );
+  }
   mkdirSync(runDir, { recursive: true });
   mkdirSync(path.join(runDir, "amendments"), { recursive: true });
 
@@ -500,6 +508,21 @@ export async function resumeRun(options: ApplyOptions & { resumeRunId: string },
   }
   const meta = loadRunMeta(paths.runsDir, runId);
   if (!meta) throw new SpcError(RUNTIME_ERROR, `run ${runId} has no metadata.json`);
+  // The state-based in-flight check is inherently racy (run-mvix4mfx:
+  // the original process was still executing when a resume started) -
+  // the pid lock is the sound fence.
+  const resumeLock = acquireExecutionLock(
+    runDir,
+    process.pid,
+    deps.now ?? (() => new Date().toISOString()),
+    "spc apply --resume",
+  );
+  if (!resumeLock.ok) {
+    throw new SpcError(
+      RUN_LOCK_HELD,
+      `run ${runId} is executing in process ${resumeLock.holderPid} (since ${resumeLock.holderAt}); one live process per run - a stale lock (dead pid, or older than 15 minutes) is taken over automatically`,
+    );
+  }
   const planFile = paths.planFile(meta.planId ?? "");
   if (!existsSync(planFile)) throw new SpcError(RUNTIME_ERROR, `plan file for run ${runId} is missing`);
   const plan = loadPlanFile(planFile);
@@ -1082,6 +1105,9 @@ async function finishRun(
   // In-place runs leave the checkout where they found it; the run branch
   // keeps the result commits. Detached-HEAD checkouts (previousBranch
   // "HEAD") stay on the run branch - there is no branch to restore.
+  // Terminal state reached: the execution lock has done its job. A
+  // crash before this point leaves the lock to the stale window.
+  releaseExecutionLock(ctx.paths.runDir(ctx.meta.runId));
   if (
     ctx.meta.worktree &&
     path.resolve(ctx.meta.worktree) === path.resolve(ctx.paths.repoRoot) &&
