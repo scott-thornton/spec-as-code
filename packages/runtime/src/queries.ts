@@ -40,7 +40,17 @@ export function loadRunView(runsDir: string, runId: string): RunView | null {
 export function latestRunViewForSpec(runsDir: string, specId: string): RunView | null {
   const views: RunView[] = [];
   for (const runId of listRunIds(runsDir)) {
-    const view = loadRunView(runsDir, runId);
+    let view: RunView | null;
+    try {
+      view = loadRunView(runsDir, runId);
+    } catch (e) {
+      // A damaged log (chain break, torn records) must not brickwall
+      // every spec-level operation: skip the unreadable run with a note,
+      // so verify and status keep working while the run itself stays
+      // individually inspectable - spc run show still refuses loudly.
+      console.error(`note: skipping run ${runId} (unreadable: ${(e as Error).message.split("\n")[0]})`);
+      continue;
+    }
     if (view && view.meta.specId === specId) views.push(view);
   }
   if (views.length === 0) return null;
