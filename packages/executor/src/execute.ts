@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { isPhysicallyContained, isSafeRelativePath, SpcError } from "@spc/core";
+import { globMatchAny, isPhysicallyContained, isSafeRelativePath, SpcError } from "@spc/core";
 import type { AcceptanceCriterion, CommandsConfig, ObservationDraft, RepositorySnapshot, SpecIR, Task } from "@spc/schema";
 import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { makeUsageRecord } from "@spc/llm";
@@ -86,11 +86,20 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
     }));
 
   const readPatterns = [...new Set([...(task.targets?.read ?? []), ...(task.targets?.write ?? [])])];
+  // Write-target files get an honest excerpt budget: anchors must come
+  // from shown text, and a 6KB window on a large edit target hides the
+  // edit region and pushes executors toward whole-file resends - the
+  // cumulative transport that corrupts bytes in transit. Read targets
+  // keep the small window; they orient, they do not carry.
+  const WRITE_EXCERPT_BYTES = 24 * 1024;
+  const READ_EXCERPT_BYTES = 6 * 1024;
+  const excerptWritePatterns = task.targets?.write ?? [];
   const readFiles = listMatchingFiles(worktreeRoot, readPatterns, 8).map((p) => {
     const digest = digestOfWorktreeFile(worktreeRoot, p);
+    const budget = globMatchAny(excerptWritePatterns, p) ? WRITE_EXCERPT_BYTES : READ_EXCERPT_BYTES;
     return {
       path: p,
-      content: readExcerpt(worktreeRoot, p, 6144) ?? "",
+      content: readExcerpt(worktreeRoot, p, budget) ?? "",
       ...(digest ? { digest } : {}),
     };
   });

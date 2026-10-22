@@ -62,6 +62,10 @@ export class HarnessProvider implements LLMProvider {
       system: request.system,
       prompt: `--- harness instructions ---\n${HARNESS_INSTRUCTIONS.replace("<id>", id)}\n\n${request.prompt}`,
       createdAt: new Date().toISOString(),
+      // Seed visible feedback for retries caused AFTER the store accepted
+      // the prior answer (e.g. plan validation): the answerer reads the
+      // queue, not the consuming process's stderr.
+      ...(request.previousRejection ? { lastError: request.previousRejection } : {}),
     });
 
     const windowMs = this.roleTimeouts?.[request.role ?? ""] ?? this.timeoutMs;

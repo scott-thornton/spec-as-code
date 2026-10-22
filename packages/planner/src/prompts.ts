@@ -13,6 +13,11 @@ Contract (invariants, enforced by the runtime after you respond):
   covering that behaviour - those tests already exist and must keep passing.
 - If two tasks would write to the same file (or overlapping globs), order them explicitly
   with dependsOn or merge them into one task; never leave overlapping writers unordered.
+- Slice by verification boundary: when sequential tasks write the same paths and the
+  properties they satisfy share one discriminating command criterion, every intermediate
+  task is unverifiable by construction (the shared oracle stays red until the last task
+  lands) - merge them into one task or re-slice so each task owns a distinct oracle.
+  spc plan validate flags this shape as LINT-PLAN-SHARED-ORACLE.
 - Task write targets must be explicit; inspect tasks must not declare write targets.
 - Unknown repository facts should become inspection tasks, not assumptions.
 - If specification information is missing or ambiguous (unnamed levels, undefined

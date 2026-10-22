@@ -1,11 +1,24 @@
+import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { SpcError } from "@spc/core";
 import { HarnessStore, checkJsonSchema } from "@spc/llm-harness";
 import { gitOk, observeRepository } from "@spc/repo";
-import { enforceProtectedPaths, enforceWriteScope, runCommand, stageChanges } from "@spc/executor";
+import { enforceProtectedPaths, enforceWriteScope, executorResultSchema, runCommand, stageChanges } from "@spc/executor";
+import { plannerOutputSchema } from "@spc/planner";
 import { verifyCriterion } from "@spc/verifier";
 import { loadRepoConfig, resolveAllSpecs, resolveRepoRoot } from "../context.js";
+
+/**
+ * Authoritative answer schemas by request schemaName: agent validate
+ * checks drafts with the same zod schemas the runtime enforces, so a
+ * draft that would be refused never validates OK. Unknown schema names
+ * keep the JSON-Schema shadow check.
+ */
+const AUTHORITATIVE_SCHEMAS = {
+  PlannerOutput: plannerOutputSchema,
+  ExecutorResult: executorResultSchema,
+} as const;
 
 /**
  * `spc agent` - the harness-side half of the harness provider: the external
@@ -186,7 +199,7 @@ export async function runAgentWait(options: { timeoutMs?: number; cwd?: string }
 }
 
 export function runAgentRespond(options: { id: string; file?: string; stdin?: boolean; by?: string; cwd?: string }): number {
-  const { store } = storeFor(options.cwd);
+  const { repoRoot, store } = storeFor(options.cwd);
   let raw: string;
   if (options.file) {
     raw = readFileSync(path.resolve(process.cwd(), options.file), "utf8");
@@ -204,6 +217,11 @@ export function runAgentRespond(options: { id: string; file?: string; stdin?: bo
   const answer = store.answer(options.id, value, options.by);
   console.log(`Answered ${answer.id}. The waiting spc process will pick it up within a second or two.`);
   console.log("If the answer fails schema validation, the request reappears in spc agent list with feedback.");
+  // Nudge, never gate: the preflight record exists precisely so the
+  // cheap check is the habitual one.
+  if ((readPreflightCounts(repoRoot).get(answer.id) ?? 0) === 0) {
+    console.log(`note: no preflight on record for ${answer.id}; de-risk next time with: spc agent dry-run ${answer.id} --file <draft> --gates`);
+  }
   return 0;
 }
 
@@ -228,6 +246,21 @@ export function runAgentValidate(options: { id: string; file: string; cwd?: stri
   }
   const issues = checkJsonSchema(request.jsonSchema, value);
   if (issues.length === 0) {
+    // The shadow is lossy (zod refinements do not serialize); for known
+    // schema names the authoritative zod parse is the final word, so a
+    // draft the runtime would requeue never validates OK. Shadow issues
+    // keep their familiar phrasing and print first.
+    const authoritative = AUTHORITATIVE_SCHEMAS[request.schemaName as keyof typeof AUTHORITATIVE_SCHEMAS];
+    if (authoritative) {
+      const parsed = authoritative.safeParse(value);
+      if (!parsed.success) {
+        console.error(`${parsed.error.issues.length} schema issue(s) [authoritative zod] - the JSON-Schema shadow passed but the runtime would requeue these:`);
+        for (const issue of parsed.error.issues.slice(0, 20)) {
+          console.error(`  ${issue.path.join(".")}: ${issue.message}`);
+        }
+        return 1;
+      }
+    }
     console.log(`OK: answer satisfies the ${request.schemaName} schema. Submit with:`);
     console.log(`  spc agent respond ${request.id} --file ${options.file}`);
     return 0;
@@ -318,7 +351,23 @@ export async function runAgentDryRun(options: { id: string; file: string; gates?
     // repo's own install so criteria and gates run against the real
     // thing; when the repo has none, say so instead of guessing.
     const depsSource = path.join(repoRoot, "node_modules");
-    if (existsSync(depsSource) && !existsSync(path.join(worktree, "node_modules"))) {
+    const pnpmLock = existsSync(path.join(repoRoot, "pnpm-lock.yaml"));
+    if (pnpmLock) {
+      // pnpm workspaces: a wholesale node_modules symlink is refused by
+      // pnpm's own task-state guard, and per-package links resolve into
+      // the LIVE tree, compiling against stale siblings. The honest
+      // cold-tree preparation is an offline frozen install of the
+      // disposable worktree - store-only, no network, deterministic
+      // setup just like the git worktree add itself.
+      const r = spawnSync("pnpm", ["install", "--frozen-lockfile", "--offline"], {
+        cwd: worktree,
+        encoding: "utf8",
+        timeout: 120_000,
+      });
+      const tail = ((r.stderr ?? "") + (r.stdout ?? "")).trim().split("\n").filter(Boolean).slice(-1)[0] ?? "";
+      console.log(`Dependencies: pnpm install --frozen-lockfile --offline exit ${r.status ?? "signal"}`);
+      if (r.status !== 0 && tail) console.log(`  ${tail.slice(0, 200)}`);
+    } else if (existsSync(depsSource) && !existsSync(path.join(worktree, "node_modules"))) {
       symlinkSync(depsSource, path.join(worktree, "node_modules"), "dir");
     }
     if (!existsSync(path.join(worktree, "node_modules"))) {
@@ -369,6 +418,28 @@ export async function runAgentDryRun(options: { id: string; file: string; gates?
     for (const p of staged.deletes) rmSync(path.join(worktree, p), { force: true });
 
     console.log(`Staged: ${staged.writes.length} staged write(s), ${staged.deletes.length} delete(s)`);
+
+    // Cold-worktree build: per-package criteria compile against their
+    // dependencies' dist artifacts, which exist in a warm in-place tree
+    // but not in a fresh checkout. One topological build of the staged
+    // tree makes every criterion self-sufficient. Advisory - a failed
+    // prepare is reported, criteria still run and speak for themselves.
+    const prepareCmd = observeRepository(repoRoot, null).commands.build;
+    if (prepareCmd) {
+      const run = await runCommand(prepareCmd, {
+        cwd: worktree,
+        timeoutMs: 180_000,
+        maxOutputBytes: config.execution.maxOutputBytes,
+        commandsConfig: config.commands,
+      });
+      if (!run.allowed) {
+        console.log(`Preparing: ${prepareCmd} denied by command policy; criteria needing built artifacts may fail`);
+      } else if (run.timedOut) {
+        console.log(`Preparing: ${prepareCmd} timed out (180s); criteria needing built artifacts may fail`);
+      } else {
+        console.log(`Preparing: ${prepareCmd} exit ${run.exitCode}`);
+      }
+    }
 
     // Find the task's properties in the repo's compiled spec.
     const specId = (payload as { spec?: { id?: string } }).spec?.id;

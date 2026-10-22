@@ -23,6 +23,10 @@ Contract:
   and digest against the file's content AFTER the prior ops applied - compose
   chains with "spc patch build --after <ops.json>" rather than hand-sequencing
   digests.
+- repositoryExcerpts are read at dispatch and include prior tasks' applied
+  changes: for sequential edits across tasks, anchor patch ops against the
+  current excerpts (chaining with "spc patch build --after") instead of
+  resending whole files.
 - When repositoryExcerpts entries carry a "digest", prefer patch ops for edits to that
   file, copying that digest as baseDigest, anchoring on text that
   occurs exactly once in the file, and give the exact replacement. A refused

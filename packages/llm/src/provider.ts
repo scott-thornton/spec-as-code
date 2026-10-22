@@ -20,6 +20,13 @@ export interface StructuredRequest<T> {
    */
   key?: string;
   maxTokens?: number;
+  /**
+   * Rejection reason from a prior attempt at this role (e.g. plan
+   * validation diagnostics). The harness provider surfaces it as the
+   * pending request's lastError, so the answering agent sees WHY there
+   * is a retry, not just that there is one.
+   */
+  previousRejection?: string;
 }
 
 export interface Usage {

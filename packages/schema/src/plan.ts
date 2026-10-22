@@ -9,9 +9,23 @@ import { followUpDraftSchema } from "./followup.js";
 
 export const taskKindSchema = z.enum(["inspect", "modify", "test", "verify", "cleanup"]);
 
+// Twin of @spc/core's isSafeRelativePath, inlined to keep the schema
+// package at the bottom of the dependency graph: absolute paths and
+// ..-escapes in task targets are authoring errors that used to die
+// three layers later in plan validation, invisibly to the answerer.
+const safeTargetPath = (p: string): boolean => {
+  if (p === "") return false;
+  if (p.startsWith("/") || /^[a-zA-Z]:/.test(p)) return false;
+  return p.split("/").every((s) => s.length > 0 && s !== "." && s !== "..");
+};
+const targetPaths = z
+  .array(z.string().min(1))
+  .refine((paths) => paths.every((p) => safeTargetPath(p)), {
+    message: "task target paths must be safe relative paths (no absolute paths, no .. escapes)",
+  });
 export const taskTargetsSchema = z.strictObject({
-  read: z.array(z.string().min(1)).optional(),
-  write: z.array(z.string().min(1)).optional(),
+  read: targetPaths.optional(),
+  write: targetPaths.optional(),
 });
 
 export const taskSchema = z.strictObject({

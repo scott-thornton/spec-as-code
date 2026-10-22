@@ -81,7 +81,15 @@ export const LINT_RULES: LintRuleProvenance[] = [
     positiveFixture: "Single-quoted or block scalars, and double-quoted commands without backslashes, do not warn.",
     approvedBy: "scott",
   },
+  {
+    id: "LINT-PLAN-SHARED-ORACLE",
+    motivation: "Sequential tasks writing the same paths whose satisfied properties share a discriminating command criterion are unverifiable in every intermediate step - the shared oracle stays red until the last task lands, so mid-sequence preflights whisper (the preflight-gates run shipped corrupted source through exactly this shape).",
+    negativeFixture: "packages/cli/src/composition-hardening.test.ts: the sliced plan (T001/T002 sequential on src/** satisfying CHF-001/CHF-002 sharing one command) prints PLAN-SHARED-ORACLE at spc plan validate.",
+    positiveFixture: "packages/cli/src/composition-hardening.test.ts: the merged single task prints no finding.",
+    approvedBy: "human (composition-hardening spec, 2026-10-22)",
+  },
 ];
+
 
 const DECORATION_COMMANDS = new Set(["true", ":", "pwd", "exit 0", "exit(0)"]);
 

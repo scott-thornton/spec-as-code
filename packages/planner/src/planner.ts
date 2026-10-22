@@ -45,6 +45,9 @@ export async function generatePlan(input: GeneratePlanInput): Promise<GeneratePl
       prompt,
       schema: plannerOutputSchema,
       schemaName: "PlannerOutput",
+      // Surface WHY a retry exists: the diagnostics that rejected the
+      // prior answer ride along as the next request's lastError.
+      ...(repair ? { previousRejection: repair } : {}),
     });
     input.onUsage?.(
       makeUsageRecord("planner", requestId, { system: PLANNER_SYSTEM, prompt }, JSON.stringify(response.value), {

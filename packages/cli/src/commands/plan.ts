@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { compileSpecSource, formatDiagnostics, hasErrors, validatePlan, SpcError } from "@spc/core";
-import type { Plan } from "@spc/schema";
+import type { Plan, SpecIR } from "@spc/schema";
 import { generatePlan } from "@spc/planner";
 import { observeRepository, readExcerpt } from "@spc/repo";
 import { renderPlan } from "@spc/renderer";
@@ -96,6 +96,49 @@ export async function runPlan(specFile: string): Promise<number> {
   return 0;
 }
 
+/**
+ * PLAN-SHARED-ORACLE: sequential tasks writing the same paths whose
+ * satisfied properties share a discriminating command criterion. Every
+ * intermediate task is unverifiable by construction - the shared oracle
+ * stays red until the last task lands, so mid-sequence preflights
+ * whisper. Advise merging or re-slicing by verification boundary.
+ */
+function findSharedOracleSlicing(plan: Plan, ir: SpecIR): string[] {
+  const commandsOf = new Map<string, string[]>();
+  for (const p of ir.properties) {
+    const cmds = p.acceptance
+      .filter((c) => c.type === "command" && c.discriminating === true && c.command !== undefined)
+      .map((c) => (c as { command: string }).command);
+    if (cmds.length > 0) commandsOf.set(p.id, cmds);
+  }
+  const ancestors = (id: string, seen = new Set<string>()): Set<string> => {
+    for (const dep of plan.tasks.find((t) => t.id === id)?.dependsOn ?? []) {
+      if (seen.has(dep)) continue;
+      seen.add(dep);
+      ancestors(dep, seen);
+    }
+    return seen;
+  };
+  const findings: string[] = [];
+  for (const later of plan.tasks) {
+    for (const earlier of plan.tasks) {
+      if (later.id === earlier.id || !ancestors(later.id).has(earlier.id)) continue;
+      const overlap = (earlier.targets?.write ?? []).filter((p) => (later.targets?.write ?? []).includes(p));
+      if (overlap.length === 0) continue;
+      const earlierCommands = (earlier.satisfies ?? []).flatMap((a) => commandsOf.get(a) ?? []);
+      const shared = earlierCommands.filter((c) =>
+        (later.satisfies ?? []).some((b) => (commandsOf.get(b) ?? []).includes(c)),
+      );
+      if (shared.length > 0) {
+        findings.push(
+          `tasks ${earlier.id} and ${later.id} write the same paths (${overlap.join(", ")}) while their satisfied properties share the command criterion "${shared[0]}"; every intermediate task is unverifiable by construction - merge into one task or re-slice by verification boundary`,
+        );
+      }
+    }
+  }
+  return findings;
+}
+
 /** `spc plan validate [file]` */
 export function runPlanValidate(planFileArg: string | undefined): number {
   const repoRoot = resolveRepoRoot();
@@ -117,8 +160,12 @@ export function runPlanValidate(planFileArg: string | undefined): number {
   }
   console.log(`✓ plan ${plan.metadata.id} valid against spec ${plan.spec.id}`);
   for (const d of diagnostics) console.log(`warning ${d.code}: ${d.message}`);
+  for (const finding of findSharedOracleSlicing(plan, spec.ir)) {
+    console.log(`warning LINT-PLAN-SHARED-ORACLE: ${finding}`);
+  }
   return 0;
 }
+
 
 /** `spc plan show [file]` */
 export function runPlanShow(planFileArg: string | undefined, format: "text" | "json" = "text"): number {
