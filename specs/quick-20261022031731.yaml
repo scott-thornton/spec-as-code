@@ -11,4 +11,5 @@ requirements:
     acceptance:
       - id: QUICK-001-A
         type: command
-        command: "pnpm --filter @spc/runtime... build > /dev/null && node -e \"const {execFileSync}=require('node:child_process');const fs=require('node:fs');const os=require('node:os');const p=require('node:path');const r=fs.mkdtempSync(p.join(os.tmpdir(),'spc-qv-'));fs.mkdirSync(p.join(r,'.spc','runs','run-broken'),{recursive:true});fs.writeFileSync(p.join(r,'.spc','runs','run-broken','metadata.json'),JSON.stringify({runId:'run-broken',specId:'spec-x',createdAt:new Date().toISOString()}));fs.writeFileSync(p.join(r,'.spc','runs','run-broken','state.json'),JSON.stringify({status:'succeeded'}));fs.writeFileSync(p.join(r,'.spc','runs','run-broken','evidence.jsonl'),'not-json\\n');const out=execFileSync(process.execPath,['-e','const {latestRunViewForSpec}=require(\\/Users/thorntons/Documents/GitHub/private/spec-plan/packages/runtime/dist/index.js\\);const v=latestRunViewForSpec(\\+r+/.spc/runs\\,\\spec-x\\);process.exit(v===null?0:1)'],{encoding:'utf8',stdio:['pipe','pipe','pipe']});console.log('skips unreadable run: ok')\""
+        command: "pnpm --filter @spc/runtime... build > /dev/null && node scripts/check-skip-unreadable-run.cjs"
+        discriminating: true
