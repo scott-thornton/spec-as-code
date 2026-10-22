@@ -1,0 +1,119 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: preflight-gates
+  title: Preflight gates and enforcement prediction for harness answers
+goal: >
+  A field agent (CHK3643, slerp) rehearsed an eight-op chained patch by
+  hand: spc patch build for every op, then a re-implemented applicator in
+  a bash heredoc applied in-place on the live tree, grep gates plus
+  vue-tsc plus eslint, then cp-revert - because the sanctioned preflight
+  could not run its gates (a bare throwaway worktree has no node_modules)
+  and did not predict what apply would refuse. The hand-rolled version
+  can leave the tree dirty on a mid-sequence anchor miss and its results
+  are invisible to everyone. Close both gaps inside spc agent dry-run:
+  link real dependencies into the worktree, run the repo's own gates on
+  request, predict apply-time refusals with the same enforcement
+  functions apply uses, bind staging to the request's base revision
+  instead of live-tree drift, and leave a lightweight informational
+  record so rehearsal stops hiding in /tmp. Advisory only, as ever: a
+  preflight never writes evidence and never gates anything - it makes
+  the cheap iteration path the governed one.
+requirements:
+  - id: PG-001
+    statement: >
+      `spc agent dry-run` links the repository's installed dependencies
+      into its throwaway worktree when the repository root has a
+      node_modules directory, so criteria and gates that resolve
+      packages run against real dependencies; when the root has none the
+      report says so instead of leaving package-manager commands to
+      cache luck.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: PG-001-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/agent-preflight.test.ts
+        discriminating: true
+  - id: PG-002
+    statement: >
+      `--gates [names...]` optionally runs the repository's declared
+      commands (the root manifest's test, build, lint, and typecheck
+      entries; a subset by name, all when the flag is bare) inside the
+      same worktree after criteria, each reported with its advisory
+      outcome on a tight time budget; the flag is off by default.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: PG-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/agent-preflight.test.ts
+        discriminating: true
+  - id: PG-003
+    statement: >
+      The dry-run predicts apply-time refusals before running criteria:
+      the draft is checked against the request's JSON schema, and the
+      staged paths are checked against the task's declared write targets
+      and the repo's verification.protectedPaths with the same
+      enforcement functions apply uses. A schema-invalid draft or any
+      predicted refusal (UNSAFE_PATH, OUT_OF_SCOPE_WRITE,
+      PROTECTED_PATH_WRITE) exits 1 printing the predicted code, so the
+      answer is fixed locally instead of burning a task retry.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: PG-003-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/agent-preflight.test.ts
+        discriminating: true
+  - id: PG-004
+    statement: >
+      Staging binds to the request's base, not the live tree: the
+      worktree is checked out at the request payload's
+      repository.revision when it carries one (HEAD otherwise), the
+      applicator stages against that worktree's files, and the report
+      names the base used. A draft whose digests match the request base
+      stages even when the live tree has drifted; a draft built from
+      drifted content is refused with PATCH_BASE_MISMATCH.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: PG-004-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/agent-preflight.test.ts
+        discriminating: true
+  - id: PG-005
+    statement: >
+      Each dry-run appends one informational line to
+      .spc/harness/preflights.jsonl (request id, timestamp, outcome
+      counts) - never evidence, never part of any verdict or state - and
+      `spc agent list` shows per-request preflight counts for pending
+      requests, so rehearsal is visible to whoever works the queue.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: PG-005-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/agent-preflight.test.ts
+        discriminating: true
+  - id: PG-006
+    statement: >
+      The answer-queue skill documents the canonical composition loop
+      for executor requests: build ops with spc patch build (chaining
+      multi-op sequences with --after), preflight the assembled draft
+      with spc agent dry-run (schema, staging, enforcement predictions,
+      criteria, optional gates), and only then respond.
+    priority: should
+    scope:
+      include: [.agents/skills/**]
+    acceptance:
+      - id: PG-006-A
+        type: file
+        path: .agents/skills/answer-queue/SKILL.md
+        assert:
+          contains: "patch build --after"
