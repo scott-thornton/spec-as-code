@@ -1,0 +1,119 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: composition-hardening
+  title: Close the composition-time gaps behind the preflight-gates incident
+goal: >
+  The preflight-gates run shipped corrupted source through a failed run
+  and a continuation, and the recovery archaeology exposed four gaps at
+  the cheap end of the loop, all confirmed in code. A planner answer
+  with an absolute path in task targets passed the provider's zod check
+  (taskTargetsSchema has no path refinement), passed spc agent validate
+  (which checks only the lossy JSON-Schema shadow), and died in
+  validatePlan - whose diagnostics feed only the NEXT attempt's prompt,
+  a surface the answering agent never reads: two attempts burned with
+  no visible feedback. And the executor excerpt window (6KB) hides the
+  edit region of large write-target files, structurally pushing
+  executors toward cumulative full-file rewrites - the exact transport
+  that mangled the bytes. Close all four: path safety in the schema
+  layer, authoritative validate, rejection visibility on the queue, a
+  plan-shape lint against shared-oracle task slicing, honest excerpt
+  budgets for write targets, and a preflight nudge in respond.
+requirements:
+  - id: CH-001
+    statement: >
+      Task target paths are safe relative paths at the schema layer:
+      taskTargetsSchema read/write entries carry a path-safety
+      refinement, so a planner answer with an absolute path (or any
+      unsafe path) is rejected at answer time by the existing
+      requeue-with-feedback machinery - the rejection is visible as
+      lastError in spc agent list, no new feedback code required.
+    priority: must
+    scope:
+      include: [packages/schema/src/**, packages/planner/src/**]
+    acceptance:
+      - id: CH-001-A
+        type: command
+        command: pnpm --filter @spc/planner build > /dev/null && pnpm --filter @spc/planner exec vitest run src/composition-hardening.test.ts
+        discriminating: true
+  - id: CH-002
+    statement: >
+      spc agent validate is authoritative for known schema names: it
+      parses the draft with the runtime's own zod schema (PlannerOutput
+      from @spc/planner, ExecutorResult from @spc/executor) and reports
+      zod issues; unknown schema names keep the JSON-Schema shadow. A
+      draft the runtime would refuse never validates OK.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: CH-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/composition-hardening.test.ts
+        discriminating: true
+  - id: CH-003
+    statement: >
+      Plan-validation rejections are visible on the queue: when
+      validatePlan rejects a planner answer and the loop retries,
+      generatePlan passes the formatted diagnostics as
+      previousRejection to the next generateStructured call, and the
+      harness provider seeds the new request's lastError with it - so
+      spc agent list shows "retry needed" for semantic plan errors,
+      not only schema errors.
+    priority: must
+    scope:
+      include: [packages/planner/src/**, packages/llm/src/**, packages/llm-harness/src/**]
+    acceptance:
+      - id: CH-003-A
+        type: command
+        command: pnpm --filter @spc/planner build > /dev/null && pnpm --filter @spc/planner exec vitest run src/composition-hardening.test.ts && pnpm --filter @spc/llm-harness build > /dev/null && pnpm --filter @spc/llm-harness exec vitest run src/composition-hardening.test.ts
+        discriminating: true
+  - id: CH-004
+    statement: >
+      Plan-shape lint at spc plan validate: sequential tasks writing
+      the same path whose satisfied properties share a discriminating
+      command criterion produce a finding (PLAN-SHARED-ORACLE)
+      advising merge or re-slice by verification boundary - the shape
+      that left every intermediate task unverifiable by construction
+      in the preflight-gates run. The rule is registered in LINT_RULES
+      with motivation, fixtures, and provenance, and the planner
+      system prompt gains one paragraph of slicing guidance.
+    priority: must
+    scope:
+      include: [packages/cli/src/**, packages/planner/src/**]
+    acceptance:
+      - id: CH-004-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/composition-hardening.test.ts
+        discriminating: true
+  - id: CH-005
+    statement: >
+      Write-target files get an honest excerpt budget: files matched by
+      a task's write targets are excerpted up to 24KB (read targets
+      stay at 6KB), and EXECUTOR_SYSTEM states that excerpts are read
+      at dispatch and include prior tasks' applied changes, so
+      sequential edits chain patch ops against them instead of
+      resending whole files.
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: CH-005-A
+        type: command
+        command: pnpm --filter @spc/executor build > /dev/null && pnpm --filter @spc/executor exec vitest run src/composition-hardening.test.ts
+        discriminating: true
+  - id: CH-006
+    statement: >
+      spc agent respond prints one advisory line when the preflight
+      record has no entry for the request id ("no preflight on
+      record; de-risk with spc agent dry-run ..."), and prints nothing
+      extra once a dry-run has been recorded - a nudge using the
+      record preflight-gates created, never a gate.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: CH-006-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/composition-hardening.test.ts
+        discriminating: true
