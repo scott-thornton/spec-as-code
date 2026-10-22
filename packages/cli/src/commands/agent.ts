@@ -22,8 +22,7 @@ function storeFor(cwd?: string): { repoRoot: string; store: HarnessStore } {
 function readPreflightCounts(repoRoot: string): Map<string, number> {
   const counts = new Map<string, number>();
   try {
-    const lines = readFileSync(path.join(repoRoot, ".spc", "harness", "preflights.jsonl"), "utf8").split("
-");
+    const lines = readFileSync(path.join(repoRoot, ".spc", "harness", "preflights.jsonl"), "utf8").split("\n");
     for (const line of lines) {
       const t = line.trim();
       if (!t) continue;
@@ -279,8 +278,7 @@ export async function runAgentDryRun(options: { id: string; file: string; gates?
     gates: Record<string, number> | null;
   }) => {
     mkdirSync(path.dirname(preflightsFile), { recursive: true });
-    appendFileSync(preflightsFile, JSON.stringify({ id: options.id, at: new Date().toISOString(), ...rec }) + "
-", "utf8");
+    appendFileSync(preflightsFile, JSON.stringify({ id: options.id, at: new Date().toISOString(), ...rec }) + "\n", "utf8");
   };
 
   // Schema first: an invalid draft requeues at submit with the same
@@ -413,7 +411,7 @@ export async function runAgentDryRun(options: { id: string; file: string; gates?
     let gateResults: Record<string, number> | null = null;
     if (options.gates !== undefined && options.gates !== false) {
       gateResults = {};
-      const declared = observeRepository(repoRoot, null).commands;
+      const declared: Record<string, string> = observeRepository(repoRoot, null).commands;
       const names = Array.isArray(options.gates) ? options.gates : Object.keys(declared);
       console.log('Gates (advisory):');
       if (names.length === 0) console.log('  (this repo declares no test/build/lint/typecheck commands)');
@@ -438,7 +436,7 @@ export async function runAgentDryRun(options: { id: string; file: string; gates?
           continue;
         }
         console.log(`  ${name}  exit ${run.exitCode}`);
-        gateResults[name] = run.exitCode;
+        gateResults[name] = run.exitCode ?? -1;
       }
     }
 
