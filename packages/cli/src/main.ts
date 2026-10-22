@@ -218,11 +218,12 @@ agent
   });
 agent
   .command("dry-run <id>")
-  .description("stage a draft answer in a throwaway worktree and run the task's deterministic criteria (advisory, never gates)")
+  .description("stage a draft answer in a throwaway worktree, check the schema, predict enforcement, run criteria and optionally the repo's gates (advisory, never gates)")
   .requiredOption("--file <path>", "file containing the draft JSON value")
+  .option("--gates [names...]", "also run the repo's declared gates (test/build/lint/typecheck; bare = all present)")
   .option("--cwd <dir>", "repository directory", process.cwd())
-  .action(async (id: string, opts: { file: string; cwd: string }) => {
-    process.exitCode = await runAgentDryRun({ id, file: opts.file, cwd: opts.cwd });
+  .action(async (id: string, opts: { file: string; gates?: string[] | boolean; cwd: string }) => {
+    process.exitCode = await runAgentDryRun({ id, file: opts.file, gates: opts.gates, cwd: opts.cwd });
   });
 
 const followup = program.command("followup").description("follow-up operations");

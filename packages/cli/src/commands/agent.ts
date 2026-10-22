@@ -1,9 +1,9 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { SpcError } from "@spc/core";
 import { HarnessStore, checkJsonSchema } from "@spc/llm-harness";
-import { gitOk } from "@spc/repo";
-import { stageChanges } from "@spc/executor";
+import { gitOk, observeRepository } from "@spc/repo";
+import { enforceProtectedPaths, enforceWriteScope, runCommand, stageChanges } from "@spc/executor";
 import { verifyCriterion } from "@spc/verifier";
 import { loadRepoConfig, resolveAllSpecs, resolveRepoRoot } from "../context.js";
 
@@ -18,8 +18,31 @@ function storeFor(cwd?: string): { repoRoot: string; store: HarnessStore } {
   return { repoRoot, store: new HarnessStore(repoRoot) };
 }
 
+/** Read per-request preflight counts from the informational record. */
+function readPreflightCounts(repoRoot: string): Map<string, number> {
+  const counts = new Map<string, number>();
+  try {
+    const lines = readFileSync(path.join(repoRoot, ".spc", "harness", "preflights.jsonl"), "utf8").split("
+");
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t) continue;
+      try {
+        const rec = JSON.parse(t) as { id?: string };
+        if (rec.id) counts.set(rec.id, (counts.get(rec.id) ?? 0) + 1);
+      } catch {
+        // malformed line: informational record only, skip it
+      }
+    }
+  } catch {
+    // absent: no preflights recorded yet
+  }
+  return counts;
+}
+
 export function runAgentList(cwd: string | undefined, format: "text" | "json"): number {
-  const { store } = storeFor(cwd);
+  const { repoRoot, store } = storeFor(cwd);
+  const preflighted = readPreflightCounts(repoRoot);
   const pending = store.listPending();
   if (format === "json") {
     console.log(
@@ -30,6 +53,7 @@ export function runAgentList(cwd: string | undefined, format: "text" | "json"): 
           key: r.key,
           schemaName: r.schemaName,
           createdAt: r.createdAt,
+          ...(preflighted.get(r.id) ? { preflightCount: preflighted.get(r.id) } : {}),
           ...(r.lastError ? { lastError: r.lastError } : {}),
         })),
         null,
@@ -51,7 +75,8 @@ export function runAgentList(cwd: string | undefined, format: "text" | "json"): 
     return `${Math.floor(m / 60)}h`;
   };
   for (const r of pending) {
-    console.log(`${r.id}  [${r.role}]  ${r.schemaName}  age ${ageOf(r.createdAt)}`);
+    const seen = preflighted.get(r.id) ?? 0;
+    console.log(`${r.id}  [${r.role}]  ${r.schemaName}  age ${ageOf(r.createdAt)}${seen > 0 ? `  preflighted ${seen}x` : ""}`);
     if (r.lastError) {
       console.log(`    retry needed - previous answer invalid: ${r.lastError.split("\n")[0]}`);
     }
@@ -215,15 +240,17 @@ export function runAgentValidate(options: { id: string; file: string; cwd?: stri
   return 1;
 }
 /**
- * Composition-time criteria dry-run: stage the draft answer's changes in
- * a throwaway worktree, run the task's deterministic criteria there with
- * the ordinary verification machinery, report outcomes - never write the
- * real tree, never gate submission. A bad answer costs thirty seconds
- * here instead of a task retry in the run. Field agents shadow-built
- * this three times (guard-spec python reimplementations, hand-run red
- * checks, bash -n/YAML parses) before it existed.
+ * Composition-time preflight: stage the draft answer's changes in a
+ * throwaway worktree checked out at the base the request was composed
+ * from, run the task's deterministic criteria there with the ordinary
+ * verification machinery, report outcomes - never write the real tree,
+ * never gate submission. A bad answer costs thirty seconds here instead
+ * of a task retry in the run. Field agents shadow-built this three
+ * times before it existed, and kept hand-rehearsing on the live tree
+ * (CHK3643) until it could bind to the request base and run with real
+ * dependencies too.
  */
-export async function runAgentDryRun(options: { id: string; file: string; cwd?: string }): Promise<number> {
+export async function runAgentDryRun(options: { id: string; file: string; gates?: string[] | boolean; cwd?: string }): Promise<number> {
   const { repoRoot, store } = storeFor(options.cwd);
   const request = store.getRequest(options.id);
   if (!request) {
@@ -241,38 +268,120 @@ export async function runAgentDryRun(options: { id: string; file: string; cwd?: 
     throw new SpcError("HARNESS_RESPOND_INPUT", `draft is not valid JSON: ${(e as Error).message}`);
   }
 
-  // Stage in memory first: an unstagedable change set is the one hard
-  // failure - the applicator's refusal code says why.
-  const staged = stageChanges(repoRoot, (draft.changes ?? []) as never);
-  if (!staged.ok) {
-    console.error(staged.message);
+// Informational record: one line per preflight, so rehearsal stops
+  // hiding in /tmp and whoever works the queue can see it. Never
+  // evidence, never state - a verifier must never read this file.
+  const preflightsFile = path.join(repoRoot, ".spc", "harness", "preflights.jsonl");
+  const recordPreflight = (rec: {
+    staged: number;
+    refusals: string[];
+    criteria: { pass: number; total: number };
+    gates: Record<string, number> | null;
+  }) => {
+    mkdirSync(path.dirname(preflightsFile), { recursive: true });
+    appendFileSync(preflightsFile, JSON.stringify({ id: options.id, at: new Date().toISOString(), ...rec }) + "
+", "utf8");
+  };
+
+  // Schema first: an invalid draft requeues at submit with the same
+  // errors - surface them here for the price of a local command.
+  const schemaIssues = checkJsonSchema(request.jsonSchema, draft);
+  if (schemaIssues.length > 0) {
+    console.log(`${schemaIssues.length} schema issue(s) in the draft (a submit would requeue with the same errors):`);
+    for (const issue of schemaIssues.slice(0, 20)) {
+      console.log(`  ${issue.path}: ${issue.message}`);
+    }
+    recordPreflight({ staged: 0, refusals: [], criteria: { pass: 0, total: 0 }, gates: null });
     return 1;
   }
 
-  // Find the task's properties in the repo's compiled spec.
-  const specId = (payload as { spec?: { id?: string } }).spec?.id;
-  const specs = resolveAllSpecs(path.join(repoRoot, "specs"));
-  const spec = specId ? specs.find((s) => s.ir.spec.metadata.id === specId) : undefined;
-  const relevant = ((payload as { relevantProperties?: { id: string }[] }).relevantProperties ?? []).map((p) => p.id);
-  const properties = (spec?.ir.properties ?? []).filter((p) => relevant.includes(p.id));
-
   const config = loadRepoConfig(repoRoot);
+
+  // The base the request was composed from: staging must bind to the
+  // excerpts the drafter read, not to whatever the live tree looks like
+  // now. No revision in the payload (older requests) falls back to HEAD.
+  const baseRevision = (payload as { repository?: { revision?: string } }).repository?.revision;
+
   const worktree = path.join(repoRoot, ".spc", "worktrees", `dryrun-${options.id.replace(/[^a-zA-Z0-9@.-]/g, "_")}`);
   try {
     gitOk(repoRoot, ["worktree", "remove", "--force", worktree]);
   } catch {
     // absent - fine
   }
-  gitOk(repoRoot, ["worktree", "add", "--detach", worktree, "HEAD"]);
+  gitOk(repoRoot, ["worktree", "add", "--detach", worktree, baseRevision ?? "HEAD"]);
   try {
+    console.log(`Preflight for ${options.id} (advisory - never evidence, never gates)`);
+    console.log(
+      `Base: ${baseRevision ? `request revision ${baseRevision.slice(0, 10)}` : "HEAD"} (throwaway worktree)`,
+    );
+
+    // A bare worktree has no installed dependencies: package-resolving
+    // commands either fail or - worse - exit 0 on cache luck. Link the
+    // repo's own install so criteria and gates run against the real
+    // thing; when the repo has none, say so instead of guessing.
+    const depsSource = path.join(repoRoot, "node_modules");
+    if (existsSync(depsSource) && !existsSync(path.join(worktree, "node_modules"))) {
+      symlinkSync(depsSource, path.join(worktree, "node_modules"), "dir");
+    }
+    if (!existsSync(path.join(worktree, "node_modules"))) {
+      console.log("Dependencies: none linked (repo root has no node_modules); package commands may not be executable");
+    }
+
+    // Stage in memory first - against the BASE worktree, not the live
+    // tree - so digests bind to the request base. An unstagedable change
+    // set is the one hard failure; the applicator's refusal code says why.
+    const staged = stageChanges(worktree, (draft.changes ?? []) as never);
+    if (!staged.ok) {
+      console.error(staged.message);
+      recordPreflight({ staged: 0, refusals: [], criteria: { pass: 0, total: 0 }, gates: null });
+      return 1;
+    }
+
+    // Predict what apply would refuse, with the same enforcement
+    // functions apply uses - a refusal here costs a local command
+    // instead of a task retry. A request that declares no write targets
+    // (legacy fixtures) cannot be scope-predicted; say so rather than
+    // fabricate a refusal.
+    const task = (payload as { task?: { targets?: { write?: string[] } } }).task;
+    const writePatterns = task?.targets?.write ?? (payload as { allowedWritePaths?: string[] }).allowedWritePaths ?? [];
+    const stagedPaths = [...staged.writes.map((w) => w.path), ...staged.deletes];
+    const violations = [
+      ...(writePatterns.length > 0 ? enforceWriteScope(writePatterns, stagedPaths) : []),
+      ...enforceProtectedPaths(config.verification.protectedPaths, stagedPaths),
+    ];
+    if (writePatterns.length === 0 && stagedPaths.length > 0) {
+      console.log('Enforcement: write scope unknown (request carries no declared write targets); scope not predicted');
+    }
+    if (violations.length > 0) {
+      for (const v of violations) {
+        console.log(`  PREDICTED REFUSAL at apply: ${v.code} - ${v.reason}`);
+      }
+      console.log('Fix the draft and preflight again; apply would refuse this answer.');
+      recordPreflight({ staged: staged.writes.length, refusals: violations.map((v) => v.code), criteria: { pass: 0, total: 0 }, gates: null });
+      return 1;
+    }
+    if (writePatterns.length > 0) {
+      console.log('Enforcement: no refusals predicted (write scope, protected paths)');
+    }
+
     for (const w of staged.writes) {
       mkdirSync(path.join(worktree, path.dirname(w.path)), { recursive: true });
       writeFileSync(path.join(worktree, w.path), w.content, "utf8");
     }
     for (const p of staged.deletes) rmSync(path.join(worktree, p), { force: true });
 
-    console.log(`Dry run for ${options.id}: ${staged.writes.length} staged write(s), ${staged.deletes.length} delete(s)`);
+    console.log(`Staged: ${staged.writes.length} staged write(s), ${staged.deletes.length} delete(s)`);
+
+    // Find the task's properties in the repo's compiled spec.
+    const specId = (payload as { spec?: { id?: string } }).spec?.id;
+    const specs = resolveAllSpecs(path.join(repoRoot, "specs"));
+    const spec = specId ? specs.find((s) => s.ir.spec.metadata.id === specId) : undefined;
+    const relevant = ((payload as { relevantProperties?: { id: string }[] }).relevantProperties ?? []).map((p) => p.id);
+    const properties = (spec?.ir.properties ?? []).filter((p) => relevant.includes(p.id));
+
     const commandRuns = new Map();
+    let criteriaPassed = 0;
+    let criteriaTotal = 0;
     for (const property of properties) {
       for (const criterion of property.acceptance) {
         if (criterion.type !== "file" && criterion.type !== "command") continue;
@@ -284,6 +393,8 @@ export async function runAgentDryRun(options: { id: string; file: string; cwd?: 
           provider: null,
           commandRuns,
         });
+        criteriaTotal += 1;
+        if (result.evidence.outcome === "supports") criteriaPassed += 1;
         const p = result.evidence.payload as Record<string, unknown>;
         const shape = p.failureShape ? ` [${p.failureShape}]` : "";
         const detail =
@@ -293,6 +404,45 @@ export async function runAgentDryRun(options: { id: string; file: string; cwd?: 
         console.log(`  ${criterion.id}  ${detail}`);
       }
     }
+    // Repo gates on request: the commands the root manifest declares
+    // (test/build/lint/typecheck), run inside the same worktree against
+    // the staged tree and linked dependencies. Advisory like everything
+    // else here - a failing gate is a report line, never an exit code;
+    // the run's own verification stays authoritative. Tight budget: a
+    // preflight that outlives its usefulness is a preflight nobody runs.
+    let gateResults: Record<string, number> | null = null;
+    if (options.gates !== undefined && options.gates !== false) {
+      gateResults = {};
+      const declared = observeRepository(repoRoot, null).commands;
+      const names = Array.isArray(options.gates) ? options.gates : Object.keys(declared);
+      console.log('Gates (advisory):');
+      if (names.length === 0) console.log('  (this repo declares no test/build/lint/typecheck commands)');
+      for (const name of names) {
+        const command = declared[name];
+        if (!command) {
+          console.log(`  ${name}  not declared by this repo's root manifest`);
+          continue;
+        }
+        const run = await runCommand(command, {
+          cwd: worktree,
+          timeoutMs: 60_000,
+          maxOutputBytes: config.execution.maxOutputBytes,
+          commandsConfig: config.commands,
+        });
+        if (!run.allowed) {
+          console.log(`  ${name}  denied by command policy (${run.deniedReason ?? 'denied'})`);
+          continue;
+        }
+        if (run.timedOut) {
+          console.log(`  ${name}  timed out (60s budget)`);
+          continue;
+        }
+        console.log(`  ${name}  exit ${run.exitCode}`);
+        gateResults[name] = run.exitCode;
+      }
+    }
+
+    recordPreflight({ staged: staged.writes.length, refusals: [], criteria: { pass: criteriaPassed, total: criteriaTotal }, gates: gateResults });
     console.log("Advisory only - the run's own verification remains authoritative. The working tree was not modified.");
     return 0;
   } finally {
@@ -303,4 +453,3 @@ export async function runAgentDryRun(options: { id: string; file: string; cwd?: 
     }
   }
 }
-

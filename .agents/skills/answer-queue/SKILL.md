@@ -36,11 +36,34 @@ Read the request system prompt first: it carries the executor
 contract - which op to prefer (patch for edits to existing files, full
 content only for creates and wholesale rewrites) and the touch-set
 rules for commands. The JSON Schema per-op descriptions carry the same
-guidance. Validate the draft against the response schema locally first (`spc agent validate <id> --file draft.json`), and for executor requests dry-run the substance too (`spc agent dry-run <id> --file draft.json`): it stages your changes in a throwaway worktree and runs the task's deterministic criteria - fix what it reports, including suite-did-not-run, before responding - an
-invalid answer costs a round trip through the requeue-with-feedback
-loop. A requeued request with feedback means your previous answer failed
-schema validation: read the errors, fix the shape, do not change the
-substance unless asked.
+guidance.
+
+The canonical loop for executor requests is compose, preflight,
+respond:
+
+1. Compose ops with `spc patch build` - chaining multiple edits to one
+   file with `spc patch build --after <ops.json>`, never hand-typed
+   digests.
+2. Preflight the assembled draft with `spc agent dry-run <id> --file
+   draft.json` - one command checks the schema, stages against the
+   request's base revision (not the live tree), predicts apply-time
+   refusals (write scope, protected paths) with the same enforcement
+   apply uses, runs the task's deterministic criteria, and with
+   `--gates` also runs the repo's declared test/build/lint/typecheck
+   commands inside the worktree with real dependencies linked in. Fix
+   everything it reports - including suite-did-not-run and PREDICTED
+   REFUSAL lines - before responding. Every line is advisory; the
+   run's verification remains the only authority.
+3. Respond with `spc agent respond <id> --file draft.json`.
+
+Never rehearse on the live tree: no hand-applied anchors, no
+apply-gates-revert shell scripts. The dry-run worktree IS the
+rehearsal - all-or-nothing, disposable, and visible in the queue
+(`spc agent list` shows preflighted counts). An invalid answer costs a
+round trip through the requeue-with-feedback loop. A requeued request
+with feedback means your previous answer failed schema validation:
+read the errors, fix the shape, do not change the substance unless
+asked.
 
 Answer exactly what is asked. Executor requests execute ONE task; do
 not do the whole plan. Never claim a requirement is satisfied -
