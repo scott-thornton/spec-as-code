@@ -110,3 +110,24 @@ that same test file:
 This worked cleanly in the field (CHK3555 quick chain, 4/4 green first
 time once dry-run adoption kicked in) and should be the default shape
 for logic changes that fit one task.
+
+## Proposal-verification doctrine
+
+> A proposal is not exempt from verification merely because it proposes
+> a verification mechanism.
+
+> Before adding a safeguard, establish which existing guarantee is
+> missing, which failure demonstrates the gap, and which regression
+> will prove the gap is closed.
+
+These came out of an anchor-audit exchange (2026-10-23) in which both
+sides proposed mechanisms that already existed or could not work as
+described; checking the implementation first is part of authoring.
+
+Practical corollary for criterion commands: in a pnpm workspace, a bare
+`pnpm --filter X <cmd>` criterion compiles X against its dependencies'
+STALE dist output - run-mvix4mfx verified against pre-change artifacts
+and its criteria honestly refused the wrong thing. Criterion build
+commands must be dependency-inclusive (`--filter X...`) or explicitly
+prepare dependencies; `spc lint` flags the bare form as
+LINT-FILTER-NO-DEPS.

@@ -27,6 +27,10 @@ export interface LintRuleProvenance {
   negativeFixture: string;
   positiveFixture: string;
   approvedBy: string;
+  /** Descriptive tags for which evidence-validity dimensions the rule
+   *  fences (criterion, environment, observation) - accumulated
+   *  operational taxonomy, never enforced. */
+  validityDimensions?: string[];
   supersededBy?: string;
 }
 
@@ -88,6 +92,14 @@ export const LINT_RULES: LintRuleProvenance[] = [
     positiveFixture: "packages/cli/src/composition-hardening.test.ts: the merged single task prints no finding.",
     approvedBy: "human (composition-hardening spec, 2026-10-22)",
   },
+  {
+    id: "LINT-FILTER-NO-DEPS",
+    motivation: "run-mvix4mfx: every criterion with a bare pnpm --filter selector verified against stale dependency dist output and honestly refused the wrong thing - the command compiled a package against its dependencies' pre-change artifacts.",
+    negativeFixture: "packages/cli/src/dependency-blind-lint.test.ts: a discriminating 'pnpm --filter X build' criterion in a pnpm workspace warns LINT-FILTER-NO-DEPS with 'potentially dependency-blind'.",
+    positiveFixture: "packages/cli/src/dependency-blind-lint.test.ts: dependency-inclusive (X...), path-form (./pkg), non-discriminating, non-workspace, and filterless commands stay quiet.",
+    approvedBy: "human (dependency-blind-lint spec, 2026-10-23)",
+    validityDimensions: ["criterion", "environment"],
+  },
 ];
 
 
@@ -98,7 +110,7 @@ const DECORATION_COMMANDS = new Set(["true", ":", "pwd", "exit 0", "exit(0)"]);
  * skill's prose, mechanized. Pure: reads the IR and config, executes
  * nothing, writes nothing. Warnings never gate.
  */
-export function lintSpec(ir: SpecIR, config: Config, source?: string): LintWarning[] {
+export function lintSpec(ir: SpecIR, config: Config, source?: string, opts?: { pnpmWorkspace?: boolean }): LintWarning[] {
   const warnings: LintWarning[] = [];
   const commandUses = new Map<string, { criterion: string; expect?: number }[]>();
 
@@ -197,6 +209,39 @@ export function lintSpec(ir: SpecIR, config: Config, source?: string): LintWarni
     });
   }
 
+  // run-mvix4mfx: criteria with bare name-form pnpm --filter selectors
+  // compiled against their dependencies' STALE dist output - the
+  // criteria honestly refused the wrong thing. Advisory, and scoped to
+  // the known mistake: pnpm workspaces, name-form filters, no trailing
+  // dependency ellipsis, discriminating criteria only.
+  if (opts?.pnpmWorkspace) {
+    const bareFilter = /(^|\s)pnpm\s+--filter\s+(@[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+|[A-Za-z][A-Za-z0-9._-]*)(?=\s)/g;
+    // Only BUILD-like subcommands compile dependencies: a bare filter
+    // before exec/test runs against whatever the build step produced and
+    // is not itself the blindness.
+    const buildLike = new Set(["build", "compile", "bundle", "pack", "package"]);
+    for (const property of ir.properties) {
+      for (const criterion of property.acceptance) {
+        if (criterion.type !== "command" || criterion.command === undefined || criterion.discriminating !== true) continue;
+        bareFilter.lastIndex = 0;
+        const matches = [...criterion.command.matchAll(bareFilter)];
+        const blind = matches.some((m) => {
+          if (m[2]!.endsWith("...")) return false;
+          const rest = criterion.command!.slice((m.index ?? 0) + m[0].length).trimStart();
+          const sub = rest.split(/\s+/)[0] ?? "";
+          return buildLike.has(sub);
+        });
+        if (blind) {
+          warnings.push({
+            rule: "LINT-FILTER-NO-DEPS",
+            target: criterion.id,
+            message: `the command is potentially dependency-blind - a bare pnpm --filter compiles against dependencies' STALE dist output (run-mvix4mfx); use a dependency-inclusive filter (X...) or an explicit dependency preparation step`,
+          });
+        }
+      }
+    }
+  }
+
   return warnings;
 }
 
@@ -245,7 +290,11 @@ export async function runSpecLint(specFile: string | undefined, cwd?: string, pr
     return 1;
   }
   const ir = compiled.ir;
-  printWarnings(lintSpec(ir, config, readFileSync(path.resolve(repoRoot, specFile), "utf8")));
+  printWarnings(
+    lintSpec(ir, config, readFileSync(path.resolve(repoRoot, specFile), "utf8"), {
+      pnpmWorkspace: existsSync(path.join(repoRoot, "pnpm-lock.yaml")),
+    }),
+  );
 
   const discriminating = ir.properties.flatMap((p) =>
     p.acceptance
