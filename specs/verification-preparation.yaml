@@ -1,0 +1,82 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: verification-preparation
+  title: Prepared verification environments and truthful failure classification
+goal: >
+  The programme's item 2, with the contamination guard included:
+  disposable verification worktrees (spc verify --run, the allowDirtyPaths
+  contamination guard) are cold - no installed dependencies - so their
+  criteria either fail meaninglessly or, worse, the guard's environment
+  failure silently downgrades genuinely satisfied properties. One
+  preparation mechanism, three consumers (dry-run already has it; verify
+  --run and the guard adopt it); preparation outcomes are recorded as
+  structured evidence; a preparation failure can never become a
+  behavioral contradiction - the invariant is that an unsuccessful
+  attempt to observe behavior is not evidence that the behavior is
+  incorrect. run-mvix4mfx is the founding specimen: five criteria
+  recorded contradicted for what was an invalid environment.
+requirements:
+  - id: VP-001
+    statement: >
+      A shared preparation helper (prepareDisposableWorktree) installs
+      dependencies into a disposable worktree: pnpm install
+      --frozen-lockfile --offline when the repository has a pnpm
+      lockfile, else a node_modules symlink from the repository root
+      when one exists, else an honest none; it reports the mode, exit
+      code, and failure detail. spc agent dry-run uses the shared
+      helper instead of its inline block.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**, packages/cli/src/**]
+    acceptance:
+      - id: VP-001-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/prepare-worktree.test.ts
+        discriminating: true
+  - id: VP-002
+    statement: >
+      When environmentReady is explicitly false in the criterion
+      context, command criteria do not execute and produce inconclusive
+      evidence naming the reason (environment preparation failed) -
+      never a contradiction; file criteria are unaffected; command
+      criteria execute normally when the flag is absent or true.
+    priority: must
+    scope:
+      include: [packages/verifier/src/**]
+    acceptance:
+      - id: VP-002-A
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/verifier exec vitest run src/environment-classification.test.ts
+        discriminating: true
+  - id: VP-003
+    statement: >
+      spc verify --run prepares its temporary worktree with the shared
+      helper and records the preparation outcome as structured evidence
+      in the verification run (kind preparation, outcome supports on
+      success, inconclusive on failure, payload carrying the mode and
+      exit code); on preparation failure, command criteria in that
+      verification are inconclusive rather than contradicted.
+    priority: must
+    scope:
+      include: [packages/cli/src/**, packages/runtime/src/**, packages/schema/src/**]
+    acceptance:
+      - id: VP-003-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/verify-run-preparation.test.ts
+        discriminating: true
+  - id: VP-004
+    statement: >
+      The contamination guard prepares its worktree with the same
+      helper, and a guard that cannot prepare does not downgrade
+      satisfied properties - it reports that the observation could not
+      be made and leaves the verdicts untouched (an environmental
+      failure is not contamination evidence).
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: VP-004-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/guard-preparation.test.ts
+        discriminating: true
