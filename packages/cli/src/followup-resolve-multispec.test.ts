@@ -124,12 +124,45 @@ describe("spc followup resolve in multi-spec repositories", () => {
 
   it("resolves without --run when the follow-up id is unique across runs (FR-001)", () => {
     makeRun("run-fr2", "fr-spec-b");
-    // F-001 exists in two runs now: the ambiguity error is legitimate.
+    // A second run with the SAME follow-up id still open: ambiguity is
+    // real (test 1 resolved run-fr1's F-001, so it no longer counts).
+    const ambDir = path.join(root, ".spc", "runs", "run-fr-amb");
+    mkdirSync(ambDir, { recursive: true });
+    writeFileSync(
+      path.join(ambDir, "metadata.json"),
+      JSON.stringify({ runId: "run-fr-amb", specId: "fr-spec-a", createdAt: "2026-10-23T00:00:00.000Z" }),
+      "utf8",
+    );
+    writeFileSync(
+      path.join(ambDir, "state.json"),
+      JSON.stringify({ status: "succeeded", requirements: {} }),
+      "utf8",
+    );
+    writeFileSync(path.join(ambDir, "followups.json"), "[]", "utf8");
+    makeRun("run-fr2", "fr-spec-b");
+    // run-fr2 carries both F-001 (ambiguous with run-fr-amb) and F-009.
+    writeFileSync(
+      path.join(root, ".spc", "runs", "run-fr-amb", "followups.json"),
+      JSON.stringify([
+        {
+          id: "F-001",
+          runId: "run-fr-amb",
+          type: "manual_verification",
+          blocking: true,
+          title: "Duplicate id",
+          description: "same follow-up id in another run",
+          options: [{ id: "confirm", description: "confirmed" }],
+          status: "open",
+          createdAt: "2026-10-23T00:00:00.000Z",
+        },
+      ]),
+      "utf8",
+    );
     const ambiguous = sh(["followup", "resolve", "F-001", "--option", "confirm"]);
     expect(ambiguous.status).not.toBe(0);
     expect(ambiguous.stderr).toContain("--run");
 
-    // A unique id in the second run resolves via its own spec derivation.
+    // A unique id in run-fr2 resolves via its own spec derivation.
     const dir = path.join(root, ".spc", "runs", "run-fr2");
     writeFileSync(
       path.join(dir, "followups.json"),
