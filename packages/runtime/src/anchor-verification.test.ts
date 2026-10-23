@@ -88,7 +88,7 @@ describe("git anchor verification (anchor-verification)", () => {
     };
     expect(stored.gitAnchor).toBeDefined();
     expect(stored.gitAnchor!.commit).toBe(attestation.gitAnchor?.commit ?? stored.gitAnchor!.commit);
-    const message = gitsh(["log", "-1", "--format=%B", stored.gitAnchor!.commit], path.join(root, "worktree"));
+    const message = gitsh(["log", "-1", "--format=%B", stored.gitAnchor!.commit]);
     expect(message).toContain(attestation.eventChainHead);
     expect(message).toContain(attestation.evidenceHead);
     const last = events.all()[events.all().length - 1]!;
