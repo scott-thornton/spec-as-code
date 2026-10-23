@@ -40,6 +40,13 @@ export interface CriterionContext {
    */
   commandRuns?: Map<string, CommandRunResult>;
   /**
+   * False only when the execution environment failed to prepare: the
+   * criterion COULD NOT meaningfully execute. Command criteria then
+   * report inconclusive without running - an invalid observation is
+   * never a behavioral contradiction (run-mvix4mfx).
+   */
+  environmentReady?: boolean;
+  /**
    * Agent-verdict cache, keyed by revision + property + criterion: a
    * judgment at a fixed revision is reusable across the sweeps of one
    * run (the field asked the same question ~6 times per run). Owned by
@@ -121,6 +128,29 @@ async function verifyCommand(
         ],
         recommendedDefault: "approve",
       },
+    };
+  }
+
+  if (ctx.environmentReady === false) {
+    return {
+      evidence: makeEvidence(
+        {
+          id: "pending",
+          runId: ctx.runId,
+          criterionId: criterion.id,
+          propertyRefs: [property.id],
+          kind: "command",
+          outcome: "inconclusive",
+          producer: { type: "runtime" },
+          timestamp: (ctx.now ?? (() => new Date().toISOString()))(),
+          repositoryRevision: ctx.repositoryRevision,
+          payload: {
+            command: criterion.command,
+            reason: "environment preparation failed - the observation could not be made; not a behavioral contradiction",
+          },
+        },
+        ctx.now,
+      ),
     };
   }
 

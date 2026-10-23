@@ -2,6 +2,8 @@ export * from "./paths.js";
 export * from "./events.js";
 export * from "./stores.js";
 export * from "./lock.js";
+export * from "./prepare.js";
+export * from "./guard.js";
 export * from "./state.js";
 export * from "./run.js";
 export * from "./verify.js";

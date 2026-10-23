@@ -5,7 +5,7 @@ import { z } from "zod";
  * evidence must never be deleted because it is inconvenient.
  */
 
-export const evidenceKindSchema = z.enum(["command", "test", "file", "diff", "agent", "human"]);
+export const evidenceKindSchema = z.enum(["command", "test", "file", "diff", "agent", "human", "preparation"]);
 
 export const evidenceOutcomeSchema = z.enum(["supports", "contradicts", "inconclusive"]);
 
@@ -62,6 +62,7 @@ export function evidenceTrustLevel(kind: EvidenceKind): 1 | 2 | 3 | 4 {
       return 1;
     case "file":
     case "diff":
+    case "preparation":
       return 2;
     case "agent":
       return 3;
@@ -78,6 +79,8 @@ export function evidenceTrustLabel(kind: EvidenceKind): string {
       return "deterministic-test";
     case "file":
       return "static-file";
+    case "preparation":
+      return "environment-preparation";
     case "diff":
       return "static-diff";
     case "agent":

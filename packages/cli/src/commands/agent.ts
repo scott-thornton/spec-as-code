@@ -1,5 +1,4 @@
-import { spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { SpcError } from "@spc/core";
 import { HarnessStore, checkJsonSchema } from "@spc/llm-harness";
@@ -7,6 +6,7 @@ import { gitOk, observeRepository } from "@spc/repo";
 import { enforceProtectedPaths, enforceWriteScope, executorResultSchema, runCommand, stageChanges } from "@spc/executor";
 import { plannerOutputSchema } from "@spc/planner";
 import { verifyCriterion } from "@spc/verifier";
+import { prepareDisposableWorktree } from "@spc/runtime";
 import { loadRepoConfig, resolveAllSpecs, resolveRepoRoot } from "../context.js";
 
 /**
@@ -350,27 +350,13 @@ export async function runAgentDryRun(options: { id: string; file: string; gates?
     // commands either fail or - worse - exit 0 on cache luck. Link the
     // repo's own install so criteria and gates run against the real
     // thing; when the repo has none, say so instead of guessing.
-    const depsSource = path.join(repoRoot, "node_modules");
-    const pnpmLock = existsSync(path.join(repoRoot, "pnpm-lock.yaml"));
-    if (pnpmLock) {
-      // pnpm workspaces: a wholesale node_modules symlink is refused by
-      // pnpm's own task-state guard, and per-package links resolve into
-      // the LIVE tree, compiling against stale siblings. The honest
-      // cold-tree preparation is an offline frozen install of the
-      // disposable worktree - store-only, no network, deterministic
-      // setup just like the git worktree add itself.
-      const r = spawnSync("pnpm", ["install", "--frozen-lockfile", "--offline"], {
-        cwd: worktree,
-        encoding: "utf8",
-        timeout: 120_000,
-      });
-      const tail = ((r.stderr ?? "") + (r.stdout ?? "")).trim().split("\n").filter(Boolean).slice(-1)[0] ?? "";
-      console.log(`Dependencies: pnpm install --frozen-lockfile --offline exit ${r.status ?? "signal"}`);
-      if (r.status !== 0 && tail) console.log(`  ${tail.slice(0, 200)}`);
-    } else if (existsSync(depsSource) && !existsSync(path.join(worktree, "node_modules"))) {
-      symlinkSync(depsSource, path.join(worktree, "node_modules"), "dir");
+    const prepared = prepareDisposableWorktree(repoRoot, worktree);
+    if (prepared.mode === "installed") console.log(`Dependencies: pnpm install --frozen-lockfile --offline exit ${prepared.exitCode}`);
+    if (prepared.mode === "failed") {
+      console.log(`Dependencies: pnpm install --frozen-lockfile --offline exit ${prepared.exitCode ?? "signal"}`);
+      if (prepared.detail) console.log(`  ${prepared.detail}`);
     }
-    if (!existsSync(path.join(worktree, "node_modules"))) {
+    if (prepared.mode === "none") {
       console.log("Dependencies: none linked (repo root has no node_modules); package commands may not be executable");
     }
 

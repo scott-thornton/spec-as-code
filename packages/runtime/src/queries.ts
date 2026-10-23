@@ -223,6 +223,9 @@ export interface StandaloneVerifyOptions {
   now?(): string;
   /** Criteria execution root (temporary worktree for --run). */
   executionRoot?: string;
+  /** Prepared-environment outcome for --run verification: recorded as
+   *  evidence, and a failure classifies command criteria inconclusive. */
+  prepareOutcome?: { mode: "installed" | "linked" | "none" | "failed"; exitCode?: number; detail?: string };
 }
 
 export interface StandaloneVerifyReport {
@@ -300,6 +303,7 @@ export async function createVerifyRun(options: StandaloneVerifyOptions): Promise
   sweep = await verifyStandalone({
     repoRoot: options.repoRoot,
     ...(options.executionRoot ? { executionRoot: options.executionRoot } : {}),
+    ...(options.prepareOutcome ? { prepareOutcome: options.prepareOutcome } : {}),
     specIr: options.specIr,
     runId,
     config: options.config,

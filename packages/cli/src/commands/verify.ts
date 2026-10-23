@@ -2,7 +2,7 @@ import path from "node:path";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { gitOk, statusPorcelain } from "@spc/repo";
 import { renderGithubAnnotations, renderGithubSummary } from "@spc/renderer";
-import { createVerifyRun, inPlaceHandoffWarning, verifyBundle } from "@spc/runtime";
+import { createVerifyRun, inPlaceHandoffWarning, prepareDisposableWorktree, verifyBundle } from "@spc/runtime";
 import { createProvider, loadRepoConfig, resolveAllSpecs, resolveRepoRoot } from "../context.js";
 
 /**
@@ -94,12 +94,23 @@ export async function runVerify(
     gitOk(repoRoot, ["worktree", "add", "--detach", worktree, state.resultRevision]);
     try {
       console.log(`Verifying run ${runId} at revision ${state.resultRevision.slice(0, 12)} (temporary worktree)`);
+      const prepared = prepareDisposableWorktree(repoRoot, worktree);
+      const prepLine =
+        prepared.mode === "installed"
+          ? `Preparing: pnpm install --frozen-lockfile --offline exit ${prepared.exitCode}`
+          : prepared.mode === "failed"
+            ? `Preparing: FAILED (${prepared.detail ?? "environment not installable"}) - command criteria will be inconclusive, not contradicted`
+            : prepared.mode === "linked"
+              ? "Preparing: linked repository node_modules"
+              : "Preparing: nothing to install or link";
+      console.log(prepLine);
       const report = await createVerifyRun({
         repoRoot,
         specIr: spec.ir,
         config,
         provider,
         executionRoot: worktree,
+        prepareOutcome: prepared,
       });
       if (format === "json") {
         console.log(JSON.stringify({

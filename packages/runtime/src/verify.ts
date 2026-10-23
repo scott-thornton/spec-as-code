@@ -39,6 +39,9 @@ export interface VerifySweepInput {
   agentVerdicts?: Map<string, { outcome: "supports" | "contradicts" | "inconclusive"; justification: string }>;
   /** Criterion-level chain flips (criterionId -> prior runId), final sweep only. */
   inheritedFlips?: ReadonlyMap<string, string>;
+  /** False only when the environment failed to prepare (see prepare.ts):
+   *  command criteria report inconclusive without executing. */
+  environmentReady?: boolean;
 }
 
 export interface VerifySweepResult {
@@ -80,6 +83,7 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
         ...(approvedCommands.size > 0 ? { approvedCommands } : {}),
         ...(input.phase ? { phase: input.phase } : {}),
         commandRuns,
+        ...(input.environmentReady === false ? { environmentReady: false } : {}),
         ...(input.agentVerdicts ? { agentVerdicts: input.agentVerdicts } : {}),
         ...(input.inheritedFlips ? { inheritedFlips: input.inheritedFlips } : {}),
         now,
@@ -166,10 +170,31 @@ export interface StandaloneVerifyInput {
   revision: string;
   now?: () => string;
   onUsage?: (record: UsageRecord) => void;
+  /** Outcome of preparing the execution environment (verify --run);
+   *  recorded as structured evidence before criteria run. */
+  prepareOutcome?: { mode: "installed" | "linked" | "none" | "failed"; exitCode?: number; detail?: string };
 }
 
 export async function verifyStandalone(input: StandaloneVerifyInput): Promise<VerifySweepResult> {
+  if (input.prepareOutcome) {
+    input.evidence.add({
+      id: `EV-${String(input.evidence.all().length + 1).padStart(4, "0")}`,
+      runId: input.runId,
+      propertyRefs: [],
+      kind: "preparation",
+      outcome: input.prepareOutcome.mode === "failed" ? "inconclusive" : "supports",
+      producer: { type: "runtime" },
+      timestamp: input.now ? input.now() : new Date().toISOString(),
+      repositoryRevision: input.revision,
+      payload: {
+        mode: input.prepareOutcome.mode,
+        ...(input.prepareOutcome.exitCode !== undefined ? { exitCode: input.prepareOutcome.exitCode } : {}),
+        ...(input.prepareOutcome.detail ? { detail: input.prepareOutcome.detail } : {}),
+      },
+    });
+  }
   return verifyProperties({
+    environmentReady: input.prepareOutcome ? input.prepareOutcome.mode !== "failed" : undefined,
     properties: input.specIr.properties,
     runId: input.runId,
     cwd: input.executionRoot ?? input.repoRoot,

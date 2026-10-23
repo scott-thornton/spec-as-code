@@ -38,6 +38,7 @@ import { initialState, persistState, projectState } from "./state.js";
 import { appendUsageRecord, EvidenceStore, FollowupStore, ObservationStore } from "./stores.js";
 import { acquireExecutionLock, releaseExecutionLock, RUN_LOCK_HELD } from "./lock.js";
 import { verifyProperties } from "./verify.js";
+import { runContaminationGuard } from "./guard.js";
 import { attestRun } from "./attestation.js";
 import { computePlanDrift } from "./drift.js";
 
@@ -960,36 +961,36 @@ async function finishRun(
     if (contaminated.length > 0) {
       // Verify against the COMMITTED result, not the live tree: a
       // temporary worktree at resultRevision contains no dirt.
-      const guardWt = path.join(ctx.paths.worktreesDir, `contamination-${ctx.meta.runId}`);
-      try { gitOk(ctx.paths.repoRoot, ["worktree", "remove", "--force", guardWt]); } catch { /* absent */ }
-      gitOk(ctx.paths.repoRoot, ["worktree", "add", "--detach", guardWt, resultRevision]);
-      let guard: Awaited<ReturnType<typeof verifyProperties>>;
-      try {
-        guard = await verifyProperties({
-        properties: ctx.specIr.properties.filter((p) => contaminated.some((c) => c.propertyId === p.id)),
+      // Guard extracted to guard.ts: prepared with the shared helper,
+      // and a guard that cannot prepare does not downgrade - an
+      // environmental failure is not contamination evidence.
+      const guard = await runContaminationGuard({
+        repoRoot: ctx.paths.repoRoot,
         runId: ctx.meta.runId,
-        cwd: guardWt,
-        revision: currentRevision(worktree),
+        resultRevision,
+        specProperties: ctx.specIr.properties.filter((p) => contaminated.some((c) => c.propertyId === p.id)),
         config: ctx.config,
         provider: ctx.provider,
         evidence: ctx.evidence,
         followups: ctx.followups,
         events: ctx.events,
-        now: ctx.now,
-        });
-      } finally {
-        try { gitOk(ctx.paths.repoRoot, ["worktree", "remove", "--force", guardWt]); } catch { /* best effort */ }
-      }
-      const guarded = new Map(guard.states.map((g) => [g.propertyId, g]));
-      sweep.states = sweep.states.map((st) => {
-        if (st.status !== "satisfied") return st;
-        const g = guarded.get(st.propertyId);
-        if (g && g.status !== "satisfied" && g.status !== "waived") {
-          ctx.log(`Property ${st.propertyId}: verification contamination - criterion passed only with excluded dirt (${dirtyExcluded.join(", ")}); downgraded to ${g.status}`);
-          return { ...g, reason: `verification contamination: the criterion passed only with excluded dirt present (strengthened allowDirtyPaths contract); re-verified against the committed result: ${g.reason ?? g.status}` };
-        }
-        return st;
+        log: ctx.log,
+        ...(ctx.now ? { now: ctx.now } : {}),
       });
+      if (!guard.ran) {
+        ctx.log(`Contamination guard: ${guard.reason}`);
+      } else {
+        const guarded = new Map(guard.states.map((g) => [g.propertyId, g]));
+        sweep.states = sweep.states.map((st) => {
+          if (st.status !== "satisfied") return st;
+          const g = guarded.get(st.propertyId);
+          if (g && g.status !== "satisfied" && g.status !== "waived") {
+            ctx.log(`Property ${st.propertyId}: verification contamination - criterion passed only with excluded dirt (${dirtyExcluded.join(", ")}); downgraded to ${g.status}`);
+            return { ...g, reason: `verification contamination: the criterion passed only with excluded dirt present (strengthened allowDirtyPaths contract); re-verified against the committed result: ${g.reason ?? g.status}` };
+          }
+          return st;
+        });
+      }
     }
   }
 
