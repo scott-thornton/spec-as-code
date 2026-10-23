@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+import { DEFAULT_CONFIG } from "@spc/schema";
 import { verifyCriterion } from "./criteria.js";
 
 // Oracle for specs/verification-preparation.yaml (VP-002): with
@@ -23,11 +24,7 @@ const property = {
   acceptance: [criterion],
 } as never;
 
-const config = {
-  execution: { commandTimeoutMs: 10_000, maxOutputBytes: 65536 },
-  commands: {},
-  verification: {},
-} as never;
+const config = DEFAULT_CONFIG;
 
 writeFileSync(path.join(root, "write-marker.cjs"), "require('node:fs').writeFileSync('marker.txt', 'ran');\n", "utf8");
 
