@@ -50,6 +50,7 @@ function makeRepo(kind: "broken-pnpm" | "plain"): string {
 function guardFor(repo: string) {
   const paths = spcPaths(repo);
   const runId = "run-guard-1";
+  mkdirSync(paths.runDir(runId), { recursive: true });
   const events = new EventStore(paths.eventsFile(runId), runId);
   const resultRevision = spawnSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).stdout!.trim();
   return () =>
