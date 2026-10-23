@@ -1,0 +1,47 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: followup-resolve-multispec
+  title: Follow-up resolution works in multi-spec repositories
+goal: >
+  Field report (slerp CHK3639, run-mvjooj61): the answering agent could
+  not resolve a confirm follow-up - spc followup resolve called the
+  single-spec resolver with no way to pass a spec, and every multi-spec
+  repository (slerp's normal state: one spec per ticket) dies with
+  "multiple specs; pass an explicit file" at that call, even with --run
+  given. The absurdity is that the run being resolved already records
+  its specId in its own metadata. Derive the spec context from the run,
+  never from a single-spec assumption, and name the missing spec id
+  clearly when a run references a spec that is no longer under specs/.
+requirements:
+  - id: FR-001
+    statement: >
+      `spc followup resolve <id> --run <runId> --option <optionId>
+      [--note <text>]` works in repositories with multiple specs: the
+      spec context is derived from the run's recorded specId (compiled
+      from specs/ and matched by id), and the same derivation applies
+      when --run is omitted and the follow-up id is unique across runs.
+      A criterion-carrying follow-up resolves and records its human
+      evidence against the correct property of the correct spec.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: FR-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/followup-resolve-multispec.test.ts
+        discriminating: true
+  - id: FR-002
+    statement: >
+      When a run references a spec id that is not present under specs/
+      (deleted or renamed after the run), resolve exits nonzero with an
+      error naming that spec id - not a generic multi-spec complaint
+      about the repository.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: FR-002-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/followup-resolve-multispec.test.ts
+        discriminating: true
