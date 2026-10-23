@@ -1,0 +1,45 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: incremental-builds
+  title: Warm builds stop paying full compile cost
+goal: >
+  Dependency-inclusive criterion commands (the stale-dist fence from
+  composition-hardening) made every criterion self-sufficient - and made
+  every warm rebuild pay full compile cost: a no-change
+  --filter X... build still costs 3-7 seconds, multiplied across every
+  command criterion on every board run, CI verify, and dry-run
+  preflight. tsc recompiles unconditionally; pnpm's task cache does not
+  make it free. Turning on incremental compilation keeps the
+  self-sufficiency guarantee and stops charging for work whose output
+  already exists.
+requirements:
+  - id: IB-001
+    statement: >
+      Builds are incremental: the shared base tsconfig declares
+      incremental, a dependency-inclusive package build produces a
+      tsbuildinfo artifact, and a warm no-change rebuild of the same
+      closure does not re-emit - the previously built artifact's mtime
+      is unchanged after a rebuild.
+    priority: must
+    scope:
+      include: [packages/cli/src/**, tsconfig.base.json]
+    acceptance:
+      - id: IB-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/incremental-builds.test.ts
+        discriminating: true
+  - id: IB-002
+    statement: >
+      Incremental state never pollutes the repository or breaks cold
+      builds: every produced tsbuildinfo file lives where .gitignore
+      already covers it (git check-ignore accepts it), so checkouts and
+      CI stay cold-build-correct.
+    priority: must
+    scope:
+      include: [packages/cli/src/**, tsconfig.base.json]
+    acceptance:
+      - id: IB-002-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/incremental-builds.test.ts
+        discriminating: true
