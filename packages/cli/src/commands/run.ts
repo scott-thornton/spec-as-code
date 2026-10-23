@@ -145,5 +145,6 @@ export function runReplay(runId: string, cwd?: string): number {
   console.log(`Projection: ${report.projectionMatches ? "state.json follows from the event log" : "DIVERGED"}`);
   for (const d of report.projectionDiffs) console.log(`  - ${d}`);
   console.log(`Attestation: ${report.attestation}${report.attestationDetail ? ` (${report.attestationDetail})` : ""}`);
+  console.log(`Anchor: ${report.anchor}${report.anchorDetail ? ` (${report.anchorDetail})` : ""}`);
   return report.ok ? 0 : 1;
 }

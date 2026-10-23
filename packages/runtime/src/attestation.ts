@@ -32,6 +32,12 @@ export interface RunAttestation {
   evidenceHead: string;
   resultRevision?: string;
   attestedAt: string;
+  /**
+   * Identity of the git anchor commit when one was created. Replay reads
+   * it back - and also finds anchors independently by scanning history,
+   * so a forger cannot hide behind a stripped field.
+   */
+  gitAnchor?: { ref: string; commit: string };
 }
 
 /** Digest committing to the ordered evidence list: ids and digests. */
@@ -43,6 +49,26 @@ export function attestRun(ctx: RunContext, status: RunStatus, resultRevision?: s
   const eventCount = ctx.events.length;
   const eventChainHead = ctx.events.chainHead() ?? "sha256:" + "0".repeat(64);
   const evidenceHead = evidenceHeadOf([...ctx.evidence.all()]);
+  // Git anchor: an empty commit on the run branch carrying the
+  // commitment. Opt-in - in current-branch in-place mode it is skipped
+  // to avoid surprise commits on the user's own branch. The commit is
+  // created BEFORE the attestation is written so the record can carry
+  // the anchor's identity for replay to read back.
+  const inPlaceCurrent =
+    ctx.config.execution.inPlace && ctx.config.execution.inPlaceBranch === "current";
+  let gitAnchor: { ref: string; commit: string } | undefined;
+  if (ctx.config.verification.attestInGit && ctx.worktreePath && !inPlaceCurrent) {
+    const branch = ctx.worktreeBranch ?? ctx.meta.branch;
+    const commit = commitEmpty(ctx.worktreePath, `spc: attest run ${ctx.meta.runId} (status ${status})`, {
+      "SPC-Run-Id": ctx.meta.runId,
+      "SPC-Attestation-Event-Count": String(eventCount),
+      "SPC-Attestation-Event-Head": eventChainHead,
+      "SPC-Attestation-Evidence-Head": evidenceHead,
+    });
+    gitAnchor = { ref: `refs/heads/${branch}`, commit };
+  } else if (ctx.config.verification.attestInGit && inPlaceCurrent) {
+    ctx.log("attestation: recorded in run directory only (inPlaceBranch current would land an empty commit on your branch)");
+  }
   const attestation = {
     schema: "spc-run-attestation/1" as const,
     runId: ctx.meta.runId,
@@ -53,25 +79,10 @@ export function attestRun(ctx: RunContext, status: RunStatus, resultRevision?: s
     evidenceHead,
     ...(resultRevision ? { resultRevision } : {}),
     attestedAt: ctx.now(),
+    ...(gitAnchor ? { gitAnchor } : {}),
   };
   writeFileSync(path.join(ctx.paths.runDir(ctx.meta.runId), "attestation.json"), JSON.stringify(attestation, null, 2) + "\n", "utf8");
   ctx.events.append("RUN_ATTESTED", { ...attestation });
-
-  // Git anchor: an empty commit on the run branch carrying the
-  // commitment. Opt-in - in current-branch in-place mode it is skipped
-  // to avoid surprise commits on the user's own branch.
-  const inPlaceCurrent =
-    ctx.config.execution.inPlace && ctx.config.execution.inPlaceBranch === "current";
-  if (ctx.config.verification.attestInGit && ctx.worktreePath && !inPlaceCurrent) {
-    commitEmpty(ctx.worktreePath, `spc: attest run ${ctx.meta.runId} (status ${status})`, {
-      "SPC-Run-Id": ctx.meta.runId,
-      "SPC-Attestation-Event-Count": String(eventCount),
-      "SPC-Attestation-Event-Head": eventChainHead,
-      "SPC-Attestation-Evidence-Head": evidenceHead,
-    });
-  } else if (ctx.config.verification.attestInGit && inPlaceCurrent) {
-    ctx.log("attestation: recorded in run directory only (inPlaceBranch current would land an empty commit on your branch)");
-  }
   return attestation;
 }
 

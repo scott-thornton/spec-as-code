@@ -8,6 +8,7 @@ import { SpcError } from "@spc/core";
 import { initialState, projectState } from "./state.js";
 import { EvidenceStore } from "./stores.js";
 import { evidenceHeadOf, type RunAttestation } from "./attestation.js";
+import { git } from "@spc/repo";
 
 /**
  * `spc run replay`: reconstruct what the run believed at each transition
@@ -34,6 +35,8 @@ export interface ReplayReport {
   projectionDiffs: string[];
   attestation: "verified" | "extended-after-attestation" | "missing" | "broken";
   attestationDetail?: string;
+  anchor: "verified" | "mismatch" | "unavailable" | "unanchored";
+  anchorDetail?: string;
 }
 
 function stateDiffs(persisted: RunState, replayed: RunState): string[] {
@@ -119,7 +122,62 @@ export function replayRun(runsDir: string, runId: string, plan: Plan | null): Re
     }
   }
 
-  const ok = projectionMatches && attestation !== "broken";
+  // Git anchor check: the local chain can be coherently rewritten by
+  // anyone who can write the files; an anchor commit in git history
+  // cannot (history rewrite is outside the threat model). Anchors are
+  // found INDEPENDENTLY - by scanning history for the run's trailer -
+  // not only via the gitAnchor field a forger controls.
+  let anchor: ReplayReport["anchor"] = "unanchored";
+  let anchorDetail: string | undefined;
+  const repoRoot = path.resolve(runsDir, "..", "..");
+  const anchorTrailers = (commit: string): { eventHead?: string; evidenceHead?: string } => {
+    const msg = git(repoRoot, ["log", "-1", "--format=%B", commit]).stdout;
+    const eventHead = /^SPC-Attestation-Event-Head:[ \t]*(\S+)/m.exec(msg)?.[1];
+    const evidenceHead = /^SPC-Attestation-Evidence-Head:[ \t]*(\S+)/m.exec(msg)?.[1];
+    return { eventHead, evidenceHead };
+  };
+  const recordedAnchor = (JSON.parse(existsSync(attestationFile) ? readFileSync(attestationFile, "utf8") : "null") as RunAttestation | null)
+    ?.gitAnchor;
+  const commitments = new Map<string, { eventHead?: string; evidenceHead?: string }>();
+  if (recordedAnchor) {
+    const present = git(repoRoot, ["cat-file", "-e", `${recordedAnchor.commit}^{commit}`]).ok;
+    if (!present) {
+      anchor = "unavailable";
+      anchorDetail = `anchor commit ${recordedAnchor.commit.slice(0, 12)} is recorded but absent from git history`;
+    } else {
+      commitments.set(recordedAnchor.commit, anchorTrailers(recordedAnchor.commit));
+    }
+  }
+  if (anchor !== "unavailable") {
+    // Match only attestation commits: the RESULT commit also carries
+    // an SPC-Run-Id trailer, and treating it as an anchor commitment
+    // would flag every clean run as a mismatch.
+    const scan = git(repoRoot, ["log", "--all", "--grep", `spc: attest run ${runId}`, "--format=%H"]);
+    for (const line of scan.stdout.split("\n").map((l) => l.trim()).filter(Boolean)) {
+      if (commitments.has(line)) continue;
+      const trailers = anchorTrailers(line);
+      if (trailers.eventHead !== undefined || trailers.evidenceHead !== undefined) {
+        commitments.set(line, trailers);
+      }
+    }
+    if (!existsSync(attestationFile) && commitments.size > 0) {
+      anchor = "unavailable";
+      anchorDetail = "git history holds an anchor commitment for this run but the local attestation record is gone";
+    } else if (commitments.size > 0) {
+      const recorded = JSON.parse(readFileSync(attestationFile, "utf8")) as RunAttestation;
+      const disagreements = [...commitments.entries()].filter(
+        ([, t]) => t.eventHead !== recorded.eventChainHead || t.evidenceHead !== recorded.evidenceHead,
+      );
+      if (disagreements.length > 0) {
+        anchor = "mismatch";
+        anchorDetail = `${disagreements.length} git anchor commit(s) commit to different heads than the attestation records - the local history was rewritten after the commitment`;
+      } else {
+        anchor = "verified";
+      }
+    }
+  }
+
+  const ok = projectionMatches && attestation !== "broken" && anchor !== "mismatch" && anchor !== "unavailable";
   return {
     runId,
     ok,
@@ -130,5 +188,7 @@ export function replayRun(runsDir: string, runId: string, plan: Plan | null): Re
     projectionDiffs,
     attestation,
     ...(attestationDetail ? { attestationDetail } : {}),
+    anchor,
+    ...(anchorDetail ? { anchorDetail } : {}),
   };
 }
