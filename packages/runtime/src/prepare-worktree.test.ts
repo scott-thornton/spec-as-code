@@ -29,6 +29,10 @@ describe("prepareDisposableWorktree (VP-001)", () => {
     gitsh(["add", "."], repo);
     gitsh(["commit", "-q", "-m", "base"], repo);
     const wt = path.join(root, "pnpm-wt");
+    // The disposable worktree contains the checked-out project.
+    mkdirSync(wt, { recursive: true });
+    writeFileSync(path.join(wt, "package.json"), JSON.stringify({ name: "p", private: true }), "utf8");
+    writeFileSync(path.join(wt, "pnpm-lock.yaml"), "this is not a lockfile\n", "utf8");
     const r = prepareDisposableWorktree(repo, wt);
     expect(r.mode).toBe("failed");
     expect(r.detail).toBeTruthy();
