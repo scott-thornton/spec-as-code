@@ -51,10 +51,12 @@ function guardFor(repo: string) {
   const paths = spcPaths(repo);
   const runId = "run-guard-1";
   const events = new EventStore(paths.eventsFile(runId), runId);
+  const resultRevision = spawnSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).stdout!.trim();
   return () =>
     runContaminationGuard({
       repoRoot: repo,
       runId,
+      resultRevision,
       specProperties: [SPEC_PROPERTY as never],
       config: { execution: { commandTimeoutMs: 10_000, maxOutputBytes: 65536 }, commands: {}, verification: {} } as never,
       provider: null,
