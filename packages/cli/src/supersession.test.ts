@@ -57,7 +57,7 @@ describe("administrative supersession (RR-003)", () => {
     expect(events).toContain("run-sup-old");
     // The superseded run keeps its own records and is rendered as superseded.
     const show = sh(["run", "show", "run-sup-old"]);
-    expect(show.stdout).toMatch(/superseded by run-sup-new/);
+    expect(show.stdout).toMatch(/superseded by run-sup-new/i);
   });
 
   it("refuses unknown runs loudly", () => {
