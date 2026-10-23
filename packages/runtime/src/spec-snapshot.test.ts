@@ -44,13 +44,14 @@ gitsh(["add", "."]);
 gitsh(["commit", "-q", "-m", "base"]);
 
 const compiled = compileSpecFile(path.join(root, "specs", "rr-snap-fixture.yaml"));
-if (!compiled.ok || !compiled.ir) throw new Error("fixture spec does not compile");
+const fixtureIr = compiled.ok ? compiled.ir : null;
+if (!fixtureIr) throw new Error("fixture spec does not compile");
 
 describe("spec snapshots (RR-002)", () => {
   it("a verification run freezes the spec source and digest it obligated against", async () => {
     const report = await createVerifyRun({
       repoRoot: root,
-      specIr: compiled.ir,
+      specIr: fixtureIr,
       config: {
         provider: { name: "harness" },
         execution: { commandTimeoutMs: 10_000, maxOutputBytes: 65536 },
@@ -61,7 +62,7 @@ describe("spec snapshots (RR-002)", () => {
     });
     const snapshotFile = path.join(report.runDir, "spec-snapshot.yaml");
     const snapshot = readFileSync(snapshotFile, "utf8");
-    expect(snapshot).toContain(compiled.ir.digest);
+    expect(snapshot).toContain(fixtureIr.digest);
     expect(snapshot).toContain("rr-snap-fixture");
     // The frozen source is the actual spec text, reconstructible verbatim.
     expect(snapshot).toContain("The frozen spec source");
