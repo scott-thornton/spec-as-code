@@ -1,0 +1,62 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: records-and-replacement
+  title: Visible integrity failures, frozen spec snapshots, and administrative supersession
+goal: >
+  The last three slices of the endorsed programme as one verification
+  boundary - they are all small records-and-rendering changes. A
+  load-refusing run currently disappears from status with only a stderr
+  whisper (the run-mvix4mfx lesson: corruption must be VISIBLE, never
+  silent); run directories and exported bundles cannot reconstruct the
+  spec text a run obligated against after amendment (the known export
+  gap); and there is no way to designate a valid run as the
+  administrative replacement of a corrupt one without pretending the
+  corrupt history never existed.
+requirements:
+  - id: RR-001
+    statement: >
+      `spc status <specFile>` renders an INTEGRITY section naming every
+      run of that spec whose records fail to load (run id and the first
+      line of the error), so a corrupted run is visible in the normal
+      view instead of silently skipped; the runs themselves stay
+      load-refusing and are never treated as evidence.
+    priority: must
+    scope:
+      include: [packages/cli/src/**, packages/runtime/src/**]
+    acceptance:
+      - id: RR-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/records-integrity.test.ts
+        discriminating: true
+  - id: RR-002
+    statement: >
+      Every run directory (apply and verify runs) carries a frozen spec
+      snapshot: spec-snapshot.yaml containing the spec source text and
+      its compiled digest, written at run creation, so historical audit
+      and bundle export can always reconstruct what the run obligated
+      against even after the spec is amended.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: RR-002-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/spec-snapshot.test.ts
+        discriminating: true
+  - id: RR-003
+    statement: >
+      `spc run supersede <supersededRunId> --by <runId>` records an
+      explicit administrative replacement: a SUPERSEDED_RUN event on the
+      superseding run, supersedesRunId in its metadata, and status
+      renders the superseded run as superseded (by which run) - with no
+      ancestry implied, no evidence inherited, and no verdict rewritten;
+      the superseded run keeps its own records and forensic history.
+    priority: must
+    scope:
+      include: [packages/cli/src/**, packages/runtime/src/**, packages/schema/src/**]
+    acceptance:
+      - id: RR-003-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/supersession.test.ts
+        discriminating: true
