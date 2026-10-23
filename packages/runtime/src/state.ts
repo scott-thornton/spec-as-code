@@ -27,6 +27,10 @@ export interface RunMeta {
    *  same spec digest, git-ancestor predecessor). Chronology is not
    *  causality - two independent runs never link. */
   parentRunId?: string;
+  /** Administrative replacement designation (spc run supersede): this
+   *  run replaces another for INTERPRETATION - no ancestry implied, no
+   *  evidence inherited, no verdict rewritten. */
+  supersedesRunId?: string;
   createdAt: string;
 }
 

@@ -3,11 +3,19 @@ import path from "node:path";
 import { SpcError } from "@spc/core";
 import { compileSpecFile, diffStat, git } from "@spc/repo";
 import { renderPrDraft } from "@spc/renderer";
-import { cancelRun, exportRun, loadRunView, replayRun, resolveChain } from "@spc/runtime";
+import { cancelRun, exportRun, loadRunView, replayRun, resolveChain, runSupersede, supersededByLookup } from "@spc/runtime";
 import { loadRunMeta as loadRunMetaFromRuntime } from "@spc/runtime";
 import { resolveRepoRoot } from "../context.js";
 
 /** `spc run show <runId>` - reconstruct what happened, without chat logs. */
+/** `spc run supersede <runId> --by <runId>`: administrative replacement. */
+export function runSupersedeCommand(runId: string, byRunId: string, cwd?: string): number {
+  const repoRoot = resolveRepoRoot(cwd);
+  const result = runSupersede(repoRoot, runId, byRunId);
+  console.log(`Recorded: run ${result.byRunId} supersedes run ${result.supersededRunId} (administrative replacement - no ancestry, no evidence inheritance, no verdict rewrite).`);
+  return 0;
+}
+
 export function runShow(runId: string, cwd?: string): number {
   const repoRoot = resolveRepoRoot(cwd);
   const view = loadRunView(path.join(repoRoot, ".spc", "runs"), runId);
@@ -19,6 +27,10 @@ export function runShow(runId: string, cwd?: string): number {
     console.log(readFileSync(summaryFile, "utf8"));
   } else {
     console.log(`Run ${runId}: status ${view.state.status} (no summary written yet)`);
+  }
+  const supersededBy = supersededByLookup(path.join(repoRoot, ".spc", "runs"), runId);
+  if (supersededBy) {
+    console.log(`\nSuperseded by ${supersededBy} (administrative replacement; this run's records are kept, never inherited)`);
   }
   console.log(`\nRun directory: ${path.join(repoRoot, ".spc", "runs", runId)}`);
   return 0;

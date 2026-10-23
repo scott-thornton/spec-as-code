@@ -12,6 +12,7 @@ import { spcPaths } from "./paths.js";
 import { listRunIds, loadRunMeta, newRunId, RUNTIME_ERROR, type RunMeta } from "./run.js";
 import { applyEvent, initialState, persistState } from "./state.js";
 import { EvidenceStore, FollowupStore } from "./stores.js";
+import { writeSpecSnapshot, findSpecSource } from "./snapshot.js";
 import { attestRecords } from "./attestation.js";
 import { verifyStandalone } from "./verify.js";
 
@@ -35,6 +36,22 @@ export function loadRunView(runsDir: string, runId: string): RunView | null {
   const evidence = new EvidenceStore(path.join(dir, "evidence.jsonl"));
   evidence.load();
   return { meta, state, followups: [...followups.all()], evidence: [...evidence.all()] };
+}
+
+/** Runs of this spec whose records fail to load: corruption must be
+ *  VISIBLE in the normal views, never silently skipped (run-mvix4mfx). */
+export function integrityFailuresForSpec(runsDir: string, specId: string): { runId: string; error: string }[] {
+  const failures: { runId: string; error: string }[] = [];
+  for (const runId of listRunIds(runsDir)) {
+    const meta = loadRunMeta(runsDir, runId);
+    if (!meta || meta.specId !== specId) continue;
+    try {
+      loadRunView(runsDir, runId);
+    } catch (e) {
+      failures.push({ runId, error: (e as Error).message.split("\n")[0] ?? String(e) });
+    }
+  }
+  return failures;
 }
 
 export function latestRunViewForSpec(runsDir: string, specId: string): RunView | null {
@@ -268,6 +285,10 @@ export async function createVerifyRun(options: StandaloneVerifyOptions): Promise
   const runId = `v-${newRunId().slice(4)}`;
   const runDir = paths.runDir(runId);
   mkdirSync(runDir, { recursive: true });
+  {
+    const source = findSpecSource(paths.specsDir, options.specIr.spec.metadata.id);
+    if (source !== null) writeSpecSnapshot(paths, runId, options.specIr, source, now);
+  }
 
   const { currentRevision, statusPorcelain } = await import("@spc/repo");
   const revision = currentRevision(options.repoRoot);

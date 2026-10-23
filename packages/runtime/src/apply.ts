@@ -40,6 +40,7 @@ import { acquireExecutionLock, releaseExecutionLock, RUN_LOCK_HELD } from "./loc
 import { verifyProperties } from "./verify.js";
 import { runContaminationGuard } from "./guard.js";
 import { attestRun } from "./attestation.js";
+import { writeSpecSnapshot, findSpecSource } from "./snapshot.js";
 import { computePlanDrift } from "./drift.js";
 
 export { RUNTIME_ERROR };
@@ -223,6 +224,10 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
   }
   mkdirSync(runDir, { recursive: true });
   mkdirSync(path.join(runDir, "amendments"), { recursive: true });
+  {
+    const source = findSpecSource(paths.specsDir, plan.spec.id);
+    if (source !== null) writeSpecSnapshot(paths, runId, specIr, source, now);
+  }
 
   const snapshot = observeRepository(options.repoRoot, specIr, now);
   writeFileSync(paths.snapshotFile(runId), JSON.stringify(snapshot, null, 2), "utf8");

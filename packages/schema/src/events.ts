@@ -38,6 +38,7 @@ export const eventTypeSchema = z.enum([
   "RUN_FAILED",
   "RUN_ATTESTED",
   "BUDGET_SIGNAL",
+  "SUPERSEDED_RUN",
 ]);
 
 export const eventSchema = z.strictObject({

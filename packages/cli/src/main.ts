@@ -9,7 +9,7 @@ import { runVerify } from "./commands/verify.js";
 import { runReconcile } from "./commands/reconcile.js";
 import { runDiff, runStatus } from "./commands/status.js";
 import { runFollowupResolve, runFollowups } from "./commands/followups.js";
-import { runCancel, runExport, runPr, runReplay, runShow } from "./commands/run.js";
+import { runCancel, runExport, runPr, runReplay, runShow, runSupersedeCommand } from "./commands/run.js";
 import { runAgentList, runAgentRespond, runAgentShow, runAgentValidate, runAgentDryRun, runAgentWait, type AgentShowPart } from "./commands/agent.js";
 import { runSkills, runUseSkill } from "./commands/skills.js";
 import { runPolicyExplain } from "./commands/policy.js";
@@ -259,6 +259,14 @@ run
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action((runId: string, opts: { cwd: string }) => {
     process.exitCode = runShow(runId, opts.cwd);
+  });
+run
+  .command("supersede <runId>")
+  .description("record this run as the administrative replacement of another (no ancestry, no inheritance, no verdict rewrite)")
+  .requiredOption("--by <runId>", "the run that replaces it")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action((runId: string, opts: { by: string; cwd: string }) => {
+    process.exitCode = runSupersedeCommand(runId, opts.by, opts.cwd);
   });
 run
   .command("cancel <runId>")

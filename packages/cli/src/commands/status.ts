@@ -1,7 +1,7 @@
 import path from "node:path";
 import { renderDiff, renderStatus } from "@spc/renderer";
 import { jsonDiff, jsonStatus } from "./json-views.js";
-import { latestRunViewForSpec, loadRunView, resolveChain } from "@spc/runtime";
+import { integrityFailuresForSpec, latestRunViewForSpec, loadRunView, resolveChain } from "@spc/runtime";
 import { resolveAllSpecs, resolveRepoRoot } from "../context.js";
 
 /**
@@ -48,6 +48,12 @@ export function runStatus(specFile: string | undefined, cwd?: string, format: "t
       console.log(`Effective chain status: no run recorded for this spec (0/${ir.properties.filter((pp) => pp.priority === "must").length} must established)`);
       console.log("");
       console.log(renderStatus({ specIr: ir, runState: null, followups: [], evidence: [] }));
+      const broken = integrityFailuresForSpec(runsDir, ir.spec.metadata.id);
+      if (broken.length > 0) {
+        console.log("INTEGRITY");
+        for (const b of broken) console.log(`  ${b.runId}: ${b.error}`);
+        console.log("  (corrupted runs are never treated as evidence; records stay load-refusing)");
+      }
       continue;
     }
     const chain = resolveChain(runsDir, view.meta.runId);
@@ -59,6 +65,13 @@ export function runStatus(specFile: string | undefined, cwd?: string, format: "t
     }).length;
     const unresolved = musts.length - mustsOk;
     if (multi) { console.log(`### ${ir.spec.metadata.id}`); console.log(""); }
+    const broken = integrityFailuresForSpec(runsDir, ir.spec.metadata.id);
+    if (broken.length > 0) {
+      console.log("INTEGRITY");
+      for (const b of broken) console.log(`  ${b.runId}: ${b.error}`);
+      console.log("  (corrupted runs are never treated as evidence; records stay load-refusing)");
+      console.log("");
+    }
     console.log(`Effective chain status (${chain.length} linked run${chain.length > 1 ? "s" : ""}, head ${view.meta.runId}):`);
     console.log(`  ${mustsOk}/${musts.length} must satisfied | newly satisfied in head: ${mustsOk - inherited} | inherited from chain: ${inherited} | unresolved: ${unresolved}`);
     console.log("");

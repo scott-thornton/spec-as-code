@@ -1,6 +1,8 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { SpcError } from "@spc/core";
+import { spcPaths } from "./paths.js";
+import { EventStore } from "./events.js";
 import { configSchema, planSchema, type Config, type Plan } from "@spc/schema";
 import { parse as parseYaml } from "yaml";
 import { compileSpecFile } from "@spc/repo";
@@ -86,6 +88,39 @@ export function listPlans(plansDir: string): string[] {
 export function latestPlanFile(plansDir: string): string | null {
   const plans = listPlans(plansDir);
   return plans.length > 0 ? path.join(plansDir, plans[plans.length - 1]!) : null;
+}
+
+/** Who has designated themselves the administrative replacement of this
+ *  run, if anyone: a reporting relation, never ancestry or inheritance. */
+export function supersededByLookup(runsDir: string, runId: string): string | null {
+  for (const other of listRunIds(runsDir)) {
+    const meta = loadRunMeta(runsDir, other);
+    if (meta?.supersedesRunId === runId) return meta.runId;
+  }
+  return null;
+}
+
+/** Record an explicit administrative replacement: an event on the
+ *  superseding run, a metadata field, nothing else. No ancestry, no
+ *  evidence inheritance, no verdict rewrite; the superseded run keeps
+ *  its own records and forensic history. */
+export function runSupersede(
+  repoRoot: string,
+  supersededRunId: string,
+  byRunId: string,
+  now: () => string = () => new Date().toISOString(),
+): { supersededRunId: string; byRunId: string } {
+  const paths = spcPaths(repoRoot);
+  const superseded = loadRunMeta(paths.runsDir, supersededRunId);
+  if (!superseded) throw new SpcError(RUNTIME_ERROR, `run ${supersededRunId} not found under ${paths.runsDir}`);
+  const by = loadRunMeta(paths.runsDir, byRunId);
+  if (!by) throw new SpcError(RUNTIME_ERROR, `run ${byRunId} not found under ${paths.runsDir}`);
+  const events = new EventStore(paths.eventsFile(byRunId), byRunId, now);
+  events.load();
+  events.append("SUPERSEDED_RUN", { supersededRunId, byRunId });
+  const metaFile = paths.metadataFile(byRunId);
+  writeFileSync(metaFile, JSON.stringify({ ...by, supersedesRunId: supersededRunId }, null, 2), "utf8");
+  return { supersededRunId, byRunId };
 }
 
 export function loadRunMeta(runsDir: string, runId: string): RunMeta | null {
