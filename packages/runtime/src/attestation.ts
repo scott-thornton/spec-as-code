@@ -1,7 +1,7 @@
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { digestOf } from "@spc/core";
-import { commitEmpty } from "@spc/repo";
+import { commitEmpty, currentRevision, git } from "@spc/repo";
 import type { Evidence, RunStatus } from "@spc/schema";
 import type { EventStore } from "./events.js";
 import type { EvidenceStore } from "./stores.js";
@@ -57,6 +57,12 @@ export function attestRun(ctx: RunContext, status: RunStatus, resultRevision?: s
   const inPlaceCurrent =
     ctx.config.execution.inPlace && ctx.config.execution.inPlaceBranch === "current";
   let gitAnchor: { ref: string; commit: string } | undefined;
+  const trailerLines = [
+    `SPC-Run-Id: ${ctx.meta.runId}`,
+    `SPC-Attestation-Event-Count: ${eventCount}`,
+    `SPC-Attestation-Event-Head: ${eventChainHead}`,
+    `SPC-Attestation-Evidence-Head: ${evidenceHead}`,
+  ].join("\n");
   if (ctx.config.verification.attestInGit && ctx.worktreePath && !inPlaceCurrent) {
     const branch = ctx.worktreeBranch ?? ctx.meta.branch;
     const commit = commitEmpty(ctx.worktreePath, `spc: attest run ${ctx.meta.runId} (status ${status})`, {
@@ -66,8 +72,32 @@ export function attestRun(ctx: RunContext, status: RunStatus, resultRevision?: s
       "SPC-Attestation-Evidence-Head": evidenceHead,
     });
     gitAnchor = { ref: `refs/heads/${branch}`, commit };
-  } else if (ctx.config.verification.attestInGit && inPlaceCurrent) {
-    ctx.log("attestation: recorded in run directory only (inPlaceBranch current would land an empty commit on your branch)");
+  } else if (ctx.config.verification.attestInGit && inPlaceCurrent && ctx.worktreePath) {
+    // Current-branch runs get the anchor WITHOUT a commit on the user's
+    // branch: a git note attaches the commitment to the result revision.
+    // A local note ref fences log-only rewrites and accidental
+    // corruption; it is not remotely protected history, and the
+    // reporting never claims more than that.
+    const target = resultRevision ?? currentRevision(ctx.worktreePath);
+    if (!target) {
+      ctx.log("attestation: no revision to annotate; recorded in run directory only");
+    } else {
+    const noteOk = git(ctx.worktreePath, [
+      "notes",
+      "--ref=spc-attestations",
+      "add",
+      "-f",
+      "-m",
+      `spc: attest run ${ctx.meta.runId} (status ${status})\n\n${trailerLines}`,
+      target,
+    ]);
+    if (noteOk.ok) {
+      gitAnchor = { ref: "refs/notes/spc-attestations", commit: target };
+      ctx.log(`attestation: anchored as a git note on ${target.slice(0, 12)} (refs/notes/spc-attestations); push the ref for remote protection`);
+    } else {
+      ctx.log(`attestation: git note anchor failed (${(noteOk.stderr || "").split("\n")[0]}); recorded in run directory only`);
+    }
+    }
   }
   const attestation = {
     schema: "spc-run-attestation/1" as const,

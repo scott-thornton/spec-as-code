@@ -132,8 +132,17 @@ export function replayRun(runsDir: string, runId: string, plan: Plan | null): Re
   const repoRoot = path.resolve(runsDir, "..", "..");
   const anchorTrailers = (commit: string): { eventHead?: string; evidenceHead?: string } => {
     const msg = git(repoRoot, ["log", "-1", "--format=%B", commit]).stdout;
-    const eventHead = /^SPC-Attestation-Event-Head:[ \t]*(\S+)/m.exec(msg)?.[1];
-    const evidenceHead = /^SPC-Attestation-Evidence-Head:[ \t]*(\S+)/m.exec(msg)?.[1];
+    let eventHead = /^SPC-Attestation-Event-Head:[ \t]*(\S+)/m.exec(msg)?.[1];
+    let evidenceHead = /^SPC-Attestation-Evidence-Head:[ \t]*(\S+)/m.exec(msg)?.[1];
+    if (eventHead === undefined || evidenceHead === undefined) {
+      // Note-borne anchors (current-branch runs): the commitment lives
+      // in the note attached to the commit, not its message.
+      const note = git(repoRoot, ["notes", "--ref=spc-attestations", "show", commit]);
+      if (note.ok) {
+        eventHead = eventHead ?? /^SPC-Attestation-Event-Head:[ \t]*(\S+)/m.exec(note.stdout)?.[1];
+        evidenceHead = evidenceHead ?? /^SPC-Attestation-Evidence-Head:[ \t]*(\S+)/m.exec(note.stdout)?.[1];
+      }
+    }
     return { eventHead, evidenceHead };
   };
   const recordedAnchor = (JSON.parse(existsSync(attestationFile) ? readFileSync(attestationFile, "utf8") : "null") as RunAttestation | null)
@@ -149,6 +158,24 @@ export function replayRun(runsDir: string, runId: string, plan: Plan | null): Re
     }
   }
   if (anchor !== "unavailable") {
+    // Note-borne anchors: enumerate the notes ref and adopt every note
+    // naming this run - the forgery defense cannot depend on the
+    // gitAnchor field in attestation.json, which the forger controls.
+    const notesList = git(repoRoot, ["notes", "--ref=spc-attestations", "list"]);
+    if (notesList.ok) {
+      for (const line of notesList.stdout.split("\n").map((l) => l.trim()).filter(Boolean)) {
+        const noted = line.split(/\s+/).pop()!;
+        if (commitments.has(noted)) continue;
+        const note = git(repoRoot, ["notes", "--ref=spc-attestations", "show", noted]);
+        if (!note.ok) continue;
+        if (!note.stdout.includes(`spc: attest run ${runId}`)) continue;
+        const eventHead = /^SPC-Attestation-Event-Head:[ \t]*(\S+)/m.exec(note.stdout)?.[1];
+        const evidenceHead = /^SPC-Attestation-Evidence-Head:[ \t]*(\S+)/m.exec(note.stdout)?.[1];
+        if (eventHead !== undefined || evidenceHead !== undefined) {
+          commitments.set(noted, { eventHead, evidenceHead });
+        }
+      }
+    }
     // Match only attestation commits: the RESULT commit also carries
     // an SPC-Run-Id trailer, and treating it as an anchor commitment
     // would flag every clean run as a mismatch.
