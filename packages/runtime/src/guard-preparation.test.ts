@@ -70,17 +70,17 @@ function guardFor(repo: string) {
 }
 
 describe("contamination guard preparation (VP-004)", () => {
-  it("a guard that cannot prepare reports it and downgrades nothing", () => {
+  it("a guard that cannot prepare reports it and downgrades nothing", async () => {
     const repo = makeRepo("broken-pnpm");
-    const result = guardFor(repo)();
+    const result = await guardFor(repo)();
     expect(result.ran).toBe(false);
     expect(result.reason ?? "").toMatch(/prepar/i);
     expect(result.states.length).toBe(0);
   });
 
-  it("a guard that prepares runs its criteria", () => {
+  it("a guard that prepares runs its criteria", async () => {
     const repo = makeRepo("plain");
-    const result = guardFor(repo)();
+    const result = await guardFor(repo)();
     expect(result.ran).toBe(true);
     expect(result.states.length).toBe(1);
     expect(result.states[0]!.propertyId).toBe("VPG-001");
