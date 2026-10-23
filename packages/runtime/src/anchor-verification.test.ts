@@ -20,13 +20,15 @@ function gitsh(args: string[], cwd = root): string {
   return (r.stdout ?? "").trim();
 }
 
-mkdirSync(path.join(root, "worktree"), { recursive: true });
-gitsh(["init", "-q", "-b", "main"], path.join(root, "worktree"));
-gitsh(["config", "user.email", "test@example.com"], path.join(root, "worktree"));
-gitsh(["config", "user.name", "test"], path.join(root, "worktree"));
-writeFileSync(path.join(root, "worktree", ".keep"), "", "utf8");
-gitsh(["add", "."], path.join(root, "worktree"));
-gitsh(["commit", "-q", "-m", "base"], path.join(root, "worktree"));
+gitsh(["init", "-q", "-b", "main"]);
+gitsh(["config", "user.email", "test@example.com"]);
+gitsh(["config", "user.name", "test"]);
+writeFileSync(path.join(root, ".keep"), "", "utf8");
+gitsh(["add", "."]);
+gitsh(["commit", "-q", "-m", "base"]);
+// attestRun commits on ctx.worktreePath's CURRENT branch: check the
+// run branch out the way a real worktree-mode run would have it.
+gitsh(["checkout", "-q", "-b", "spc/av-spec/run-anchor-1"]);
 
 const runId = "run-anchor-1";
 const runDir = path.join(root, ".spc", "runs", runId);
@@ -70,7 +72,7 @@ function ctxFor(events: EventStore, evidence: EvidenceStore): RunContext {
     meta: { runId, specId: "av-spec", branch: "spc/av-spec/run-anchor-1" } as never,
     events,
     evidence,
-    worktreePath: path.join(root, "worktree"),
+    worktreePath: root,
     worktreeBranch: "spc/av-spec/run-anchor-1",
     log: () => {},
     now: () => "2026-10-23T00:00:00.000Z",
