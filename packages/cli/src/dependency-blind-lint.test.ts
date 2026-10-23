@@ -56,7 +56,7 @@ ${discriminating ? "        discriminating: true" : ""}
 function lint(command: string, discriminating = true): string {
   const file = path.join(root, "specs", "db-fixture.yaml");
   writeFileSync(file, specWith(command, discriminating), "utf8");
-  return sh(["lint", file]).stdout;
+  return sh(["spec", "lint", file]).stdout;
 }
 
 describe("LINT-FILTER-NO-DEPS (dependency-blind-lint)", () => {
