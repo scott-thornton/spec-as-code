@@ -1,0 +1,70 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: dependency-blind-lint
+  title: LINT-FILTER-NO-DEPS and the proposal-verification doctrine
+goal: >
+  run-mvix4mfx verified against stale dependency artifacts because its
+  criterion commands used bare pnpm --filter selectors, which compile a
+  package against its dependencies' STALE dist output - the criteria
+  honestly refused, but they refused the wrong thing. One incident, one
+  ratchet entry: an advisory lint rule flags potentially dependency-
+  blind criterion commands in pnpm workspaces, the registry entry
+  carries descriptive multi-valued validity-dimension tags and the
+  incident's provenance, and the authoring skills gain both the
+  dependency-inclusive command guidance and the doctrine this
+  architecture's own development keeps re-learning.
+requirements:
+  - id: DB-001
+    statement: >
+      LINT-FILTER-NO-DEPS fires as an advisory warning when a
+      discriminating command criterion in a pnpm workspace uses a bare
+      name-form pnpm --filter selector (no trailing ...), with wording
+      that says potentially dependency-blind and suggests a
+      dependency-inclusive filter or an explicit dependency preparation
+      step. It does not fire for dependency-inclusive selectors
+      (trailing ...), path-form selectors, non-workspace repositories,
+      non-discriminating criteria, or commands without a bare filter.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: DB-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/dependency-blind-lint.test.ts
+        discriminating: true
+  - id: DB-002
+    statement: >
+      The rule is registered in LINT_RULES with motivation citing
+      run-mvix4mfx, both fixtures described, approvedBy, and descriptive
+      multi-valued validityDimensions (criterion and environment) - the
+      registry accumulating the empirically grounded catalogue of
+      oracle-validity failure modes without enforcing a taxonomy.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: DB-002-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/dependency-blind-lint.test.ts
+        discriminating: true
+  - id: DB-003
+    statement: >
+      The authoring guidance carries the doctrine: the red-oracle-recipe
+      and author-spec skills state that criterion build commands must be
+      dependency-inclusive (or explicitly prepare dependencies), and the
+      proposal-verification doctrine - a proposal is not exempt from
+      verification merely because it proposes a verification mechanism;
+      before adding a safeguard, establish which existing guarantee is
+      missing, which failure demonstrates the gap, and which regression
+      will prove the gap is closed - is recorded where future proposals
+      will read it.
+    priority: should
+    scope:
+      include: [.agents/skills/**]
+    acceptance:
+      - id: DB-003-A
+        type: file
+        path: .agents/skills/author-spec/SKILL.md
+        assert:
+          contains: "not exempt from verification"
