@@ -1,7 +1,7 @@
 import path from "node:path";
 import { allOpenFollowups, loadRunView, resolveFollowup } from "@spc/runtime";
 import { jsonFollowups } from "./json-views.js";
-import { loadRepoConfig, resolveRepoRoot, resolveSpec } from "../context.js";
+import { loadRepoConfig, resolveAllSpecs, resolveRepoRoot } from "../context.js";
 
 /** `spc followups` - structured queue across runs. */
 export function runFollowups(cwd?: string, format: "text" | "json" = "text"): number {
@@ -71,8 +71,20 @@ export function runFollowupResolve(options: {
     console.log(`Run ${runId} not readable.`);
     return 1;
   }
+  // The run being resolved knows its spec: derive the context from the
+  // run's recorded specId instead of assuming the repository holds
+  // exactly one spec. Field: slerp CHK3639 - resolve was unusable in
+  // every multi-spec repo, even with --run given.
   const specDir = path.join(repoRoot, "specs");
-  const { ir } = resolveSpec(specDir);
+  const specId = view.meta.specId;
+  const match = resolveAllSpecs(specDir).find((s) => s.ir.spec.metadata.id === specId);
+  if (!match) {
+    console.error(
+      `error SPEC_NOT_FOUND: run ${runId} references spec ${specId}, which is not under ${specDir}; restore the spec file to resolve this follow-up`,
+    );
+    return 1;
+  }
+  const { ir } = match;
   const config = loadRepoConfig(repoRoot);
 
   const result = resolveFollowup({
