@@ -1,0 +1,51 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: notes-anchoring
+  title: Git anchoring for current-branch runs via git notes
+goal: >
+  verification.attestInGit skips anchoring entirely in the mode this
+  repository actually runs (inPlaceBranch: current) to avoid surprise
+  commits on the user's branch - so the strongest guarantee is
+  structurally unavailable where spc dogfoods itself. Git notes solve
+  it: a note under refs/notes/spc-attestations attaches the commitment
+  to the result revision without modifying its commit identity, without
+  touching the branch, and the ref is pushable and protectable like any
+  other. The write path anchors via notes in current-branch mode; the
+  read path reads note-borne trailers; the reporting never claims more
+  than a local ref establishes (a local note ref fences log-only
+  rewrites and accidental corruption - the run-mvix4mfx class - and is
+  not a remotely protected history).
+requirements:
+  - id: NA-001
+    statement: >
+      When attestInGit is enabled and the run executes in current-branch
+      in-place mode, attestRun attaches the commitment as a git note
+      under refs/notes/spc-attestations on the run's result revision -
+      same trailer heads as the empty-commit form, no commit on the
+      user's branch - and records gitAnchor { ref:
+      refs/notes/spc-attestations, commit: result revision } in
+      attestation.json and the RUN_ATTESTED event.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: NA-001-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/notes-anchoring.test.ts
+        discriminating: true
+  - id: NA-002
+    statement: >
+      Replay reads note-borne anchors: when the recorded anchor ref is
+      the notes ref (or a commit message carries no attestation
+      trailers), the head trailers are read from the note attached to
+      the commit, and an authentic note-anchored run reports anchor
+      verified while a contradicted one reports mismatch.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: NA-002-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/notes-anchoring.test.ts
+        discriminating: true
