@@ -1,0 +1,66 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: anchor-verification
+  title: Git anchoring is verified, not just written
+goal: >
+  The P1 from the anchor audit: verification.attestInGit writes an empty
+  commit carrying the event and evidence chain heads, but replay never
+  consults it - the anchor is write-only decoration, and a coherent
+  local rewrite of the evidence log plus a rewritten attestation.json
+  passes replay today even when a contradictory commitment sits in git
+  history. A safeguard whose write path shipped without its read path
+  is a claim without evidence. Close it: the write path records the
+  anchor identity (ref and commit) in the attestation, the read path
+  independently finds anchors for the run and compares commitments, and
+  the reporting never lets an unanchored or contradicted run render as
+  anchored and authentic.
+requirements:
+  - id: AV-001
+    statement: >
+      When attestRun creates a git anchor, the attestation records its
+      identity: attestation.json and the RUN_ATTESTED event payload
+      carry gitAnchor { ref, commit } naming the anchor commit, whose
+      message trailers carry the same heads the attestation commits to.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: AV-001-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/anchor-verification.test.ts
+        discriminating: true
+  - id: AV-002
+    statement: >
+      replayRun consults the git anchor: it independently finds anchor
+      commits for the run (by scanning history for the run's
+      SPC-Run-Id trailer, not only by trusting attestation.json) and
+      reports anchor as verified (commit exists, trailers match the
+      recorded commitment), mismatch (a coherently rewritten local
+      history contradicted by an existing commitment - replay fails,
+      never reported as authentic), unavailable (an anchor was recorded
+      but its commit is gone), or unanchored (no anchor exists - never
+      rendered as anchored). A mismatch or unavailable anchor makes the
+      replay report not ok.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: AV-002-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/anchor-verification.test.ts
+        discriminating: true
+  - id: AV-003
+    statement: >
+      `spc run replay <runId>` renders the anchor state on its own line
+      (anchor: verified | mismatch | unavailable | unanchored, with
+      detail when present), so an anchored, contradicted, or unanchored
+      run is visible to whoever audits it.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: AV-003-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/anchor-replay-render.test.ts
+        discriminating: true
