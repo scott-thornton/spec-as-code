@@ -133,10 +133,9 @@ program
   .option("--format <format>", "text | github | json", "text")
   .option("--bundle <dir>", "verify an exported run bundle (integrity + derivation, no repo)")
   .option("--run <runId>", "verify a run's acceptance criteria against its result revision (temporary worktree)")
-  .option("--all", "force full verification (no cached skipping; CI always passes this)")
-  .action(async (specFile: string | undefined, opts: { cwd: string; format: string; bundle?: string; run?: string; all?: boolean }) => {
+  .action(async (specFile: string | undefined, opts: { cwd: string; format: string; bundle?: string; run?: string }) => {
     const vfmt = opts.format === "github" ? "github" : opts.format === "json" ? "json" : "text";
-    process.exitCode = await runVerify(specFile, opts.cwd, vfmt, opts.bundle, opts.run, opts.all === true);
+    process.exitCode = await runVerify(specFile, opts.cwd, vfmt, opts.bundle, opts.run);
   });
 
 program
