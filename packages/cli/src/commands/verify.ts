@@ -2,7 +2,7 @@ import path from "node:path";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { gitOk, statusPorcelain } from "@spc/repo";
 import { renderGithubAnnotations, renderGithubSummary } from "@spc/renderer";
-import { createVerifyRun, inPlaceHandoffWarning, prepareDisposableWorktree, verifyBundle } from "@spc/runtime";
+import { createVerifyRun, freshnessCheck, inPlaceHandoffWarning, prepareDisposableWorktree, verifyBundle } from "@spc/runtime";
 import { createProvider, loadRepoConfig, resolveAllSpecs, resolveRepoRoot } from "../context.js";
 
 /**
@@ -17,6 +17,7 @@ export async function runVerify(
   format: "text" | "github" | "json" = "text",
   bundleDir?: string,
   runId?: string,
+  forceAll?: boolean,
 ): Promise<number> {
   // Bundle mode: verify an exported run's integrity and derivation
   // WITHOUT the repository. Cannot re-execute commands (threat model).
@@ -142,6 +143,17 @@ export async function runVerify(
   for (const { ir } of specs) {
     const handoff = inPlaceHandoffWarning(path.join(repoRoot, ".spc", "runs"), ir.spec.metadata.id, repoRoot);
     if (handoff && format === "text") console.log(handoff);
+    if (!forceAll) {
+      const freshness = freshnessCheck(repoRoot, ir, path.join(repoRoot, ".spc", "runs"));
+      if (freshness.cached) {
+        if (format === "json") {
+          jsonReports.push({ spec: ir.spec.metadata.id, cached: true, priorRunId: freshness.priorRunId });
+        } else {
+          console.log(`  CACHED      ${ir.spec.metadata.id} (prior ${freshness.priorRunId}; zero tracked changes since its verified base - not newly collected evidence)`);
+        }
+        continue;
+      }
+    }
     const report = await createVerifyRun({ repoRoot, specIr: ir, config, provider });
     const ok = report.states.every((s) => s.status === "satisfied" || s.status === "waived");
     if (!ok) worst = 1;
