@@ -279,6 +279,14 @@ export function resolveChain(runsDir: string, runId: string): { runId: string }[
   return out;
 }
 
+/** Digest of the effective verification config: file bytes, or the
+ *  canonical default when no config.yaml exists. Shared by run
+ *  creation and freshness eligibility. */
+export function configDigestOf(configPath: string, config?: unknown): string {
+  const content = existsSync(configPath) ? readFileSync(configPath, "utf8") : JSON.stringify(config ?? {});
+  return "sha256:" + createHash("sha256").update(content, "utf8").digest("hex");
+}
+
 export async function createVerifyRun(options: StandaloneVerifyOptions): Promise<StandaloneVerifyReport> {
   const now = options.now ?? (() => new Date().toISOString());
   const paths = spcPaths(options.repoRoot);
@@ -294,16 +302,14 @@ export async function createVerifyRun(options: StandaloneVerifyOptions): Promise
   const revision = currentRevision(options.repoRoot);
   const dirty = statusPorcelain(options.repoRoot).dirty;
 
-  const configDigestOf = (configPath: string): string => {
-    const content = existsSync(configPath) ? readFileSync(configPath, "utf8") : JSON.stringify(options.config);
-    return "sha256:" + createHash("sha256").update(content, "utf8").digest("hex");
-  };
+  // configDigestOf is now the shared exported helper (freshness uses it
+  // for cache eligibility); the call site passes the effective config.
   const meta: RunMeta = {
     runId,
     kind: "verify",
     specId: options.specIr.spec.metadata.id,
     specDigest: options.specIr.digest,
-    configDigest: configDigestOf(paths.configPath),
+    configDigest: configDigestOf(paths.configPath, options.config),
     baseRevision: revision,
     createdAt: now(),
     // RunMeta gains configDigest formally in a follow-up amendment; the
