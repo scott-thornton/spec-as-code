@@ -70,6 +70,24 @@ export interface CriterionResult {
   commandRun?: CommandRunResult;
 }
 
+/**
+ * Child-runner infrastructure-death envelopes: output signatures that
+ * mean the TEST RUNNER died, not that an assertion failed. Strict by
+ * contract (failure-classification spec, 2026-10-24): fixture-backed
+ * from the M0 board-flake captures, narrowed to runner envelopes the
+ * code under test does not emit as ordinary error strings, and NEVER
+ * applied to timed-out runs (a hang is potentially behavioral) nor to
+ * signals alone. An infrastructure failure must never produce
+ * supporting evidence, and must never be represented as a
+ * demonstrated behavioral contradiction.
+ */
+export const INFRA_DEATH_SIGNATURES: RegExp[] = [
+  /vitest[^\n]*worker[^\n]*exited unexpectedly/i,
+  /vitest[^\n]*process[^\n]*(crashed|exited unexpectedly)/i,
+  /worker process [^\n]* (terminated|exited unexpectedly)/i,
+  /test runner crashed/i,
+];
+
 export function makeEvidence(
   base: Omit<Evidence, "digest">,
   now: () => string = () => new Date().toISOString(),
@@ -190,6 +208,18 @@ async function verifyCommand(
       /failed suites/i.test(output) ||
       /failed to load/i.test(output) ||
       /must contain at least one test/i.test(output));
+  // Runner infrastructure deaths are the one honest exception: the
+  // machine died, not the assertion. Timeouts keep precedence and stay
+  // contradicted (a hang is potentially behavioral); load failures
+  // (suite-did-not-run) stay red-capable BY DESIGN - a suite that
+  // cannot load because the implementation is absent at base IS the
+  // red state module-import oracles depend on. Signals are context only.
+  const infraDeath =
+    outcome === "contradicts" &&
+    !run.timedOut &&
+    INFRA_DEATH_SIGNATURES.some((re) => re.test(output));
+  const evidenceOutcome: EvidenceOutcome =
+    outcome === "contradicts" && infraDeath ? "inconclusive" : outcome;
   const evidence = makeEvidence(
     {
       id: "pending",
@@ -198,7 +228,7 @@ async function verifyCommand(
       criterionId: criterion.id,
       propertyRefs: [property.id],
       kind: category === "test" ? "test" : "command",
-      outcome,
+      outcome: evidenceOutcome,
       producer: { type: "runtime" },
       timestamp: (ctx.now ?? (() => new Date().toISOString()))(),
       repositoryRevision: ctx.repositoryRevision,
@@ -212,6 +242,8 @@ async function verifyCommand(
         stdout: run.stdout,
         stderr: run.stderr,
         ...(suiteNeverRan ? { failureShape: "suite-did-not-run" } : {}),
+        ...(infraDeath ? { failureShape: "environment-death" } : {}),
+        ...(run.signal ? { signal: run.signal } : {}),
         ...(run.deniedReason ? { deniedReason: run.deniedReason } : {}),
       },
     },

@@ -131,6 +131,11 @@ export interface CommandRunResult {
   endTime: string;
   durationMs: number;
   timedOut: boolean;
+  /** Termination signal of the spawned shell, when the platform
+   *  reports one (our own timeout kill surfaces as SIGKILL). Diagnostic
+   *  context ONLY - a signal says HOW a process died, never WHY, and
+   *  classifies nothing by itself (review ruling, 2026-10-24). */
+  signal: string | null;
   category: CommandCategory;
   policy: PolicyValue;
   allowed: boolean;
@@ -149,6 +154,7 @@ export function runCommand(command: string, opts: CommandRunOptions): Promise<Co
     category: decision.category,
     policy: decision.policy,
     allowed: decision.allowed,
+    signal: null,
   };
   if (!decision.allowed) {
     const endTime = new Date().toISOString();
@@ -213,7 +219,7 @@ export function runCommand(command: string, opts: CommandRunOptions): Promise<Co
     // Resolve on exit, not close: with shell: true a SIGKILL to the shell
     // leaves the spawned command holding the stdio pipe open on Linux, so
     // "close" would not fire until the command itself finishes.
-    child.on("exit", (code) => {
+    child.on("exit", (code, signal) => {
       clearTimeout(timer);
       const endTime = new Date().toISOString();
       const env = opts.env ?? process.env;
@@ -222,6 +228,7 @@ export function runCommand(command: string, opts: CommandRunOptions): Promise<Co
       resolve({
         ...base,
         exitCode: code,
+        signal: signal ?? null,
         stdout: cleanOut,
         stderr: cleanErr,
         stdoutDigest: digestOf(stdout),
@@ -239,6 +246,7 @@ export function runCommand(command: string, opts: CommandRunOptions): Promise<Co
       resolve({
         ...base,
         exitCode: null,
+        signal: null,
         stdout: redactSecrets(truncate(stdout, opts.maxOutputBytes), env),
         stderr: redactSecrets(e.message, env),
         stdoutDigest: digestOf(stdout),
