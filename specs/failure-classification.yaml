@@ -39,10 +39,16 @@ requirements:
         discriminating: true
   - id: FC-002
     statement: >
-      A command whose suite never collected tests (the existing
-      suite-did-not-run detection) records outcome inconclusive with its
-      failureShape - closing the documented field case where a suite
-      that never ran was recorded as a plain contradiction.
+      A suite that fails to LOAD stays red-capable by design: outcome
+      contradicts with the suite-did-not-run failureShape preserved.
+      The shape is the visibility mark (the EV-0001 field case); the
+      redness is what lets module-import oracles establish the red
+      phase when the implementation does not exist at base - a
+      load failure is code-dependent and flip-meaningful, unlike an
+      environment death. Environment-death classification must never
+      apply to load failures. (Rehearsal finding, 2026-10-24: the
+      original FC-002 - making suite-did-not-run inconclusive - broke
+      red establishment for every oracle of this shape.)
     priority: must
     scope:
       include: [packages/verifier/src/**]

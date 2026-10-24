@@ -52,10 +52,13 @@ describe("failure classification (failure-classification)", () => {
     expect(r.payload.failureShape).toBe("environment-death");
   });
 
-  it("a suite that never collected tests is inconclusive with its shape (FC-002)", async () => {
+  it("a suite that fails to LOAD stays red-capable: contradicts with its shape (FC-002)", async () => {
     const cmd = script("no-tests.cjs", 'console.log("Tests  no tests"); process.exit(1);\n');
     const r = await run(cmd);
-    expect(r.outcome).toBe("inconclusive");
+    // Deliberate semantics: the shape is the visibility mark; the
+    // redness establishes the flip for module-import oracles whose
+    // implementation does not exist at base.
+    expect(r.outcome).toBe("contradicts");
     expect(r.payload.failureShape).toBe("suite-did-not-run");
   });
 
