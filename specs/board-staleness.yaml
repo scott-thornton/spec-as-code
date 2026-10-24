@@ -1,0 +1,80 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: board-staleness
+  title: Conservative cached verification for the local board
+goal: >
+  The board re-verifies every spec on every run even when nothing
+  changed - a 20+ minute sweep whose cumulative load is the flake
+  surface, and whose re-runs (the flake-recovery workflow) pay full
+  price to re-establish results that already hold. Cached verification
+  under a deliberately conservative contract: a spec's prior green
+  result is reused only when the repository has ZERO tracked changes
+  since the verified base - because scope.include is a write boundary,
+  not a verification-dependency declaration, file criteria may point
+  anywhere, and command criteria can read the whole repository
+  (review ruling, 2026-10-24). Cached satisfaction renders distinctly,
+  counts toward exit status, and is never recorded as new evidence.
+  CI pins --all and remains the standing audit of the invalidation
+  strategy. A narrower boundary (explicit verification.dependsOn) is
+  deliberately deferred until a real case demands it.
+requirements:
+  - id: BS-001
+    statement: >
+      Bare `spc verify <specFile>` reports CACHED and skips execution
+      when every eligibility condition holds: a prior verify run for
+      the spec exists and is loadable; every current property was
+      satisfied-or-waived in it (the existing board predicate); the
+      prior run verified a clean tree (RUN_CREATED dirty false) with a
+      recorded baseRevision; the current working tree is clean; the
+      current compiled spec digest equals the prior run's recorded
+      specDigest; the current config digest equals the prior's; the
+      prior base is a git ancestor of HEAD; and git diff over the
+      tracked range prior-base..HEAD is EMPTY. Cached specs create no
+      run, record no evidence, and count toward exit status.
+    priority: must
+    scope:
+      include: [packages/cli/src/**, packages/runtime/src/**]
+    acceptance:
+      - id: BS-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/board-staleness.test.ts
+        discriminating: true
+  - id: BS-002
+    statement: >
+      Every eligibility failure fails OPEN to verification: any tracked
+      change since the prior base, a dirty current tree, a spec digest
+      mismatch (amendment or import change), a config digest mismatch,
+      a prior run that verified a dirty tree, a prior run with
+      unsatisfied or indeterminate properties, a missing or unreadable
+      prior run, and an unresolvable git comparison (bogus ancestry)
+      all re-verify rather than cache - an unverified change can never
+      inherit verified status.
+    priority: must
+    scope:
+      include: [packages/cli/src/**, packages/runtime/src/**]
+    acceptance:
+      - id: BS-002-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/board-staleness.test.ts
+        discriminating: true
+  - id: BS-003
+    statement: >
+      `spc verify --all` forces full verification regardless of
+      eligibility, the board output distinguishes CACHED (with the
+      prior run id) from verified-now lines, and CI's spc-verify
+      workflow passes --all so the invalidation strategy is
+      independently audited on clean runners.
+    priority: must
+    scope:
+      include: [packages/cli/src/**, .github/**]
+    acceptance:
+      - id: BS-003-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/board-staleness.test.ts
+        discriminating: true
+      - id: BS-003-B
+        type: file
+        path: .github/workflows/spc-verify.yml
+        assert:
+          contains: "--all"

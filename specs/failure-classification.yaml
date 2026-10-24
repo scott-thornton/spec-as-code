@@ -1,0 +1,73 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: failure-classification
+  title: Infrastructural failures are never behavioral contradictions
+goal: >
+  The invariant, in full: an infrastructure failure must never produce
+  supporting evidence, and must never be misrepresented as a
+  demonstrated behavioral contradiction. run-mvix4mxf recorded five
+  criteria contradicted for an invalid environment; the board flake
+  records machine deaths as requirement failures; and the code's own
+  comment documents "Tests: no tests" recorded as a plain
+  contradiction. Classification closes these under a deliberately
+  strict contract: only fixture-backed child-runner envelope patterns
+  classify as environment-death (inconclusive, with the shape
+  recorded); suite-did-not-run becomes inconclusive; timeouts take
+  precedence and remain contradicted (a hang is potentially
+  behavioral); genuine assertion failures remain contradicted; and a
+  captured termination signal is structured diagnostic context that
+  never classifies anything by itself - a signal is evidence of HOW a
+  process died, not WHY (review ruling, 2026-10-24).
+requirements:
+  - id: FC-001
+    statement: >
+      A command criterion whose captured output matches the exported,
+      fixture-backed child-runner infrastructure envelope set records
+      outcome inconclusive with failureShape environment-death - never
+      contradicts - while the board exit stays nonzero for indeterminate
+      results. The envelope set is exported, cites its provenance (the
+      M0 board-flake captures), and classifies nothing the code under
+      test could itself emit as an ordinary error string.
+    priority: must
+    scope:
+      include: [packages/verifier/src/**]
+    acceptance:
+      - id: FC-001-A
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/verifier exec vitest run src/failure-classification.test.ts
+        discriminating: true
+  - id: FC-002
+    statement: >
+      A command whose suite never collected tests (the existing
+      suite-did-not-run detection) records outcome inconclusive with its
+      failureShape - closing the documented field case where a suite
+      that never ran was recorded as a plain contradiction.
+    priority: must
+    scope:
+      include: [packages/verifier/src/**]
+    acceptance:
+      - id: FC-002-A
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/verifier exec vitest run src/failure-classification.test.ts
+        discriminating: true
+  - id: FC-003
+    statement: >
+      The strictness contract: a timed-out command remains contradicted
+      (timedOut takes precedence over envelope classification); a
+      genuine assertion failure remains contradicted (the negative
+      fixture); and a termination signal captured from the child is
+      recorded in the evidence payload as diagnostic context and never
+      classifies an outcome by itself.
+    priority: must
+    scope:
+      include: [packages/executor/src/**, packages/verifier/src/**]
+    acceptance:
+      - id: FC-003-A
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/verifier exec vitest run src/failure-classification.test.ts
+        discriminating: true
+      - id: FC-003-B
+        type: command
+        command: pnpm --filter @spc/executor... build > /dev/null && pnpm --filter @spc/executor exec vitest run src/signal-capture.test.ts
+        discriminating: true
