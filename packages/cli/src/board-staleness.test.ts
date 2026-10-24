@@ -106,7 +106,7 @@ async function buildPriorRun(overrides: {
     JSON.stringify({
       status: "succeeded",
       tasks: {},
-      requirements: { BSF-001: { propertyId: "BSF-001", status: overrides.requirementStatus ?? "satisfied" } },
+      requirements: { "BSF-001": { propertyId: "BSF-001", status: overrides.requirementStatus ?? "satisfied" } },
     }),
     "utf8",
   );
