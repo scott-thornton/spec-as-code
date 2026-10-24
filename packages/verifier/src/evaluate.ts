@@ -1,5 +1,6 @@
 import type { DesiredProperty, Evidence, RequirementState } from "@spc/schema";
 import { isDeterministicCriterion } from "@spc/schema";
+import { isEligibleRed } from "./oracle-validity.js";
 
 /**
  * Requirement satisfaction is DERIVED from evidence. Agent completion
@@ -144,8 +145,18 @@ export function evaluateProperty(
             redPhase: "passed_at_base",
           };
         }
-      } else if (red.outcome === "contradicts") {
+      } else if (red.outcome === "contradicts" && isEligibleRed(red)) {
         verdict = { ...verdict, redPhase: "flipped" };
+      } else if (red.outcome === "contradicts") {
+        // Oracle-validity (2026-10-25): a red that cannot parse never
+        // discriminated anything - it is entitled to establish no flip,
+        // in this run or any consumer of this evidence.
+        verdict = {
+          ...verdict,
+          status: "indeterminate",
+          detail: "baseline red is oracle-invalid or unevaluably so; no red was demonstrated, so no flip is established",
+          redPhase: "no_red_evidence",
+        };
       } else {
         // Inconclusive baseline (e.g. policy-denied command): absence of
         // red is not proof of red - no flip established (external review

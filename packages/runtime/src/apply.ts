@@ -38,6 +38,7 @@ import { initialState, persistState, projectState } from "./state.js";
 import { appendUsageRecord, EvidenceStore, FollowupStore, ObservationStore } from "./stores.js";
 import { acquireExecutionLock, releaseExecutionLock, RUN_LOCK_HELD } from "./lock.js";
 import { verifyProperties } from "./verify.js";
+import { isEligibleRed } from "@spc/verifier";
 import { runContaminationGuard } from "./guard.js";
 import { attestRun } from "./attestation.js";
 import { writeSpecSnapshot, findSpecSource } from "./snapshot.js";
@@ -492,6 +493,42 @@ async function runRedPhaseSweep(ctx: RunContext): Promise<void> {
     criteriaCount,
     outcomes: Object.fromEntries(sweep.states.map((s) => [s.propertyId, s.status])),
   });
+
+  // Oracle validity (2026-10-25): a red oracle that cannot parse never
+  // discriminated anything, and a run bet on it is burned by
+  // arithmetic - it can never flip. Refuse BEFORE executor work.
+  for (const e of ctx.evidence.all()) {
+    if (e.phase !== "red" || e.outcome !== "contradicts") continue;
+    if (isEligibleRed(e)) continue;
+    throw new SpcError(
+      "ORACLE_INVALID",
+      `ORACLE_INVALID: criterion ${e.criterionId}: the red oracle fails to parse (transform error located in the oracle source) - a broken oracle cannot discriminate, so the run it would gate is burned by construction. Fix the oracle, commit the corrected red, and re-apply.`,
+    );
+  }
+}
+
+/**
+ * Ancestor flip adoption (chain inheritance), extracted for one shared
+ * eligibility semantics: a green criterion whose red ALSO appears in
+ * the ancestor's evidence inherits its flip - unless that red is
+ * oracle-invalid (stamped, or derived from the recorded diagnostics at
+ * consumption: legacy and cached reds cannot bypass the semantics).
+ */
+export function adoptAncestorFlips(
+  records: readonly { criterionId?: string; outcome?: string; phase?: string; payload?: Record<string, unknown> }[],
+  priorId: string,
+  inheritedFlips: Map<string, string>,
+): void {
+  const sawRed = new Set<string>();
+  const sawGreen = new Set<string>();
+  for (const e of records) {
+    if (!e.criterionId) continue;
+    if (e.phase === "red" && e.outcome === "contradicts" && isEligibleRed(e)) sawRed.add(e.criterionId);
+    if (e.phase !== "red" && e.outcome === "supports") sawGreen.add(e.criterionId);
+  }
+  for (const c of sawGreen) {
+    if (sawRed.has(c) && !inheritedFlips.has(c)) inheritedFlips.set(c, priorId);
+  }
 }
 
 /** In-place execution writes in the shared checkout; parallel tasks cannot. */
@@ -904,17 +941,7 @@ async function finishRun(
     if (!existsSync(evidenceFile)) continue;
     try {
       const lines = readFileSync(evidenceFile, "utf8").split("\n").filter(Boolean);
-      const sawRed = new Set<string>();
-      const sawGreen = new Set<string>();
-      for (const line of lines) {
-        const e = JSON.parse(line) as { criterionId?: string; outcome?: string; phase?: string };
-        if (!e.criterionId) continue;
-        if (e.phase === "red" && e.outcome === "contradicts") sawRed.add(e.criterionId);
-        if (e.phase !== "red" && e.outcome === "supports") sawGreen.add(e.criterionId);
-      }
-      for (const c of sawGreen) {
-        if (sawRed.has(c) && !inheritedFlips.has(c)) inheritedFlips.set(c, priorId);
-      }
+      adoptAncestorFlips(lines.map((l) => JSON.parse(l)), priorId, inheritedFlips);
     } catch {
       // unreadable ancestor evidence: not a source of flips
     }

@@ -13,6 +13,7 @@ import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { makeUsageRecord } from "@spc/llm";
 import { z } from "zod";
 import { classifyCommand, evaluateCommandPolicy, runCommand, type CommandRunResult } from "@spc/executor";
+import { classifyOracleValidity } from "./oracle-validity.js";
 import { isSafeRelativePath } from "@spc/core";
 
 /**
@@ -244,6 +245,11 @@ async function verifyCommand(
         ...(suiteNeverRan ? { failureShape: "suite-did-not-run" } : {}),
         ...(infraDeath ? { failureShape: "environment-death" } : {}),
         ...(run.signal ? { signal: run.signal } : {}),
+        ...(
+          outcome === "contradicts" && classifyOracleValidity(criterion.command, output).invalid
+            ? { oracleValidity: "invalid" as const }
+            : {}
+        ),
         ...(run.deniedReason ? { deniedReason: run.deniedReason } : {}),
       },
     },
