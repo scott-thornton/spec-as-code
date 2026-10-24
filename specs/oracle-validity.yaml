@@ -1,0 +1,103 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: oracle-validity
+  title: Red evidence must be entitled to establish what it establishes
+goal: >
+  Three times the author bet a run on a red oracle that was red for the
+  wrong reason: broken syntax in the oracle source, not a discriminating
+  assertion (two amendments in the 48h self-hosting report; the
+  unquoted-key oracle of 2026-10-24). The red phase records the
+  failure, the run proceeds, and the defect surfaces only at result -
+  a burned run, since an oracle that cannot parse can never flip. The
+  distinction being protected (external review, 2026-10-24): a valid
+  execution, a valid observation, and a valid acceptance criterion are
+  three different claims, and flip eligibility - whether a recorded
+  red may establish the red half of a red-to-green transition - is a
+  property OF THE EVIDENCE, applied identically by every consumer: the
+  live evaluator, the ancestor reconstruction, and the re-verification
+  of historical runs. Classification fails to uncertainty, never to
+  false certainty: only a transform failure unambiguously located in
+  the oracle's own source is oracle-invalid; transitive breakage,
+  ambiguous paths, compound commands, and unknown runner output stay
+  unclassified and red-eligible under current policy. Historical
+  records are never rewritten - eligibility is derived where the
+  recorded diagnostics permit, and legacy records lacking diagnostics
+  acquire no claim of confirmed validity. Narrow by design: this
+  closes one evidentiary hole; it does not attempt to prove that a
+  red assertion is meaningful.
+requirements:
+  - id: OV-001
+    statement: >
+      Classification semantics: a contradicted command criterion whose
+      output carries a transform/parse failure envelope is oracle-
+      invalid ONLY when the diagnostic names exactly the oracle source
+      - the command identifies a single test-file path and every
+      diagnostic path in the envelope resolves to that file's basename.
+      A legitimate missing-implementation failure (cannot-find-module
+      against the code under test) is never oracle-invalid. A transform
+      failure naming any other file (transitive import), commands
+      naming zero or multiple test files, and unknown runner output all
+      remain unclassified - eligible red, no certainty claimed. The
+      evidence payload records oracleValidity "invalid" only for the
+      confirmed class.
+    priority: must
+    scope:
+      include: [packages/verifier/src/**]
+    acceptance:
+      - id: OV-001-A
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/verifier exec vitest run src/oracle-validity.test.ts
+        discriminating: true
+  - id: OV-002
+    statement: >
+      An oracle-invalid red refuses the run before executor work
+      proceeds: the red-phase sweep detects a discriminating criterion
+      whose red evidence is oracle-invalid and fails the apply with a
+      named error (ORACLE_INVALID) naming the criterion - no executor
+      request is dispatched, nothing is bet on a run whose flip is
+      structurally impossible.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: OV-002-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/oracle-invalid-refusal.test.ts
+        discriminating: true
+  - id: OV-003
+    statement: >
+      Flip eligibility applies identically at every consumer of red
+      evidence: the live evaluator accepts a red-to-green flip only
+      when the baseline red is eligible, the ancestor reconstruction
+      (inherited flips) never adopts a red that the shared classifier
+      confirms oracle-invalid - including legacy ancestor records
+      carrying the invalid envelope without the stamp (eligibility is
+      derived from the recorded diagnostics at consumption) - and a
+      legacy red without derivable diagnostics stays eligible without
+      acquiring a claim of validity. One shared classifier serves all
+      consumers; no consumer implements its own policy.
+    priority: must
+    scope:
+      include: [packages/verifier/src/**, packages/runtime/src/**]
+    acceptance:
+      - id: OV-003-A
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/verifier exec vitest run src/oracle-validity.test.ts && pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/oracle-eligibility.test.ts
+        discriminating: true
+  - id: OV-004
+    statement: >
+      No behavioral regression to legitimate red-to-green workflows:
+      assertion-red oracles and missing-implementation oracles continue
+      to establish flips within a run and across chains exactly as
+      before (the module-import oracle pattern - red because the
+      implementation is absent at base - remains the load-bearing case
+      it has always been).
+    priority: must
+    scope:
+      include: [packages/verifier/src/**, packages/runtime/src/**]
+    acceptance:
+      - id: OV-004-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/oracle-eligibility.test.ts src/criterion-chain.test.ts src/continuation-replay.test.ts
+        discriminating: true
