@@ -113,7 +113,7 @@ const allPasses = [];
 for (let pass = 1; pass <= passes; pass++) {
   const startTs = Date.now();
   const before = machineContext();
-  const board = spawnSync(process.execPath, [CLI, "verify"], {
+  const board = spawnSync(process.execPath, [CLI, "verify", "--all"], {
     cwd: repoRoot,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
