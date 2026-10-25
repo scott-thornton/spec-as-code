@@ -1,0 +1,54 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: plan-target-gap
+  title: Advisory plan lint when intent names paths the targets do not cover
+goal: >
+  Three apply attempts in the 2026-10-23/24 programme were refused
+  OUT_OF_SCOPE_WRITE because the plan's task intents explicitly named
+  files (packages/runtime/src/queries.ts; state.ts under a
+  wrong-package path) that the declared write targets omitted - the
+  accurate representation (the intent prose) and the enforced
+  representation (the targets) disagreed, and nothing joined them. The
+  join is lint's job description. LINT-PLAN-TARGET-GAP warns when a
+  task's intent names a repository path that falls outside the union
+  of its declared read and write targets - advisory only, because
+  intents legitimately mention paths for context and prose must never
+  be treated as authoritative: a definite uncovered path warns; an
+  ambiguous basename (multiple candidate repository files) stays
+  silent rather than manufacturing certainty from prose. Registered in
+  the rule registry with its motivating incidents, both fixtures, and
+  validity-dimension tags.
+requirements:
+  - id: PT-001
+    statement: >
+      `spc plan validate` warns LINT-PLAN-TARGET-GAP when a task's
+      intent names a repository file that exists under the repository
+      and is not covered by the task's declared write or read target
+      globs; the warning names the path and both sides of the gap.
+      Paths mentioned in the intent that ARE covered, basenames that
+      match multiple repository files (ambiguous), paths that do not
+      exist in the repository, and read-only mentions already covered
+      by read targets produce no warning.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: PT-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/plan-target-gap.test.ts
+        discriminating: true
+  - id: PT-002
+    statement: >
+      The rule is registered in LINT_RULES with motivation citing the
+      three OUT_OF_SCOPE_WRITE incidents, negative and positive
+      fixtures described, approvedBy, and validityDimensions
+      declaration (criterion).
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: PT-002-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/plan-target-gap.test.ts
+        discriminating: true
