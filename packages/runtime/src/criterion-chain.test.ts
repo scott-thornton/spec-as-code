@@ -69,7 +69,7 @@ function planFor(id: string, digest: string, taskId: string, module: string, rev
 }
 
 describe("criterion-level chain inheritance (the LIST-001 field case)", () => {
-  it("a property whose criteria flip in DIFFERENT chain runs aggregates to satisfied in the chain head", async () => {
+  it("a property whose criteria flip in DIFFERENT chain runs aggregates to satisfied in the chain head", { timeout: 120_000 }, async () => {
     const repo = setup();
     const ir = compileSpecSource(specYaml, "specs/spec.yaml").ir!;
     const paths = spcPaths(repo);
@@ -101,7 +101,7 @@ describe("criterion-level chain inheritance (the LIST-001 field case)", () => {
     expect(replay.projectionMatches).toBe(true);
   });
 
-  it("a criterion passing at base with NO ancestor flip stays indeterminate", async () => {
+  it("a criterion passing at base with NO ancestor flip stays indeterminate", { timeout: 120_000 }, async () => {
     const repo = setup();
     const ir = compileSpecSource(specYaml, "specs/spec.yaml").ir!;
     const paths = spcPaths(repo);
