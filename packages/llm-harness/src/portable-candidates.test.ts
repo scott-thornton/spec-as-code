@@ -89,7 +89,10 @@ describe("claim semantics (PC-002)", () => {
   mismatch("schema", (s) => putRequest(s, "executor-T001@2-1", basePayload({ id: "T001", targets: { write: ["src/**"] } }, "a".repeat(40)), { ...SCHEMA, required: [...SCHEMA.required, "extra"] }, "T001@2"));
   mismatch("baseRevision", (s) => putRequest(s, "executor-T001@2-1", basePayload({ id: "T001", targets: { write: ["src/**"] } }, "b".repeat(40)), SCHEMA, "T001@2"));
   mismatch("writeScope", (s) => putRequest(s, "executor-T001@2-1", basePayload({ id: "T001", targets: { write: ["docs/**"] } }, "a".repeat(40)), SCHEMA, "T001@2"));
-  mismatch("config", (s) => writeFileSync(path.join(root, ".spc", "config.yaml"), "version: 9\n", "utf8"));
+  mismatch("config", (s) => {
+    putRequest(s, "executor-T001@2-1", basePayload({ id: "T001", targets: { write: ["src/**"] } }, "a".repeat(40)), SCHEMA, "T001@2");
+    writeFileSync(path.join(root, ".spc", "config.yaml"), "version: 9\n", "utf8");
+  });
 
   it("a schema-invalid candidate value is refused at claim", () => {
     const cand = saveCandidate(store, { status: "nope" }, "executor-T001@1-1", "composer");
