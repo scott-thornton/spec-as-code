@@ -1,0 +1,81 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: portable-candidates
+  title: Compose off the clock - portable answer candidates admitted by atomic claim
+goal: >
+  RFC v3 (docs/rfc-compose-off-the-clock.md), approved with the final
+  gates resolved. The harness window couples composition latency to
+  acceptance freshness; the field report prices it in burned windows
+  and one sacrificed run. The abstraction: computation produces
+  candidates, authority admits candidates. An immutable candidate
+  (composed answer + dependency fingerprint + provenance) exists
+  independently of any request; a LIVE successor request admits it via
+  claim - the single atomic commit (one rename of the answer file),
+  with the fingerprint derived from the AUTHORITATIVE live request
+  records, never trusted from the candidate file. Consumption is
+  derived (an answer record naming the candidate exists or does not) -
+  crash recovery is a predicate, not a reconciliation. Mismatch
+  rejects the attempt and preserves the candidate. An expired request
+  stays dead forever. Executors only in v1.
+requirements:
+  - id: PC-001
+    statement: >
+      `spc agent save-candidate --file <answer.json> --request <id>`
+      persists an immutable candidate: the value, the dependency
+      fingerprint derived from the named request's own records
+      (canonical task payload digest, schema name + digest, repository
+      base revision, declared write scope, config digest), and
+      composition provenance. The request may be pending or already
+      stale (composition against an expired request is legal - the
+      candidate confers no authority). Non-executor roles are refused
+      (CANDIDATE_ROLE_UNSUPPORTED).
+    priority: must
+    scope:
+      include: [packages/llm-harness/src/**, packages/cli/src/**]
+    acceptance:
+      - id: PC-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/candidate-claim.test.ts
+        discriminating: true
+  - id: PC-002
+    statement: >
+      `spc agent respond <id> --from-candidate <cid>` claims: the
+      candidate must exist and not be consumed (derived); the request
+      must be LIVE in pending (expired or missing: rejected - expired
+      stays dead); the live fingerprint is derived from the request's
+      records and compared member-by-member - any mismatch rejects the
+      ATTEMPT with the differing member named and PRESERVES the
+      candidate; the value must satisfy the request's authoritative
+      schema; the commit is one atomic rename installing the answer
+      with both identities in its lineage. A consumed candidate can
+      never be claimed again.
+    priority: must
+    scope:
+      include: [packages/llm-harness/src/**, packages/cli/src/**]
+    acceptance:
+      - id: PC-002-A
+        type: command
+        command: pnpm --filter @spc/llm-harness... build > /dev/null && pnpm --filter @spc/llm-harness exec vitest run src/portable-candidates.test.ts && pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/candidate-claim.test.ts
+        discriminating: true
+  - id: PC-003
+    statement: >
+      The race and crash invariants, as executable predicates over the
+      durable records: expiry racing claim leaves an unclaimed
+      candidate Available and the request dead, in either order; claim
+      succeeded then expiry racing consumption leaves the candidate
+      consumed and the records converged (answer consumed coherently
+      or archived with the expired request - never half-state); and
+      for every candidate, (an answer record naming it exists) XOR
+      (candidate Available) - an orphaned temp file in answered/ is
+      not an answer, and a config-digest drift between composition and
+      claim rejects the attempt (the fingerprint member is derived at
+      claim time from live records).
+    priority: must
+    scope:
+      include: [packages/llm-harness/src/**]
+    acceptance:
+      - id: PC-003-A
+        type: command
+        command: pnpm --filter @spc/llm-harness... build > /dev/null && pnpm --filter @spc/llm-harness exec vitest run src/portable-candidates.test.ts
+        discriminating: true
