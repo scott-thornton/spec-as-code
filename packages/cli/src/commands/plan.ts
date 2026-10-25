@@ -1,7 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { compileSpecSource, formatDiagnostics, hasErrors, validatePlan, SpcError } from "@spc/core";
-import type { Plan, SpecIR } from "@spc/schema";
+import { globMatchAny } from "@spc/core";
+import { listMatchingFiles } from "@spc/repo";
+import type { Plan, SpecIR, Task } from "@spc/schema";
 import { generatePlan } from "@spc/planner";
 import { observeRepository, readExcerpt } from "@spc/repo";
 import { renderPlan } from "@spc/renderer";
@@ -103,6 +105,45 @@ export async function runPlan(specFile: string): Promise<number> {
  * stays red until the last task lands, so mid-sequence preflights
  * whisper. Advise merging or re-slicing by verification boundary.
  */
+/**
+ * LINT-PLAN-TARGET-GAP: the advisory join between a task's intent
+ * prose and its declared targets. Three apply attempts in the
+ * 2026-10-23/24 programme were refused OUT_OF_SCOPE_WRITE because the
+ * intent named files the targets omitted - the accurate representation
+ * and the enforced representation disagreed, and nothing joined them.
+ * Prose never manufactures certainty: a bare basename matching
+ * multiple repository files stays silent; an absent path stays
+ * silent; only an unambiguously resolvable, uncovered repository file
+ * warns. Advisory - warnings never gate.
+ */
+function findPlanTargetGaps(repoRoot: string, plan: Plan): string[] {
+  const warnings: string[] = [];
+  const intentPath = /([\w@.-]+(?:\/[\w@.-]+)+\.[A-Za-z]{1,8})|(\b[\w.-]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|ya?ml)\b)/g;
+  for (const task of plan.tasks as (Task & { intent: string })[]) {
+    const declared = [...(task.targets?.write ?? []), ...(task.targets?.read ?? [])];
+    const seen = new Set<string>();
+    for (const m of task.intent.matchAll(intentPath)) {
+      const token = m[1] ?? m[2] ?? "";
+      if (!token || seen.has(token)) continue;
+      seen.add(token);
+      let candidates: string[];
+      if (token.includes("/")) {
+        candidates = existsSync(path.join(repoRoot, token)) ? [token] : [];
+      } else {
+        candidates = listMatchingFiles(repoRoot, [`**/${token}`], 10);
+      }
+      // Ambiguous (multiple) or absent (zero): prose is not authority.
+      if (candidates.length !== 1) continue;
+      const file = candidates[0]!;
+      if (declared.length > 0 && globMatchAny(declared, file)) continue;
+      warnings.push(
+        `task ${task.id}: intent names ${file}; declared targets do not cover it - add it to targets or reword the intent, or enforcement will refuse the write mid-apply (three incidents, 2026-10-23/24)`,
+      );
+    }
+  }
+  return warnings;
+}
+
 function findSharedOracleSlicing(plan: Plan, ir: SpecIR): string[] {
   const commandsOf = new Map<string, string[]>();
   for (const p of ir.properties) {
@@ -162,6 +203,9 @@ export function runPlanValidate(planFileArg: string | undefined): number {
   for (const d of diagnostics) console.log(`warning ${d.code}: ${d.message}`);
   for (const finding of findSharedOracleSlicing(plan, spec.ir)) {
     console.log(`warning LINT-PLAN-SHARED-ORACLE: ${finding}`);
+  }
+  for (const gap of findPlanTargetGaps(repoRoot, plan)) {
+    console.log(`warning LINT-PLAN-TARGET-GAP: ${gap}`);
   }
   return 0;
 }

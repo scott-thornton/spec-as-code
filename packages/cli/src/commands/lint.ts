@@ -100,6 +100,14 @@ export const LINT_RULES: LintRuleProvenance[] = [
     approvedBy: "human (dependency-blind-lint spec, 2026-10-23)",
     validityDimensions: ["criterion", "environment"],
   },
+  {
+    id: "LINT-PLAN-TARGET-GAP",
+    motivation: "Three apply attempts (2026-10-23/24) were refused OUT_OF_SCOPE_WRITE because task intents explicitly named files the declared write targets omitted - queries.ts left out entirely, state.ts listed under a wrong package path. The intent prose was right all three times; the targets were wrong all three times; nothing joined the two representations.",
+    negativeFixture: "packages/cli/src/plan-target-gap.test.ts: an intent naming packages/runtime/src/queries.ts outside the declared targets warns with the path.",
+    positiveFixture: "packages/cli/src/plan-target-gap.test.ts: covered paths, read-covered mentions, ambiguous basenames (two repository state.ts files), and absent paths all stay silent.",
+    approvedBy: "human (plan-target-gap spec, 2026-10-25)",
+    validityDimensions: ["criterion"],
+  },
 ];
 
 
