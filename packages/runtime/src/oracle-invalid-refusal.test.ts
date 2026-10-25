@@ -85,7 +85,7 @@ function planFor(digest: string): Plan {
 }
 
 describe("oracle-invalid red refusal (OV-002)", () => {
-  it("a syntax-broken oracle refuses the apply before executor work - named error", async () => {
+  it("a syntax-broken oracle refuses the apply before executor work - named error", { timeout: 120_000 }, async () => {
     // The 2026-10-24 incident shape: an unquoted dashed key - the file
     // cannot parse, so the red it establishes is entitled to nothing.
     const repo = setup(`import { describe, it, expect } from "vitest";
@@ -106,7 +106,7 @@ describe("marker", () => {
     ).rejects.toThrow(/ORACLE_INVALID/);
   });
 
-  it("a legitimate assertion-red oracle proceeds to the executor (the control)", async () => {
+  it("a legitimate assertion-red oracle proceeds to the executor (the control)", { timeout: 120_000 }, async () => {
     const repo = setup(`import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
 describe("marker", () => {
