@@ -35,6 +35,11 @@ export interface HarnessAnswer {
   value: unknown;
   answeredBy?: string;
   answeredAt: string;
+  /** Present when this answer admitted a portable candidate: the
+   *  candidate's id and the request it was composed against (RFC v3
+   *  lineage - both identities travel with the answer record). */
+  candidateId?: string;
+  claimedFromRequest?: string;
 }
 
 export class HarnessStore {
