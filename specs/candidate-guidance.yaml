@@ -1,0 +1,59 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: candidate-guidance
+  title: The answer-queue skill teaches compose-off-the-clock
+goal: >
+  The portable-candidate affordances shipped (RFC v3, run-mvnbf5ab):
+  spc agent save-candidate persists an immutable candidate composed
+  against a request's recorded premises - pending or stale - and
+  spc agent respond --from-candidate admits it via atomic claim when a
+  LIVE successor's fingerprint matches. The answer-queue skill still
+  teaches compose-and-submit inside the window as the only workflow -
+  the exact 15-minute-residency coupling candidates exist to remove,
+  priced by the provider-instability field report (one sacrificed run,
+  several burned windows). A skill that documents less than the tool
+  does misleads every answering agent that reads it.
+requirements:
+  - id: CG-001
+    statement: >
+      The answer-queue skill documents the candidate workflow:
+      composing an answer off the clock with `spc agent save-candidate
+      --file <draft> --request <originalId>` (legal against a pending
+      OR already-expired request - the candidate confers no
+      authority), and admitting it with `spc agent respond <id>
+      --from-candidate <cid>` when a live successor request's
+      fingerprint matches (task, schema, base revision, write scope,
+      config); a fingerprint mismatch rejects the attempt and
+      PRESERVES the candidate for a matching successor.
+    priority: must
+    scope:
+      include: [.agents/skills/**]
+    acceptance:
+      - id: CG-001-A
+        type: file
+        path: .agents/skills/answer-queue/SKILL.md
+        assert:
+          contains: "--from-candidate"
+      - id: CG-001-B
+        type: file
+        path: .agents/skills/answer-queue/SKILL.md
+        assert:
+          contains: "confers no authority"
+  - id: CG-002
+    statement: >
+      The skill states WHEN the workflow applies - composition that
+      will exceed the request window (long rehearsals, dry-run +
+      gates, provider instability) - so the choice between submitting
+      in-window and saving a candidate is a named decision rule, not
+      trivia; and the stale original is never resurrected (claim
+      targets a live successor only).
+    priority: must
+    scope:
+      include: [.agents/skills/**]
+    acceptance:
+      - id: CG-002-A
+        type: file
+        path: .agents/skills/answer-queue/SKILL.md
+        assert:
+          contains: "off the clock"
