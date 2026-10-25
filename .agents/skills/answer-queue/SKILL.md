@@ -17,6 +17,36 @@ spc agent show <requestId>    # full prompt + response schema
 spc agent respond <requestId> --file <answer.json>
 ```
 
+## Composing off the clock (when the window is too short)
+
+The request window (~15 minutes) is a freshness mechanism, not a
+composition budget. When your answer will outlive it - long
+rehearsals, dry-run with --gates, provider instability killing your
+turn mid-composition - do not race the clock. Compose fully, then
+persist a portable candidate:
+
+```bash
+spc agent save-candidate --file <draft.json> --request <originalId>
+```
+
+Legal against the original request whether still pending or already
+expired: the candidate confers no authority, and the expired request
+stays dead. When the successor request dispatches, admit it:
+
+```bash
+spc agent respond <successorId> --from-candidate <cid>
+```
+
+The claim derives the live fingerprint (task, schema, base revision,
+write scope, config) from the successor's own records, compares it
+member-by-member against what you composed, and a single atomic
+rename commits the answer with both identities in its lineage. A
+fingerprint mismatch rejects the ATTEMPT and PRESERVES the candidate
+for a matching successor; a schema-invalid value is refused at claim;
+a consumed candidate can never be claimed again. Rule of thumb: if
+dry-run plus fixes took you near the window once, compose the next
+attempt as a candidate from the start.
+
 ## Role-based attention
 
 - **planner / replanner requests**: contract decisions. Answer slowly.
@@ -54,7 +84,10 @@ respond:
    everything it reports - including suite-did-not-run and PREDICTED
    REFUSAL lines - before responding. Every line is advisory; the
    run's verification remains the only authority.
-3. Respond with `spc agent respond <id> --file draft.json`.
+3. Respond with `spc agent respond <id> --file draft.json` - directly
+   for short answers, or via `save-candidate` now and
+   `respond --from-candidate` when the successor arrives, if
+   composition will run long (see below).
 
 Never rehearse on the live tree: no hand-applied anchors, no
 apply-gates-revert shell scripts. The dry-run worktree IS the
