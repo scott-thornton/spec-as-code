@@ -10,7 +10,7 @@ import { runReconcile } from "./commands/reconcile.js";
 import { runDiff, runStatus } from "./commands/status.js";
 import { runFollowupResolve, runFollowups } from "./commands/followups.js";
 import { runCancel, runExport, runPr, runReplay, runShow, runSupersedeCommand } from "./commands/run.js";
-import { runAgentList, runAgentRespond, runAgentShow, runAgentValidate, runAgentDryRun, runAgentWait, type AgentShowPart } from "./commands/agent.js";
+import { runAgentList, runAgentRespond, runAgentSaveCandidate, runAgentShow, runAgentValidate, runAgentDryRun, runAgentWait, type AgentShowPart } from "./commands/agent.js";
 import { runSkills, runUseSkill } from "./commands/skills.js";
 import { runPolicyExplain } from "./commands/policy.js";
 import { runQuickCommand } from "./commands/quick.js";
@@ -205,9 +205,20 @@ agent
   .option("--file <path>", "file containing the JSON value")
   .option("--stdin", "read the JSON value from stdin")
   .option("--by <who>", "record who answered")
+  .option("--from-candidate <cid>", "admit a portable candidate (atomic claim; fingerprint must match this request)")
   .option("--cwd <dir>", "repository directory", process.cwd())
-  .action((id: string, opts: { file?: string; stdin?: boolean; by?: string; cwd: string }) => {
-    process.exitCode = runAgentRespond({ id, file: opts.file, stdin: opts.stdin, by: opts.by, cwd: opts.cwd });
+  .action((id: string, opts: { file?: string; stdin?: boolean; by?: string; fromCandidate?: string; cwd: string }) => {
+    process.exitCode = runAgentRespond({ id, file: opts.file, stdin: opts.stdin, by: opts.by, fromCandidate: opts.fromCandidate, cwd: opts.cwd });
+  });
+agent
+  .command("save-candidate")
+  .description("persist an immutable portable candidate composed against a request (pending or stale; executors only)")
+  .requiredOption("--file <path>", "file containing the composed JSON value")
+  .requiredOption("--request <id>", "the request whose recorded premises the composition is against")
+  .option("--by <who>", "record who composed it")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action((opts: { file: string; request: string; by?: string; cwd: string }) => {
+    process.exitCode = runAgentSaveCandidate({ file: opts.file, request: opts.request, by: opts.by, cwd: opts.cwd });
   });
 agent
   .command("validate <id>")

@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { getCandidate } from "./candidates.js";
 
 /**
  * File-backed request/response store for the harness provider. Layout under
@@ -192,6 +193,11 @@ export class HarnessStore {
   /** True once an answer file exists for the id. */
   hasAnswer(id: string): boolean {
     return existsSync(path.join(this.base, "answered", `${id}.json`));
+  }
+
+  /** A portable answer candidate by id (see candidates.ts). */
+  getCandidate(id: string): import("./candidates.js").CandidateRecord | null {
+    return getCandidate(this, id);
   }
 }
 

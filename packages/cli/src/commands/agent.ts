@@ -1,7 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { SpcError } from "@spc/core";
-import { HarnessStore, checkJsonSchema } from "@spc/llm-harness";
+import { HarnessStore, checkJsonSchema, claimCandidate, saveCandidate } from "@spc/llm-harness";
 import { gitOk, observeRepository } from "@spc/repo";
 import { enforceProtectedPaths, enforceWriteScope, executorResultSchema, runCommand, stageChanges } from "@spc/executor";
 import { plannerOutputSchema } from "@spc/planner";
@@ -198,8 +198,23 @@ export async function runAgentWait(options: { timeoutMs?: number; cwd?: string }
   }
 }
 
-export function runAgentRespond(options: { id: string; file?: string; stdin?: boolean; by?: string; cwd?: string }): number {
+export function runAgentRespond(options: { id: string; file?: string; stdin?: boolean; by?: string; cwd?: string; fromCandidate?: string }): number {
   const { repoRoot, store } = storeFor(options.cwd);
+  if (options.fromCandidate) {
+    if (options.file || options.stdin) {
+      throw new SpcError("HARNESS_RESPOND_INPUT", "--from-candidate is mutually exclusive with --file/--stdin");
+    }
+    // Authority admits candidates: the claim is the atomic commit, and
+    // its rejection semantics preserve the candidate for a successor.
+    const claim = claimCandidate(store, options.fromCandidate, options.id);
+    if (!claim.ok) {
+      console.log(`claim rejected: ${claim.code} - ${claim.detail}`);
+      return 1;
+    }
+    console.log(`Claimed ${options.fromCandidate} into ${claim.answer.id} (lineage: composed off the clock, admitted now).`);
+    console.log(`Answered ${claim.answer.id}. The waiting spc process will pick it up within a second or two.`);
+    return 0;
+  }
   let raw: string;
   if (options.file) {
     raw = readFileSync(path.resolve(process.cwd(), options.file), "utf8");
@@ -223,6 +238,33 @@ export function runAgentRespond(options: { id: string; file?: string; stdin?: bo
     console.log(`note: no preflight on record for ${answer.id}; de-risk next time with: spc agent dry-run ${answer.id} --file <draft> --gates`);
   }
   return 0;
+}
+
+/**
+ * `spc agent save-candidate`: persist an immutable portable candidate
+ * composed against a request's recorded premises (pending OR stale -
+ * composing against an expired request is legal; the candidate confers
+ * no authority until a live successor claims it). Executors only.
+ */
+export function runAgentSaveCandidate(options: { file: string; request: string; by?: string; cwd?: string }): number {
+  const { store } = storeFor(options.cwd);
+  const raw = readFileSync(path.resolve(process.cwd(), options.file), "utf8");
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch (e) {
+    throw new SpcError("HARNESS_RESPOND_INPUT", `answer is not valid JSON: ${(e as Error).message}`);
+  }
+  try {
+    const candidate = saveCandidate(store, value, options.request, options.by);
+    console.log(`${candidate.id}  composed against ${options.request} (role executor; fingerprint: task, schema, base revision, write scope, config).`);
+    console.log("The candidate confers no authority: a LIVE successor request admits it via `spc agent respond <id> --from-candidate " + candidate.id + "`.");
+    return 0;
+  } catch (e) {
+    const message = (e as Error).message;
+    console.log(message.startsWith("CANDIDATE_") ? message : `error: ${message}`);
+    return 1;
+  }
 }
 
 /**
