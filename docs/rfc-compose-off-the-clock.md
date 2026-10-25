@@ -1,7 +1,7 @@
 # RFC: portable answer candidates - compose off the clock, submit against the successor
 
-**Status:** v2, revised per external review 2026-10-25 - ready for final
-approval · **Date:** 2026-10-25 · **Origin:** the provider-instability
+**Status:** v3, final - review gates resolved (persistent-state contract,
+race-test references, executable crash invariant) · **Date:** 2026-10-25 · **Origin:** the provider-instability
 field report (docs/field-report-2026-10-24-provider-instability.md),
 Finding 3; external reviews 2026-10-24 and 2026-10-25
 
@@ -84,9 +84,11 @@ which freshness is established:
    and preserves the candidate** - it may match a different successor.
 4. Schema validation of the candidate's value against the request's
    authoritative schema.
-5. Atomic compare-and-swap: the candidate's value moves into the
-   request's answer slot with both identities stamped (candidate id,
-   request id) or nothing changes.
+5. Atomic commit: the answer file is written to a temp name and
+   renamed into `answered/<requestId>.json` (the store's existing
+   single-answer-per-request slot) with both identities stamped
+   (candidate id in the answer lineage, request id as the answer id).
+   The rename is the commit; the candidate file is never mutated.
 
 After a successful claim, the candidate is `Consumed` and the value is
 an ordinary pending answer: the waiting provider process validates and
