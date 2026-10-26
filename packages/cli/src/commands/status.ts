@@ -1,7 +1,7 @@
 import path from "node:path";
 import { renderDiff, renderStatus } from "@spc/renderer";
 import { jsonDiff, jsonStatus } from "./json-views.js";
-import { integrityFailuresForSpec, latestRunViewForSpec, loadRunView, resolveChain } from "@spc/runtime";
+import { integrityFailuresForSpec, latestRunViewForSpec, loadRunView, postureFor, resolveChain } from "@spc/runtime";
 import { resolveAllSpecs, resolveRepoRoot } from "../context.js";
 
 /**
@@ -45,6 +45,8 @@ export function runStatus(specFile: string | undefined, cwd?: string, format: "t
     }
     if (view === null) {
       if (multi) { console.log(`### ${ir.spec.metadata.id}`); console.log(""); }
+      const postureNull = postureFor(ir, runsDir, repoRoot);
+      console.log(`Posture: ${postureNull.posture} - ${postureNull.reason}`);
       console.log(`Effective chain status: no run recorded for this spec (0/${ir.properties.filter((pp) => pp.priority === "must").length} must established)`);
       console.log("");
       console.log(renderStatus({ specIr: ir, runState: null, followups: [], evidence: [] }));
@@ -65,6 +67,8 @@ export function runStatus(specFile: string | undefined, cwd?: string, format: "t
     }).length;
     const unresolved = musts.length - mustsOk;
     if (multi) { console.log(`### ${ir.spec.metadata.id}`); console.log(""); }
+    const postureLine = postureFor(ir, runsDir, repoRoot);
+    console.log(`Posture: ${postureLine.posture} - ${postureLine.reason}`);
     const broken = integrityFailuresForSpec(runsDir, ir.spec.metadata.id);
     if (broken.length > 0) {
       console.log("INTEGRITY");

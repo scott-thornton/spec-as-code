@@ -8,6 +8,7 @@ export * from "./state.js";
 export * from "./run.js";
 export * from "./snapshot.js";
 export * from "./freshness.js";
+export * from "./posture.js";
 export * from "./verify.js";
 export * from "./apply.js";
 export * from "./queries.js";

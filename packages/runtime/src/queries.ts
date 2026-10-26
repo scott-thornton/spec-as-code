@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { SpcError } from "@spc/core";
-import type { Config, Event, Evidence, FollowUp, RequirementState, RunState, SpecIR } from "@spc/schema";
+import { configSchema, type Config, type Event, type Evidence, type FollowUp, type RequirementState, type RunState, type SpecIR } from "@spc/schema";
 import type { LLMProvider } from "@spc/llm";
 import { currentBranch, currentRevision, git, statusPorcelain } from "@spc/repo";
 import { renderRunSummary } from "@spc/renderer";
@@ -283,7 +283,14 @@ export function resolveChain(runsDir: string, runId: string): { runId: string }[
  *  canonical default when no config.yaml exists. Shared by run
  *  creation and freshness eligibility. */
 export function configDigestOf(configPath: string, config?: unknown): string {
-  const content = existsSync(configPath) ? readFileSync(configPath, "utf8") : JSON.stringify(config ?? {});
+  // Canonical: the file when it exists, else the LOADED DEFAULT - the
+  // same bytes a real run records. Digesting {} instead made every
+  // digest comparison fail in config-less repositories (a latent
+  // freshness bug posture surfaced: runs recorded the default config's
+  // digest, comparisons digested the empty object).
+  const content = existsSync(configPath)
+    ? readFileSync(configPath, "utf8")
+    : JSON.stringify(config ?? configSchema.parse({}));
   return "sha256:" + createHash("sha256").update(content, "utf8").digest("hex");
 }
 

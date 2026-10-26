@@ -3,7 +3,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { git } from "@spc/repo";
 import { HarnessStore } from "@spc/llm-harness";
-import { resolveChain } from "@spc/runtime";
+import { postureFor, resolveChain } from "@spc/runtime";
 import { loadRepoConfig, resolveAllSpecs, resolveRepoRoot } from "../context.js";
 
 interface LastRun {
@@ -18,6 +18,8 @@ interface BriefSpec {
   lastRun: LastRun | null;
   configChanged: boolean;
   chainDepth?: number;
+  posture: string;
+  postureReason: string;
 }
 
 /**
@@ -79,6 +81,7 @@ export function runBrief(cwd: string | undefined, format: "text" | "json" = "tex
   }
 
   const specs: BriefSpec[] = resolveAllSpecs(path.join(repoRoot, "specs")).map(({ ir }) => {
+    const posture = postureFor(ir, path.join(repoRoot, ".spc", "runs"), repoRoot);
     const lastRun = lastBySpec.get(ir.spec.metadata.id) ?? null;
     // Chain depth: walk the validated parent links from the head run.
     let chainDepth = 1;
@@ -90,9 +93,13 @@ export function runBrief(cwd: string | undefined, format: "text" | "json" = "tex
       id: ir.spec.metadata.id,
       lastRun,
       configChanged: lastRun !== null && lastRun.configDigest !== undefined && lastRun.configDigest !== configDigest,
+      posture: posture.posture,
+      postureReason: posture.reason,
       ...(chainDepth > 1 ? { chainDepth } : {}),
     };
   });
+  const postureCounts: Record<string, number> = { standing: 0, active: 0, unverified: 0, stale: 0 };
+  for (const s of specs) postureCounts[s.posture] = (postureCounts[s.posture] ?? 0) + 1;
 
   const pendingHarness = new HarnessStore(repoRoot).listPending().length;
 
@@ -129,6 +136,7 @@ export function runBrief(cwd: string | undefined, format: "text" | "json" = "tex
       console.log(`    ⚠ config changed since ${s.id}'s last run - authored assumptions may be stale`);
     }
   }
+  console.log(`postures: ${postureCounts.standing} standing · ${postureCounts.active} active · ${postureCounts.unverified} unverified · ${postureCounts.stale} stale`);
   console.log(`pending harness requests: ${pendingHarness}`);
   const posture = [
     config.provider?.name ?? "none",

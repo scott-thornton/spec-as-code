@@ -4,6 +4,7 @@ import { git, statusPorcelain } from "@spc/repo";
 import type { SpecIR } from "@spc/schema";
 import { listRunIds, loadRunMeta } from "./run.js";
 import { configDigestOf, loadRunView } from "./queries.js";
+import { trackedDrift } from "./posture.js";
 
 export interface FreshnessResult {
   cached: boolean;
@@ -71,12 +72,12 @@ export function freshnessCheck(repoRoot: string, specIr: SpecIR, runsDir: string
     });
     if (!allHeld) return verify("prior run did not satisfy every property");
 
-    // Valid ancestry, then the zero-tracked-changes rule itself.
-    const ancestor = git(repoRoot, ["merge-base", "--is-ancestor", meta.baseRevision, "HEAD"]);
-    if (!ancestor.ok) return verify("prior base is not an ancestor of HEAD");
-    const diff = git(repoRoot, ["diff", "--name-only", `${meta.baseRevision}..HEAD`]);
-    if (!diff.ok) return verify("git comparison failed");
-    if (diff.stdout.trim() !== "") return verify("tracked changes since the prior base");
+    // Freshness proper, via the shared predicate (postureFor uses the
+    // same function with run-kind-appropriate anchors): ancestry and
+    // the zero-tracked-changes rule. Cache eligibility's own
+    // conditions all ran above; this is drift, nothing else.
+    const drift = trackedDrift(repoRoot, meta.baseRevision, meta.configDigest);
+    if (drift.drifted) return verify(drift.reason ?? "tracked inputs have drifted since the prior base");
 
     return { cached: true, priorRunId: prior.id };
   } catch (e) {
