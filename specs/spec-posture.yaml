@@ -1,0 +1,81 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: spec-posture
+  title: Derived spec posture - naming what the records establish
+goal: >
+  Lifecycle ruling (2026-10-25/26): the lifecycle is a derived reporting
+  vocabulary, not a machine. Posture is computed per digest from the
+  run records and the shared tracked-drift predicate - never persisted,
+  never a new event, never enforcement. The ruling's central
+  distinction: a RUN establishes what its evidence supports; its KIND
+  determines which operational optimizations may reuse it. Any latest
+  valid digest-matching run establishes posture; verify-kind remains a
+  cache-eligibility requirement only. freshnessCheck conflated the two
+  (its kind filter would make a green apply run read unverified
+  because it cannot serve as a cache hit), so the tracked-drift
+  predicate is extracted and shared. Evaluation order is fixed:
+  unverified (no valid run for the current digest - a successor digest
+  never inherits its predecessor's posture), then active (unresolved
+  musts - unresolved work takes precedence over staleness), then the
+  drift predicate against the run's evidence anchor (verify runs
+  anchor at their recorded base revision; apply runs at their result
+  revision) deciding stale versus standing. Posture reporting must not
+  alter board execution or caching behavior; supersession stays
+  record-only.
+requirements:
+  - id: PS-001
+    statement: >
+      postureFor derives the four postures exactly: unverified when no
+      loadable run matches the current spec digest (including the
+      successor-digest negative - a predecessor's green never carries
+      over); active when the latest valid digest-matching run has
+      unresolved musts, even when tracked inputs have also drifted
+      (unresolved work takes precedence); stale when that run is green
+      and tracked inputs have drifted relative to its evidence anchor
+      - new commits since the anchor, a dirty working tree, a config
+      digest change, broken ancestry, or (verify runs) evidence
+      recorded against a dirty tree that cannot be reconstructed;
+      standing when the run is green and inputs remain fresh. Any run
+      kind establishes posture - a green apply run anchors at its
+      result revision and reads standing when HEAD has not moved past
+      it, stale when it has.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: PS-001-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/spec-posture.test.ts
+        discriminating: true
+  - id: PS-002
+    statement: >
+      The tracked-drift predicate (dirty tree, missing anchor, config
+      digest, ancestry, anchor..HEAD diff) is extracted and shared:
+      freshnessCheck is refactored to call it with identical cache
+      behavior - the protected board-staleness oracle passes unchanged
+      - and postureFor uses it with the run-kind-appropriate anchor.
+      Cache eligibility keeps its verify-kind and clean-verified-tree
+      requirements; posture never consults them.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: PS-002-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/spec-posture.test.ts src/board-staleness.test.ts
+        discriminating: true
+  - id: PS-003
+    statement: >
+      `spc status` renders one Posture line per spec (posture plus a
+      short reason) without executing anything, and `spc brief`
+      summarizes posture counts across all specs. Rendering is
+      read-only: board execution and caching behavior are unchanged.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: PS-003-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/posture-render.test.ts
+        discriminating: true
