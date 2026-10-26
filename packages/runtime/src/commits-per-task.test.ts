@@ -150,7 +150,7 @@ describe("commit-per-task", () => {
 
     // Run-level diff still covers the whole transition.
     expect(report.changedFileCount).toBe(2);
-  }, 120_000);
+  });
 
   it("disabled (default): single result revision, no TASK_COMMITTED events, no per-task revisions", { timeout: 120_000 }, async () => {
     const repo = setupRepo("off", []);
@@ -173,5 +173,5 @@ describe("commit-per-task", () => {
     const events = readFileSync(paths.eventsFile(report.runId), "utf8");
     expect(events).not.toContain('"type":"TASK_COMMITTED"');
     expect(report.changedFileCount).toBe(2);
-  }, 120_000);
+  });
 });

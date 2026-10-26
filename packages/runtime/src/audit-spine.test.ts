@@ -104,7 +104,7 @@ describe("audit spine: chaining, attestation, replay", () => {
     const attestation = JSON.parse(readFileSync(path.join(paths.runDir(runId), "attestation.json"), "utf8")) as { eventCount: number; status: string };
     expect(attestation.status).toBe("succeeded");
     expect(attestation.eventCount).toBeGreaterThan(0);
-  }, 120_000);
+  });
 
   it("editing an interior event breaks the chain and replay fails loudly", { timeout: 120_000 }, async () => {
     const repo = setupRepo("tamper", []);
@@ -117,7 +117,7 @@ describe("audit spine: chaining, attestation, replay", () => {
     lines[2] = JSON.stringify(victim);
     writeFileSync(evFile, lines.join("\n"), "utf8");
     expect(() => replayOf(repo, runId)).toThrow(/chain break/);
-  }, 120_000);
+  });
 
   it("an edited state.json diverges from the replayed projection", { timeout: 120_000 }, async () => {
     const repo = setupRepo("projection", []);
@@ -131,7 +131,7 @@ describe("audit spine: chaining, attestation, replay", () => {
     expect(r.ok).toBe(false);
     expect(r.projectionMatches).toBe(false);
     expect(r.projectionDiffs.join(" ")).toContain("modelCalls");
-  }, 120_000);
+  });
 
   it("a forged attestation is detected as broken", { timeout: 120_000 }, async () => {
     const repo = setupRepo("forge", []);
@@ -144,7 +144,7 @@ describe("audit spine: chaining, attestation, replay", () => {
     const r = replayOf(repo, runId);
     expect(r.ok).toBe(false);
     expect(r.attestation).toBe("broken");
-  }, 120_000);
+  });
 
   it("legacy unchained logs replay as legacy; mixed logs are rejected", { timeout: 120_000 }, () => {
     const dir = path.join(root, "legacy");
@@ -188,5 +188,5 @@ describe("audit spine: chaining, attestation, replay", () => {
     expect(anchored.ok).toBe(true);
     expect(anchored.stdout).toContain("SPC-Attestation-Event-Head");
     expect(anchored.stdout).toContain("SPC-Attestation-Evidence-Head");
-  }, 120_000);
+  });
 });

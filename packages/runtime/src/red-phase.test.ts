@@ -142,7 +142,7 @@ describe("red-phase verification (verification.requireRedPhase)", () => {
 
     const summary = readFileSync(paths.summaryFile(report.runId), "utf8");
     expect(summary).toContain("Red phase: 1/1 discriminating properties flipped");
-  }, 120_000);
+  });
 
   it("criterion that already passes at base: property indeterminate, run cannot succeed", { timeout: 120_000 }, async () => {
     const repo = setupRepo(
@@ -175,7 +175,7 @@ describe("red-phase verification (verification.requireRedPhase)", () => {
 
     const summary = readFileSync(paths.summaryFile(report.runId), "utf8");
     expect(summary).toContain("does not test this change");
-  }, 120_000);
+  });
 
   it("flag off: discriminating markers are inert authoring metadata", { timeout: 120_000 }, async () => {
     const repo = setupRepo("off", [], greetSpec);
@@ -202,7 +202,7 @@ describe("red-phase verification (verification.requireRedPhase)", () => {
       requirements: Record<string, { redPhase?: string }>;
     };
     expect(state.requirements["FEAT-A"]?.redPhase).toBeUndefined();
-  }, 120_000);
+  });
 
   it("standalone verify never demands red-phase evidence: satisfied specs keep verifying green", { timeout: 120_000 }, async () => {
     // The CHK3650 shape: a spec satisfied through a proper apply run, with
@@ -238,5 +238,5 @@ describe("red-phase verification (verification.requireRedPhase)", () => {
     const state = standalone.states.find((s) => s.propertyId === "FEAT-A");
     expect(state?.status).toBe("satisfied");
     expect(state?.redPhase).toBeUndefined();
-  }, 120_000);
+  });
 });

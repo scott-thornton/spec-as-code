@@ -85,5 +85,5 @@ describe("no-op as a first-class successful outcome", () => {
     // And the evidence still proves the property against the tree.
     const req = report.requirements.find((r) => r.propertyId === "FEAT-A");
     expect(req?.status).toBe("satisfied");
-  }, 120_000);
+  });
 });

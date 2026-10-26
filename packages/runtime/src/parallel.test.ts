@@ -128,7 +128,7 @@ executor:
     expect(patches).toHaveLength(2);
     // Task worktrees cleaned up.
     expect(readFileSync(paths.eventsFile(report.runId), "utf8")).toContain("PATCH_MERGED");
-  }, 120_000);
+  });
 
   it("serializes overlapping writers via dependencies (cumulative, no clobber)", { timeout: 120_000 }, async () => {
     const repo = setupRepo("serialized", ["execution:", "  parallelism: 2"], sharedSpecYaml);
@@ -167,7 +167,7 @@ executor:
     const shared = gitOk(report.worktree!, ["show", "HEAD:src/shared.mjs"]);
     expect(shared).toContain("feature-a");
     expect(shared).toContain("feature-b");
-  }, 120_000);
+  });
 
   it("mergeTaskPatch: conflicting patches are refused and the integration branch restored, never silently resolved", { timeout: 120_000 }, () => {
     const repo = path.join(root, "conflict-unit");
@@ -254,7 +254,7 @@ executor:
       .map((l) => JSON.parse(l) as { type: string; payload?: { taskId?: string } })
       .filter((e) => e.type === "PATCH_MERGED");
     expect(merged.map((e) => e.payload?.taskId)).toEqual(["T001"]);
-  }, 120_000);
+  });
 });
 
 describe("atomic model budget under parallelism", () => {
@@ -295,5 +295,5 @@ executor:
     expect(statuses.filter((s) => s === "completed").length).toBe(1);
     const budgetFailed = Object.values(state.tasks).filter((t) => t.failure?.code === "MODEL_BUDGET_EXCEEDED");
     expect(budgetFailed).toHaveLength(1);
-  }, 120_000);
+  });
 });

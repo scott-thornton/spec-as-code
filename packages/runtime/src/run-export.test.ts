@@ -107,7 +107,7 @@ describe("spc run export", () => {
     expect(existsSync(path.join(result.dir, "run", "events.jsonl"))).toBe(true);
     const patch = readFileSync(path.join(result.dir, "diff.patch"), "utf8");
     expect(patch).toContain("greet");
-  }, 120_000);
+  });
 
   it("warns loudly when the spec changed since the run", { timeout: 120_000 }, async () => {
     const repo = setupRepo("drift", ["execution:", "  inPlace: true", "  inPlaceBranch: current"]);
@@ -122,7 +122,7 @@ describe("spc run export", () => {
     const result = exportRun(repo, report.runId);
     expect(result.warnings.join(" ")).toContain("spec has changed since the run");
     expect(result.warnings.join(" ")).toContain(ir.digest);
-  }, 120_000);
+  });
 
   it("refuses unknown runs", { timeout: 120_000 }, () => {
     const repo = setupRepo("empty", []);

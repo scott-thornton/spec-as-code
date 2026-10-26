@@ -101,7 +101,7 @@ describe("budgets as signals", () => {
     const budgetFollowups = followups.filter((f) => f.title.startsWith("Budget exceeded"));
     expect(budgetFollowups).toHaveLength(3);
     expect(budgetFollowups.every((f) => !f.blocking)).toBe(true);
-  }, 120_000);
+  });
 
   it("no budgets configured: no signals, no noise", { timeout: 120_000 }, async () => {
     const repo = setupRepo("off", []);
@@ -109,5 +109,5 @@ describe("budgets as signals", () => {
     expect(status).toBe("succeeded");
     const events = readFileSync(spcPaths(repo).eventsFile(runId), "utf8");
     expect(events).not.toContain("BUDGET_SIGNAL");
-  }, 120_000);
+  });
 });

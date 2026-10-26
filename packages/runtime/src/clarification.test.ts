@@ -114,7 +114,7 @@ describe("clarification demotion, executor side (ADR-0013)", () => {
     expect(events).toContain('"demoted":true');
     // The decision the executor made on retry is recorded as an observation.
     expect(events).toContain("Proceeded with the recommended default");
-  }, 120_000);
+  });
 
   it("policy off (strict): the same executor block ends the run blocked - no silent proceeding", { timeout: 120_000 }, async () => {
     const repo = setupRepo("policy-off", []);
@@ -129,7 +129,7 @@ describe("clarification demotion, executor side (ADR-0013)", () => {
     expect(blocking).toBeTruthy();
     const events = readFileSync(paths.eventsFile(report.runId), "utf8");
     expect(events).not.toContain('"demoted":true');
-  }, 120_000);
+  });
 
   it("policy on but blocking on a missing secret is NOT demoted", { timeout: 120_000 }, async () => {
     const secretBlock = `
@@ -155,5 +155,5 @@ executor:
     const report = await applyPlan({ repoRoot: repo }, { providerFactory: async () => provider, log: () => {} });
     expect(report.status).toBe("blocked");
     expect(report.followups.some((f) => f.type === "missing_secret" && f.status === "open")).toBe(true);
-  }, 120_000);
+  });
 });

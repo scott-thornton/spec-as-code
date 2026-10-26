@@ -77,7 +77,7 @@ describe("§53 named secret references", () => {
     } finally {
       if (prev !== undefined) process.env.SPC_TEST_TOKEN = prev;
     }
-  }, 60_000);
+  });
 
   it("proceeds to verification when the secret is present", { timeout: 120_000 }, async () => {
     const repo = setupRepo("present");
@@ -92,5 +92,5 @@ describe("§53 named secret references", () => {
     } finally {
       delete process.env.SPC_TEST_TOKEN;
     }
-  }, 60_000);
+  });
 });

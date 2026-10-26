@@ -122,7 +122,7 @@ replanner:
     expect(readdirSync(dir).some((f) => f.endsWith(".gated.json"))).toBe(true);
     // No worktree changes were applied from the gated amendment.
     expect(readFileSync(paths.eventsFile(report.runId), "utf8")).not.toContain('"type":"PATCH_MERGED"');
-  }, 120_000);
+  });
 
   it("auto policy (default) still applies the same amendment without gating", { timeout: 120_000 }, async () => {
     const repo = setupRepo("auto", []);
@@ -170,7 +170,7 @@ replanner:
     const report = await applyPlan({ repoRoot: repo }, { providerFactory: async () => provider, log: () => {} });
     expect(report.status).toBe("succeeded");
     expect(report.replans).toBe(1);
-  }, 120_000);
+  });
 });
 
 describe("run cancellation", () => {

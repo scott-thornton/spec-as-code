@@ -121,7 +121,7 @@ describe("execution.inPlace", () => {
     expect(warning).toContain("drift");
     gitOk(repo, ["merge", report.branch!]);
     expect(inPlaceHandoffWarning(paths.runsDir, "one-file", repo)).toBeNull();
-  }, 120_000);
+  });
 
   it("rejects inPlace with parallelism > 1", { timeout: 120_000 }, async () => {
     const repo = setupRepo("par", ["execution:", "  inPlace: true", "  parallelism: 2"]);
@@ -134,7 +134,7 @@ describe("execution.inPlace", () => {
     ).rejects.toThrow(/inPlace requires execution\.parallelism 1/);
     // Nothing was checked out or left behind.
     expect(gitOk(repo, ["rev-parse", "--abbrev-ref", "HEAD"]).trim()).toBe("main");
-  }, 120_000);
+  });
 
   it("inPlaceBranch current: executes and commits on the checked-out branch, no branch switching", { timeout: 120_000 }, async () => {
     const repo = setupRepo("current", ["execution:", "  inPlace: true", "  inPlaceBranch: current"]);
@@ -166,7 +166,7 @@ describe("execution.inPlace", () => {
     expect(meta.originalBranch).toBeUndefined();
     // Current-branch mode never moves results off HEAD: no handoff trap.
     expect(inPlaceHandoffWarning(paths.runsDir, "one-file", repo)).toBeNull();
-  }, 120_000);
+  });
 
   it("inPlaceBranch current refuses detached HEAD", { timeout: 120_000 }, async () => {
     const repo = setupRepo("detached", ["execution:", "  inPlace: true", "  inPlaceBranch: current"]);
@@ -178,5 +178,5 @@ describe("execution.inPlace", () => {
     await expect(
       applyPlan({ repoRoot: repo }, { providerFactory: async () => provider(), log: () => {} }),
     ).rejects.toThrow(/requires a checked-out branch/);
-  }, 120_000);
+  });
 });

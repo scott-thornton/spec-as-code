@@ -96,7 +96,7 @@ describe("verification.protectedPaths", () => {
     // failure, so the retry re-violates instead of inheriting an empty
     // delta and completing with the protected change in the tree.
     expect(existsSync(path.join(report.worktree!, "src", "greet.cjs"))).toBe(false);
-  }, 120_000);
+  });
 
   it("command-mediated out-of-scope writes revert on violation and cannot be laundered by retry", { timeout: 120_000 }, async () => {
     // A criterion command with filesystem side effects bypasses the
@@ -157,7 +157,7 @@ describe("verification.protectedPaths", () => {
     // the tree; side-effect-free gates are the author's job.)
     const show = git(report.worktree!, ["show", `${report.branch}:smuggle.txt`]);
     expect(show.ok).toBe(false);
-  }, 120_000);
+  });
 
   it("protection does not over-block: unrelated paths run untouched", { timeout: 120_000 }, async () => {
     const repo = setupRepo("passing", ["verification:", "  protectedPaths:", "    - \"tests/**\""]);
@@ -167,5 +167,5 @@ describe("verification.protectedPaths", () => {
 
     const report = await applyPlan({ repoRoot: repo }, { providerFactory: async () => new FakeProvider(parseFakeScript(fakeScript)), log: () => {} });
     expect(report.status).toBe("succeeded");
-  }, 120_000);
+  });
 });
