@@ -97,7 +97,7 @@ function buildRun(
     JSON.stringify({
       status: opts.requirementStatus === "satisfied" ? "succeeded" : "partially_satisfied",
       tasks: {},
-      requirements: { PSP-001: { propertyId: "PSP-001", status: opts.requirementStatus ?? "satisfied" } },
+      requirements: { "PSP-001": { propertyId: "PSP-001", status: opts.requirementStatus ?? "satisfied" } },
       ...(opts.resultRevision ? { resultRevision: opts.resultRevision } : {}),
     }),
     "utf8",
