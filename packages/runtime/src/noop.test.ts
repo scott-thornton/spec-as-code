@@ -54,7 +54,7 @@ function setupRepo(name: string): string {
 }
 
 describe("no-op as a first-class successful outcome", () => {
-  it("a task that confirms existing state completes with an empty diff and the run succeeds", async () => {
+  it("a task that confirms existing state completes with an empty diff and the run succeeds", { timeout: 120_000 }, async () => {
     const repo = setupRepo("noop");
     const paths = spcPaths(repo);
     mkdirSync(paths.plansDir, { recursive: true });

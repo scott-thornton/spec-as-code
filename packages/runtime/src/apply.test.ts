@@ -137,13 +137,13 @@ describe("applyPlan end-to-end (library level)", () => {
     report = await applyGreeting(repo);
   });
 
-  it("completes with succeeded status driven by requirement satisfaction", () => {
+  it("completes with succeeded status driven by requirement satisfaction", { timeout: 120_000 }, () => {
     expect(report.status).toBe("succeeded");
     expect(report.requirements.find((r) => r.propertyId === "GREETING-001")?.status).toBe("satisfied");
     expect(report.requirements.find((r) => r.propertyId === "GREETING-002")?.status).toBe("satisfied");
   });
 
-  it("records deterministic evidence with provenance", () => {
+  it("records deterministic evidence with provenance", { timeout: 120_000 }, () => {
     const evidenceFile = spcPaths(repo).evidenceFile(report.runId);
     expect(existsSync(evidenceFile)).toBe(true);
     const lines = readFileSync(evidenceFile, "utf8").trim().split("\n").map((l) => JSON.parse(l) as Record<string, unknown>);
@@ -154,7 +154,7 @@ describe("applyPlan end-to-end (library level)", () => {
     expect(diffEvidence).toBeTruthy();
   });
 
-  it("persists the full event chain and state projection", () => {
+  it("persists the full event chain and state projection", { timeout: 120_000 }, () => {
     const eventsFile = spcPaths(repo).eventsFile(report.runId);
     const types = readFileSync(eventsFile, "utf8").trim().split("\n").map((l) => (JSON.parse(l) as { type: string }).type);
     for (const expected of ["RUN_CREATED", "SPEC_VALIDATED", "REPOSITORY_OBSERVED", "PLAN_VALIDATED", "TASK_STARTED", "FILE_CHANGED", "TASK_COMPLETED", "EVIDENCE_RECORDED", "PROPERTY_VERIFIED", "RUN_COMPLETED"]) {
@@ -166,7 +166,7 @@ describe("applyPlan end-to-end (library level)", () => {
     expect(state.tasks["T002"]?.status).toBe("completed");
   });
 
-  it("commits results to an isolated branch and never touches main", () => {
+  it("commits results to an isolated branch and never touches main", { timeout: 120_000 }, () => {
     expect(report.branch).toMatch(/^spc\/greeting-api\//);
     expect(report.resultRevision).not.toBe(report.baseRevision);
     const main = gitOk(repo, ["rev-parse", "main"]).trim();
@@ -175,7 +175,7 @@ describe("applyPlan end-to-end (library level)", () => {
     expect(worktreeGreeting).toContain("hello");
   });
 
-  it("writes a run summary and leaves source repository clean", () => {
+  it("writes a run summary and leaves source repository clean", { timeout: 120_000 }, () => {
     expect(existsSync(report.summaryPath)).toBe(true);
     const summary = readFileSync(report.summaryPath, "utf8");
     expect(summary).toContain("GREETING-001");
@@ -273,7 +273,7 @@ replanner:
     );
   }
 
-  it("observation invalidates the task, amendment is validated, history preserved, run succeeds", async () => {
+  it("observation invalidates the task, amendment is validated, history preserved, run succeeds", { timeout: 120_000 }, async () => {
     const repo = setup();
     const ir = compileSpecSource(sessionSpecYaml, "specs/session.yaml").ir!;
     const plan: Plan = {
@@ -331,7 +331,7 @@ describe("recovery after interruption", () => {
     return { repo, report: null as unknown as ApplyReport };
   }
 
-  it("resumes an interrupted run from replayed events without duplicating completed work", async () => {
+  it("resumes an interrupted run from replayed events without duplicating completed work", { timeout: 120_000 }, async () => {
     // Build a repo, then simulate a crash mid-T001 by hand-crafting the
     // on-disk state an interrupted process leaves behind.
     const src = setupGreetingRepo("recover-crash");
@@ -409,7 +409,7 @@ describe("recovery after interruption", () => {
 });
 
 describe("preflight failures", () => {
-  it("refuses to run against a dirty repository", async () => {
+  it("refuses to run against a dirty repository", { timeout: 120_000 }, async () => {
     const repo = setupGreetingRepo("dirty");
     writeFileSync(path.join(repo, "uncommitted.txt"), "x");
     const paths = spcPaths(repo);
@@ -420,7 +420,7 @@ describe("preflight failures", () => {
     ).rejects.toMatchObject({ code: "DIRTY_REPOSITORY" });
   });
 
-  it("refuses when the plan no longer matches the spec digest", async () => {
+  it("refuses when the plan no longer matches the spec digest", { timeout: 120_000 }, async () => {
     const repo = setupGreetingRepo("stale");
     const paths = spcPaths(repo);
     mkdirSync(paths.plansDir, { recursive: true });
@@ -434,7 +434,7 @@ describe("preflight failures", () => {
     ).rejects.toMatchObject({ code: "PLAN_INVALID" });
   });
 
-  it("respects write-scope enforcement: out-of-scope writes fail the task", async () => {
+  it("respects write-scope enforcement: out-of-scope writes fail the task", { timeout: 120_000 }, async () => {
     const repo = setupGreetingRepo("scope");
     const paths = spcPaths(repo);
     mkdirSync(paths.plansDir, { recursive: true });

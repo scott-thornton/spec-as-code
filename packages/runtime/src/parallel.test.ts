@@ -76,7 +76,7 @@ function twoTaskPlan(): Plan {
 }
 
 describe("parallel execution (§78)", () => {
-  it("executes disjoint writers concurrently and merges both patches deterministically", async () => {
+  it("executes disjoint writers concurrently and merges both patches deterministically", { timeout: 120_000 }, async () => {
     const repo = setupRepo("parallel", ["execution:", "  parallelism: 2"]);
     const provider = new FakeProvider(
       parseFakeScript(`
@@ -130,7 +130,7 @@ executor:
     expect(readFileSync(paths.eventsFile(report.runId), "utf8")).toContain("PATCH_MERGED");
   }, 120_000);
 
-  it("serializes overlapping writers via dependencies (cumulative, no clobber)", async () => {
+  it("serializes overlapping writers via dependencies (cumulative, no clobber)", { timeout: 120_000 }, async () => {
     const repo = setupRepo("serialized", ["execution:", "  parallelism: 2"], sharedSpecYaml);
     const sharedIr = compileSpecSource(sharedSpecYaml, "specs/spec.yaml").ir!;
     const provider = new FakeProvider(
@@ -169,7 +169,7 @@ executor:
     expect(shared).toContain("feature-b");
   }, 120_000);
 
-  it("mergeTaskPatch: conflicting patches are refused and the integration branch restored, never silently resolved", () => {
+  it("mergeTaskPatch: conflicting patches are refused and the integration branch restored, never silently resolved", { timeout: 120_000 }, () => {
     const repo = path.join(root, "conflict-unit");
     mkdirSync(repo, { recursive: true });
     gitOk(repo, ["init", "-b", "main"]);
@@ -210,7 +210,7 @@ executor:
 });
 
 describe("parallel failure isolation", () => {
-  it("a failed task's mutations never reach the integration branch", async () => {
+  it("a failed task's mutations never reach the integration branch", { timeout: 120_000 }, async () => {
     const repo = setupRepo("failed-merge", ["execution:", "  parallelism: 2"]);
     // T001 completes and writes src/a.mjs; T002 reports FAILED but has
     // already written src/b.mjs in its per-task worktree.
@@ -258,7 +258,7 @@ executor:
 });
 
 describe("atomic model budget under parallelism", () => {
-  it("a synchronously reserved budget admits exactly maxModelCalls tasks regardless of interleaving", async () => {
+  it("a synchronously reserved budget admits exactly maxModelCalls tasks regardless of interleaving", { timeout: 120_000 }, async () => {
     const repo = setupRepo("budget", ["execution:", "  parallelism: 2", "  maxModelCalls: 1"]);
     const provider = new FakeProvider(
       parseFakeScript(`

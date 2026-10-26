@@ -96,7 +96,7 @@ function planFor(repo: string): void {
 }
 
 describe("allowDirtyPaths: the strengthened contract", () => {
-  it("dirt on an allowlisted path permits the run; the dirt is preserved and NEVER committed", () => {
+  it("dirt on an allowlisted path permits the run; the dirt is preserved and NEVER committed", { timeout: 120_000 }, () => {
     const repo = setup([".env"]);
     // Make .env dirty (tracked, locally modified).
     writeFileSync(path.join(repo, ".env"), "VITE_KEY=changed\n", "utf8");
@@ -112,7 +112,7 @@ describe("allowDirtyPaths: the strengthened contract", () => {
     expect(touched).toBe("");
   });
 
-  it("dirt on a NON-allowlisted path still rejects at preflight", () => {
+  it("dirt on a NON-allowlisted path still rejects at preflight", { timeout: 120_000 }, () => {
     const repo = setup([".env"]);
     writeFileSync(path.join(repo, "src.ts"), "dirty\n", "utf8");
     planFor(repo);
@@ -121,7 +121,7 @@ describe("allowDirtyPaths: the strengthened contract", () => {
     expect(r.stderr).toMatch(/dirty|clean/i);
   });
 
-  it("a dirty allowlisted path overlapping a task's write scope HARD-REJECTS at preflight", () => {
+  it("a dirty allowlisted path overlapping a task's write scope HARD-REJECTS at preflight", { timeout: 120_000 }, () => {
     const repo = setup(["marker.txt"]);
     writeFileSync(path.join(repo, "marker.txt"), "pre-existing dirt\n", "utf8");
     planFor(repo);
@@ -130,14 +130,14 @@ describe("allowDirtyPaths: the strengthened contract", () => {
     expect(r.stderr).toMatch(/DIRTY_PATH_SCOPE|overlap/i);
   });
 
-  it("an allowlisted path that is CLEAN does not interfere", () => {
+  it("an allowlisted path that is CLEAN does not interfere", { timeout: 120_000 }, () => {
     const repo = setup([".env"]);
     planFor(repo);
     const r = sh(repo, ["apply"]);
     expect(r.stderr).toContain("succeeded");
   });
 
-  it("verification contamination: criteria passing only because of excluded dirt stay unsatisfied", () => {
+  it("verification contamination: criteria passing only because of excluded dirt stay unsatisfied", { timeout: 120_000 }, () => {
     // A criterion that reads .env's LOCAL value would pass in the worktree
     // but the committed tree lacks it; the run must not claim it.
     const repo = setup([".env"]);

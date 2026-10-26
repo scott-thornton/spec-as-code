@@ -111,7 +111,7 @@ function provider(script: string): FakeProvider {
 }
 
 describe("red-phase verification (verification.requireRedPhase)", () => {
-  it("command criterion flips red -> green: run succeeds with flip recorded", async () => {
+  it("command criterion flips red -> green: run succeeds with flip recorded", { timeout: 120_000 }, async () => {
     const repo = setupRepo("flip", ["verification:", "  requireRedPhase: true"], greetSpec);
     const paths = spcPaths(repo);
     mkdirSync(paths.plansDir, { recursive: true });
@@ -144,7 +144,7 @@ describe("red-phase verification (verification.requireRedPhase)", () => {
     expect(summary).toContain("Red phase: 1/1 discriminating properties flipped");
   }, 120_000);
 
-  it("criterion that already passes at base: property indeterminate, run cannot succeed", async () => {
+  it("criterion that already passes at base: property indeterminate, run cannot succeed", { timeout: 120_000 }, async () => {
     const repo = setupRepo(
       "decorative",
       ["verification:", "  requireRedPhase: true"],
@@ -177,7 +177,7 @@ describe("red-phase verification (verification.requireRedPhase)", () => {
     expect(summary).toContain("does not test this change");
   }, 120_000);
 
-  it("flag off: discriminating markers are inert authoring metadata", async () => {
+  it("flag off: discriminating markers are inert authoring metadata", { timeout: 120_000 }, async () => {
     const repo = setupRepo("off", [], greetSpec);
     const paths = spcPaths(repo);
     mkdirSync(paths.plansDir, { recursive: true });
@@ -204,7 +204,7 @@ describe("red-phase verification (verification.requireRedPhase)", () => {
     expect(state.requirements["FEAT-A"]?.redPhase).toBeUndefined();
   }, 120_000);
 
-  it("standalone verify never demands red-phase evidence: satisfied specs keep verifying green", async () => {
+  it("standalone verify never demands red-phase evidence: satisfied specs keep verifying green", { timeout: 120_000 }, async () => {
     // The CHK3650 shape: a spec satisfied through a proper apply run, with
     // the feature enabled. A later after-the-fact verify must not report
     // indeterminate on the discriminating criterion - the flip was a

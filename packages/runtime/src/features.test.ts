@@ -66,7 +66,7 @@ function planFor(repo: string, extraTask?: Record<string, unknown>) {
 }
 
 describe("§31 tiered amendment approval", () => {
-  it("high-risk amendment (lockfile write) is gated behind a blocking follow-up; run ends blocked", async () => {
+  it("high-risk amendment (lockfile write) is gated behind a blocking follow-up; run ends blocked", { timeout: 120_000 }, async () => {
     const repo = setupRepo("tiered", ["execution:", "  amendmentApproval: tiered"]);
     const provider = new FakeProvider(
       parseFakeScript(`
@@ -124,7 +124,7 @@ replanner:
     expect(readFileSync(paths.eventsFile(report.runId), "utf8")).not.toContain('"type":"PATCH_MERGED"');
   }, 120_000);
 
-  it("auto policy (default) still applies the same amendment without gating", async () => {
+  it("auto policy (default) still applies the same amendment without gating", { timeout: 120_000 }, async () => {
     const repo = setupRepo("auto", []);
     const provider = new FakeProvider(
       parseFakeScript(`
@@ -174,7 +174,7 @@ replanner:
 });
 
 describe("run cancellation", () => {
-  it("marks an interrupted (running) run cancelled; resume then refuses", async () => {
+  it("marks an interrupted (running) run cancelled; resume then refuses", { timeout: 120_000 }, async () => {
     const repo = setupRepo("cancel", []);
     const paths = spcPaths(repo);
     const runId = "run-stale-1";

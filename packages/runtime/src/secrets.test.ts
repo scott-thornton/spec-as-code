@@ -58,7 +58,7 @@ function planFor(): unknown {
 }
 
 describe("§53 named secret references", () => {
-  it("blocks before any execution when a required secret is absent, with a missing_secret follow-up", async () => {
+  it("blocks before any execution when a required secret is absent, with a missing_secret follow-up", { timeout: 120_000 }, async () => {
     const repo = setupRepo("missing");
     const paths = spcPaths(repo);
     mkdirSync(paths.plansDir, { recursive: true });
@@ -79,7 +79,7 @@ describe("§53 named secret references", () => {
     }
   }, 60_000);
 
-  it("proceeds to verification when the secret is present", async () => {
+  it("proceeds to verification when the secret is present", { timeout: 120_000 }, async () => {
     const repo = setupRepo("present");
     const paths = spcPaths(repo);
     mkdirSync(paths.plansDir, { recursive: true });

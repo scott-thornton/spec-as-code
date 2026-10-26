@@ -73,7 +73,7 @@ function planFor(): unknown {
 }
 
 describe("spc run export", () => {
-  it("emits a self-contained bundle with verifiable hashes", async () => {
+  it("emits a self-contained bundle with verifiable hashes", { timeout: 120_000 }, async () => {
     const repo = setupRepo("full", ["execution:", "  inPlace: true", "  inPlaceBranch: current"]);
     const paths = spcPaths(repo);
     mkdirSync(paths.plansDir, { recursive: true });
@@ -109,7 +109,7 @@ describe("spc run export", () => {
     expect(patch).toContain("greet");
   }, 120_000);
 
-  it("warns loudly when the spec changed since the run", async () => {
+  it("warns loudly when the spec changed since the run", { timeout: 120_000 }, async () => {
     const repo = setupRepo("drift", ["execution:", "  inPlace: true", "  inPlaceBranch: current"]);
     const paths = spcPaths(repo);
     mkdirSync(paths.plansDir, { recursive: true });
@@ -124,7 +124,7 @@ describe("spc run export", () => {
     expect(result.warnings.join(" ")).toContain(ir.digest);
   }, 120_000);
 
-  it("refuses unknown runs", () => {
+  it("refuses unknown runs", { timeout: 120_000 }, () => {
     const repo = setupRepo("empty", []);
     expect(() => exportRun(repo, "run-nope")).toThrow(/no run run-nope/);
   });

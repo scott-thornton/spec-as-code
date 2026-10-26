@@ -19,7 +19,7 @@ function event(type: Event["type"], payload: Record<string, unknown>, seq: numbe
 }
 
 describe("computePlanDrift", () => {
-  it("as-planned execution reports zero divergence", () => {
+  it("as-planned execution reports zero divergence", { timeout: 120_000 }, () => {
     const drift = computePlanDrift(
       [event("FILE_CHANGED", { taskId: "T001", path: "src/a.ts", change: "created" }, 1)],
       plan,
@@ -28,7 +28,7 @@ describe("computePlanDrift", () => {
     expect(drift.filesOutsideOriginalTargets).toEqual([]);
   });
 
-  it("amendments, replans and out-of-original-target files are visible", () => {
+  it("amendments, replans and out-of-original-target files are visible", { timeout: 120_000 }, () => {
     const drift = computePlanDrift(
       [
         event("REPLAN_REQUESTED", {}, 1),

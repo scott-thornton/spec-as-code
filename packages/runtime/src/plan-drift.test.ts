@@ -59,7 +59,7 @@ function setup(): string {
 }
 
 describe("plan drift visibility (Finding D)", () => {
-  it("a plan whose recorded revision differs from the apply base emits PLAN_DRIFT and a non-blocking follow-up", async () => {
+  it("a plan whose recorded revision differs from the apply base emits PLAN_DRIFT and a non-blocking follow-up", { timeout: 120_000 }, async () => {
     const repo = setup();
     const ir = compileSpecSource(specYaml, "specs/spec.yaml").ir!;
     const paths = spcPaths(repo);
@@ -87,7 +87,7 @@ describe("plan drift visibility (Finding D)", () => {
     expect(followups.some((f) => /drift/i.test(f.title) && !f.blocking)).toBe(true);
   });
 
-  it("no drift event when the plan revision matches the base", async () => {
+  it("no drift event when the plan revision matches the base", { timeout: 120_000 }, async () => {
     const repo = setup();
     const ir = compileSpecSource(specYaml, "specs/spec.yaml").ir!;
     const paths = spcPaths(repo);

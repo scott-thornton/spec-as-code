@@ -78,7 +78,7 @@ function provider(): FakeProvider {
 }
 
 describe("execution.inPlace", () => {
-  it("runs in the checkout on the run branch and restores the original branch", async () => {
+  it("runs in the checkout on the run branch and restores the original branch", { timeout: 120_000 }, async () => {
     const repo = setupRepo("on", ["execution:", "  inPlace: true", "  commitPerTask: true"]);
     const paths = spcPaths(repo);
     mkdirSync(paths.plansDir, { recursive: true });
@@ -123,7 +123,7 @@ describe("execution.inPlace", () => {
     expect(inPlaceHandoffWarning(paths.runsDir, "one-file", repo)).toBeNull();
   }, 120_000);
 
-  it("rejects inPlace with parallelism > 1", async () => {
+  it("rejects inPlace with parallelism > 1", { timeout: 120_000 }, async () => {
     const repo = setupRepo("par", ["execution:", "  inPlace: true", "  parallelism: 2"]);
     const paths = spcPaths(repo);
     mkdirSync(paths.plansDir, { recursive: true });
@@ -136,7 +136,7 @@ describe("execution.inPlace", () => {
     expect(gitOk(repo, ["rev-parse", "--abbrev-ref", "HEAD"]).trim()).toBe("main");
   }, 120_000);
 
-  it("inPlaceBranch current: executes and commits on the checked-out branch, no branch switching", async () => {
+  it("inPlaceBranch current: executes and commits on the checked-out branch, no branch switching", { timeout: 120_000 }, async () => {
     const repo = setupRepo("current", ["execution:", "  inPlace: true", "  inPlaceBranch: current"]);
     const paths = spcPaths(repo);
     mkdirSync(paths.plansDir, { recursive: true });
@@ -168,7 +168,7 @@ describe("execution.inPlace", () => {
     expect(inPlaceHandoffWarning(paths.runsDir, "one-file", repo)).toBeNull();
   }, 120_000);
 
-  it("inPlaceBranch current refuses detached HEAD", async () => {
+  it("inPlaceBranch current refuses detached HEAD", { timeout: 120_000 }, async () => {
     const repo = setupRepo("detached", ["execution:", "  inPlace: true", "  inPlaceBranch: current"]);
     const paths = spcPaths(repo);
     mkdirSync(paths.plansDir, { recursive: true });

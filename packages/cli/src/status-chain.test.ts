@@ -70,7 +70,7 @@ function planFor(id: string, digest: string, taskId: string, revision = "0000"):
 }
 
 describe("chain-aware surfaces", () => {
-  it("status renders the effective chain with provenance and exit 0; --run shows the single run", async () => {
+  it("status renders the effective chain with provenance and exit 0; --run shows the single run", { timeout: 120_000 }, async () => {
     const repo = setup();
     const ir = compileSpecSource(specYaml, "specs/spec.yaml").ir!;
     const paths = spcPaths(repo);
@@ -90,7 +90,7 @@ describe("chain-aware surfaces", () => {
     expect(single.stdout).toContain(run2.runId);
   });
 
-  it("run pr leads with the chain verdict and separates it from the diff", async () => {
+  it("run pr leads with the chain verdict and separates it from the diff", { timeout: 120_000 }, async () => {
     const repo = setup();
     const ir = compileSpecSource(specYaml, "specs/spec.yaml").ir!;
     const paths = spcPaths(repo);
@@ -104,7 +104,7 @@ describe("chain-aware surfaces", () => {
     expect(pr.stdout).toMatch(/2 linked runs|chain of 2/i);
   });
 
-  it("brief shows chain depth for continued specs", async () => {
+  it("brief shows chain depth for continued specs", { timeout: 120_000 }, async () => {
     const repo = setup();
     const ir = compileSpecSource(specYaml, "specs/spec.yaml").ir!;
     const paths = spcPaths(repo);

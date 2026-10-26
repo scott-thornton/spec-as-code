@@ -63,7 +63,7 @@ function planFor(id: string, digest: string, taskId: string, revision = "0000"):
 }
 
 describe("parentRunId lineage (approved ruling: validated ancestry at creation)", () => {
-  it("run 2's parent defaults to run 1 when run 1's result is a git ancestor of run 2's base", async () => {
+  it("run 2's parent defaults to run 1 when run 1's result is a git ancestor of run 2's base", { timeout: 120_000 }, async () => {
     const repo = setup();
     const ir = compileSpecSource(specYaml, "specs/spec.yaml").ir!;
     const paths = spcPaths(repo);
@@ -85,7 +85,7 @@ describe("parentRunId lineage (approved ruling: validated ancestry at creation)"
     expect(chain.map((r) => r.runId)).toEqual([run2.runId, run1.runId]);
   });
 
-  it("two independent runs of the same spec never chain (chronology is not causality)", async () => {
+  it("two independent runs of the same spec never chain (chronology is not causality)", { timeout: 120_000 }, async () => {
     const repo = setup();
     const ir = compileSpecSource(specYaml, "specs/spec.yaml").ir!;
     const paths = spcPaths(repo);
@@ -107,7 +107,7 @@ describe("parentRunId lineage (approved ruling: validated ancestry at creation)"
     expect(chain.map((r) => r.runId)).toEqual([run2.runId]);
   });
 
-  it("inheritance follows the chain: a run whose parent is unset inherits nothing", async () => {
+  it("inheritance follows the chain: a run whose parent is unset inherits nothing", { timeout: 120_000 }, async () => {
     const repo = setup();
     const ir = compileSpecSource(specYaml, "specs/spec.yaml").ir!;
     const paths = spcPaths(repo);

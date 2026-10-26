@@ -84,7 +84,7 @@ async function run(repo: string): Promise<{ runId: string; status: string }> {
 }
 
 describe("budgets as signals", () => {
-  it("exceeded budgets signal loudly but never change the outcome", async () => {
+  it("exceeded budgets signal loudly but never change the outcome", { timeout: 120_000 }, async () => {
     const repo = setupRepo("tight", ["execution:", "  budgets:", "    wallTimeMs: 1", "    diffLines: 1", "    changedFiles: 1"]);
     const { runId, status } = await run(repo);
     const paths = spcPaths(repo);
@@ -103,7 +103,7 @@ describe("budgets as signals", () => {
     expect(budgetFollowups.every((f) => !f.blocking)).toBe(true);
   }, 120_000);
 
-  it("no budgets configured: no signals, no noise", async () => {
+  it("no budgets configured: no signals, no noise", { timeout: 120_000 }, async () => {
     const repo = setupRepo("off", []);
     const { runId, status } = await run(repo);
     expect(status).toBe("succeeded");

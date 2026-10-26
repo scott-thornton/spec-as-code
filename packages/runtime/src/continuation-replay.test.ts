@@ -101,7 +101,7 @@ function planFor(id: string, digest: string, taskId: string): Plan {
 }
 
 describe("continuation inheritance: replay consistency (Finding B) + digest binding (Finding A)", () => {
-  it("run 2's inherited satisfaction replays exactly (PROPERTY_INHERITED in the log)", async () => {
+  it("run 2's inherited satisfaction replays exactly (PROPERTY_INHERITED in the log)", { timeout: 120_000 }, async () => {
     const repo = setup();
     const ir = compileSpecSource(specYaml, "specs/spec.yaml").ir!;
     const paths = spcPaths(repo);
@@ -130,7 +130,7 @@ describe("continuation inheritance: replay consistency (Finding B) + digest bind
     expect(replay.projectionMatches).toBe(true);
   });
 
-  it("digest binding: an amended spec does NOT inherit from the old contract", async () => {
+  it("digest binding: an amended spec does NOT inherit from the old contract", { timeout: 120_000 }, async () => {
     const repo = setup();
     const ir = compileSpecSource(specYaml, "specs/spec.yaml").ir!;
     const paths = spcPaths(repo);

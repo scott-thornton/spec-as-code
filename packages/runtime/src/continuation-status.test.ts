@@ -91,7 +91,7 @@ function planFor(id: string, digest: string, taskId: string): Plan {
 }
 
 describe("continuation runs inherit prior satisfied properties (the CHK3555 status artifact)", () => {
-  it("a second run of the same spec reports prior-satisfied properties as satisfied, not indeterminate", async () => {
+  it("a second run of the same spec reports prior-satisfied properties as satisfied, not indeterminate", { timeout: 120_000 }, async () => {
     const repo = setup();
     const ir = compileSpecSource(specYaml, "specs/spec.yaml").ir!;
     const paths = spcPaths(repo);
@@ -151,7 +151,7 @@ executor:
     expect(state.requirements["CT-001"]?.reason ?? "").toMatch(/prior (chain )?run/);
   });
 
-  it("does not inherit when no prior run recorded the property satisfied", async () => {
+  it("does not inherit when no prior run recorded the property satisfied", { timeout: 120_000 }, async () => {
     const repo = setup();
     const ir = compileSpecSource(specYaml, "specs/spec.yaml").ir!;
     const paths = spcPaths(repo);

@@ -95,7 +95,7 @@ function provider(): FakeProvider {
 }
 
 describe("commit-per-task", () => {
-  it("enabled: each task lands as its own revision on the run branch, recorded on task state", async () => {
+  it("enabled: each task lands as its own revision on the run branch, recorded on task state", { timeout: 120_000 }, async () => {
     const repo = setupRepo("on", ["execution:", "  commitPerTask: true"]);
     const paths = spcPaths(repo);
     mkdirSync(paths.plansDir, { recursive: true });
@@ -152,7 +152,7 @@ describe("commit-per-task", () => {
     expect(report.changedFileCount).toBe(2);
   }, 120_000);
 
-  it("disabled (default): single result revision, no TASK_COMMITTED events, no per-task revisions", async () => {
+  it("disabled (default): single result revision, no TASK_COMMITTED events, no per-task revisions", { timeout: 120_000 }, async () => {
     const repo = setupRepo("off", []);
     const paths = spcPaths(repo);
     mkdirSync(paths.plansDir, { recursive: true });

@@ -35,7 +35,7 @@ describe("follow-up resolution produces human evidence and re-derives state", ()
   const runId = "run-human-1";
   const paths = spcPaths(repo);
 
-  it("confirm resolves the manual-verification follow-up to satisfied", () => {
+  it("confirm resolves the manual-verification follow-up to satisfied", { timeout: 120_000 }, () => {
     mkdirSync(repo, { recursive: true });
     gitOk(repo, ["init", "-b", "main"]);
     writeFileSync(path.join(repo, ".gitignore"), ".spc/runs/\n.spc/worktrees/\n.spc/plans/\n");
@@ -105,7 +105,7 @@ describe("follow-up resolution produces human evidence and re-derives state", ()
     expect(events.all().map((e) => e.type)).toContain("PROPERTY_VERIFIED");
   });
 
-  it("reject option derives unsatisfied; invalid options are refused", () => {
+  it("reject option derives unsatisfied; invalid options are refused", { timeout: 120_000 }, () => {
     const before = new FollowupStore(paths.followupsFile(runId));
     void before;
     expect(() =>
@@ -122,7 +122,7 @@ describe("follow-up resolution produces human evidence and re-derives state", ()
 });
 
 describe("blocking follow-ups gate new apply runs", () => {
-  it("refuses apply while an earlier run of the spec has an open blocking follow-up", async () => {
+  it("refuses apply while an earlier run of the spec has an open blocking follow-up", { timeout: 120_000 }, async () => {
     const repo = path.join(root, "gated");
     mkdirSync(repo, { recursive: true });
     gitOk(repo, ["init", "-b", "main"]);

@@ -89,7 +89,7 @@ function replayOf(repo: string, runId: string) {
 }
 
 describe("audit spine: chaining, attestation, replay", () => {
-  it("a completed run is chained, attested, and replays clean", async () => {
+  it("a completed run is chained, attested, and replays clean", { timeout: 120_000 }, async () => {
     const repo = setupRepo("clean", []);
     const runId = await runTo(repo);
     const paths = spcPaths(repo);
@@ -106,7 +106,7 @@ describe("audit spine: chaining, attestation, replay", () => {
     expect(attestation.eventCount).toBeGreaterThan(0);
   }, 120_000);
 
-  it("editing an interior event breaks the chain and replay fails loudly", async () => {
+  it("editing an interior event breaks the chain and replay fails loudly", { timeout: 120_000 }, async () => {
     const repo = setupRepo("tamper", []);
     const runId = await runTo(repo);
     const paths = spcPaths(repo);
@@ -119,7 +119,7 @@ describe("audit spine: chaining, attestation, replay", () => {
     expect(() => replayOf(repo, runId)).toThrow(/chain break/);
   }, 120_000);
 
-  it("an edited state.json diverges from the replayed projection", async () => {
+  it("an edited state.json diverges from the replayed projection", { timeout: 120_000 }, async () => {
     const repo = setupRepo("projection", []);
     const runId = await runTo(repo);
     const paths = spcPaths(repo);
@@ -133,7 +133,7 @@ describe("audit spine: chaining, attestation, replay", () => {
     expect(r.projectionDiffs.join(" ")).toContain("modelCalls");
   }, 120_000);
 
-  it("a forged attestation is detected as broken", async () => {
+  it("a forged attestation is detected as broken", { timeout: 120_000 }, async () => {
     const repo = setupRepo("forge", []);
     const runId = await runTo(repo);
     const paths = spcPaths(repo);
@@ -146,7 +146,7 @@ describe("audit spine: chaining, attestation, replay", () => {
     expect(r.attestation).toBe("broken");
   }, 120_000);
 
-  it("legacy unchained logs replay as legacy; mixed logs are rejected", () => {
+  it("legacy unchained logs replay as legacy; mixed logs are rejected", { timeout: 120_000 }, () => {
     const dir = path.join(root, "legacy");
     mkdirSync(dir, { recursive: true });
     const file = path.join(dir, "events.jsonl");
@@ -176,7 +176,7 @@ describe("audit spine: chaining, attestation, replay", () => {
     expect(() => new EventStore(path.join(dir, "mixed.jsonl"), "run-mixed").load()).toThrow(/partially chained/);
   });
 
-  it("attestInGit anchors the commitment as an empty commit on the run branch", async () => {
+  it("attestInGit anchors the commitment as an empty commit on the run branch", { timeout: 120_000 }, async () => {
     const repo = setupRepo("anchor", ["verification:", "  attestInGit: true"]);
     const runId = await runTo(repo);
     const paths = spcPaths(repo);

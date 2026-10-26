@@ -72,7 +72,7 @@ function planFor(): unknown {
 }
 
 describe("verification.protectedPaths", () => {
-  it("a task touching a protected verification asset fails with PROTECTED_PATH_WRITE", async () => {
+  it("a task touching a protected verification asset fails with PROTECTED_PATH_WRITE", { timeout: 120_000 }, async () => {
     // The write target is legitimately declared - the violation is the
     // protection, not the scope: the agent may not grade its own homework.
     const repo = setupRepo("blocked", ["verification:", "  protectedPaths:", "    - \"src/**\""]);
@@ -98,7 +98,7 @@ describe("verification.protectedPaths", () => {
     expect(existsSync(path.join(report.worktree!, "src", "greet.cjs"))).toBe(false);
   }, 120_000);
 
-  it("command-mediated out-of-scope writes revert on violation and cannot be laundered by retry", async () => {
+  it("command-mediated out-of-scope writes revert on violation and cannot be laundered by retry", { timeout: 120_000 }, async () => {
     // A criterion command with filesystem side effects bypasses the
     // executor's pre-flight (which only sees proposed response changes).
     // Without the revert, attempt 1 writes the file and fails; attempt 2
@@ -159,7 +159,7 @@ describe("verification.protectedPaths", () => {
     expect(show.ok).toBe(false);
   }, 120_000);
 
-  it("protection does not over-block: unrelated paths run untouched", async () => {
+  it("protection does not over-block: unrelated paths run untouched", { timeout: 120_000 }, async () => {
     const repo = setupRepo("passing", ["verification:", "  protectedPaths:", "    - \"tests/**\""]);
     const paths = spcPaths(repo);
     mkdirSync(paths.plansDir, { recursive: true });

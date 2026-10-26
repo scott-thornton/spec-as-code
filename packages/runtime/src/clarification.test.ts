@@ -92,7 +92,7 @@ executor:
 `;
 
 describe("clarification demotion, executor side (ADR-0013)", () => {
-  it("policy on: executor blocking on only clarifications is demoted and auto-retried to completion", async () => {
+  it("policy on: executor blocking on only clarifications is demoted and auto-retried to completion", { timeout: 120_000 }, async () => {
     const repo = setupRepo("policy-on", ["execution:", "  proceedOnClarificationFollowups: true"]);
     const provider = new FakeProvider(parseFakeScript(blockThenComplete));
     const paths = spcPaths(repo);
@@ -116,7 +116,7 @@ describe("clarification demotion, executor side (ADR-0013)", () => {
     expect(events).toContain("Proceeded with the recommended default");
   }, 120_000);
 
-  it("policy off (strict): the same executor block ends the run blocked - no silent proceeding", async () => {
+  it("policy off (strict): the same executor block ends the run blocked - no silent proceeding", { timeout: 120_000 }, async () => {
     const repo = setupRepo("policy-off", []);
     const provider = new FakeProvider(parseFakeScript(blockThenComplete));
     const paths = spcPaths(repo);
@@ -131,7 +131,7 @@ describe("clarification demotion, executor side (ADR-0013)", () => {
     expect(events).not.toContain('"demoted":true');
   }, 120_000);
 
-  it("policy on but blocking on a missing secret is NOT demoted", async () => {
+  it("policy on but blocking on a missing secret is NOT demoted", { timeout: 120_000 }, async () => {
     const secretBlock = `
 executor:
   T001:

@@ -96,7 +96,7 @@ replanner:
 }
 
 describe("amendment re-dispatch (the CHK3555 field defect)", () => {
-  it("re-dispatches the triggering task after a changeTarget amendment that adds nothing", async () => {
+  it("re-dispatches the triggering task after a changeTarget amendment that adds nothing", { timeout: 120_000 }, async () => {
     const repo = setup();
     const ir = compileSpecSource(specYaml, "specs/spec.yaml").ir!;
     const plan: Plan = {

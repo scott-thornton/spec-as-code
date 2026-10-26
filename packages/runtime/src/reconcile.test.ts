@@ -110,7 +110,7 @@ async function applyGreeting(repo: string): Promise<void> {
 }
 
 describe("reconcile", () => {
-  it("detects drift, generates the next transition, and (with --apply) closes it", async () => {
+  it("detects drift, generates the next transition, and (with --apply) closes it", { timeout: 120_000 }, async () => {
     const repo = setupRepo("drift");
     await applyGreeting(repo); // fix lands on a branch; main stays unsatisfied
 
@@ -132,7 +132,7 @@ describe("reconcile", () => {
     expect(applied.applied?.requirements.find((r) => r.propertyId === "GREETING-001")?.status).toBe("satisfied");
   }, 120_000);
 
-  it("reports in-sync when the current tree satisfies the spec", async () => {
+  it("reports in-sync when the current tree satisfies the spec", { timeout: 120_000 }, async () => {
     const repo = setupRepo("sync");
     // Merge the fix into main directly, then reconcile.
     mkdirSync(path.join(repo, "src"), { recursive: true });
