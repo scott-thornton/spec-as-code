@@ -64,7 +64,9 @@ describe("posture rendering (PS-003)", () => {
   it("spc status renders a Posture line per spec without creating runs", () => {
     const before = require("node:fs").readdirSync(path.join(root, ".spc", "runs")).length;
     const r = sh(["status"]);
-    expect(r.status).toBe(0);
+    // Worst-of exit semantics: one unverified spec (pr-b) makes the
+    // bare board exit 1 - posture rendering does not change that.
+    expect(r.status).toBe(1);
     expect(r.stdout).toMatch(/Posture:\s*standing.*pr-a|pr-a[\s\S]*?Posture:\s*standing/);
     expect(r.stdout).toMatch(/Posture:\s*unverified[\s\S]*?pr-b|pr-b[\s\S]*?Posture:\s*unverified/);
     const after = require("node:fs").readdirSync(path.join(root, ".spc", "runs")).length;
