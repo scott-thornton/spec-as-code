@@ -53,33 +53,12 @@ writeFileSync(path.join(root, ".keep"), "", "utf8");
 gitsh(["add", "."]);
 gitsh(["commit", "-q", "-m", "base"]);
 
-function digestOfSpec(file: string): string {
-  const out = sh(["spec", "validate", file]).stdout;
-  return /Digest: (sha256:\w+)/.exec(out)?.[1] ?? `sha256:${"0".repeat(64)}`;
-}
-const digestA = digestOfSpec("specs/pr-a.yaml");
-const digestB = digestOfSpec("specs/pr-b.yaml");
-const head = gitsh(["rev-parse", "HEAD"]);
-
-function greenRun(runId: string, specId: string, digest: string, prop: string): void {
-  const dir = path.join(root, ".spc", "runs", runId);
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(
-    path.join(dir, "metadata.json"),
-    JSON.stringify({ runId, kind: "verify", specId, specDigest: digest, baseRevision: head, createdAt: "2026-10-26T00:00:00.000Z" }),
-    "utf8",
-  );
-  writeFileSync(path.join(dir, "events.jsonl"), JSON.stringify({ type: "RUN_CREATED", payload: { dirty: false } }) + "\n", "utf8");
-  writeFileSync(path.join(dir, "evidence.jsonl"), "", "utf8");
-  writeFileSync(
-    path.join(dir, "state.json"),
-    JSON.stringify({ status: "succeeded", tasks: {}, requirements: { [prop]: { propertyId: prop, status: "satisfied" } } }),
-    "utf8",
-  );
-}
-
-// pr-a: standing (green + fresh). pr-b: unverified (no runs).
-greenRun("v-pra", "pr-a", digestA, "PRA-001");
+// pr-a: standing via a REAL verify run (genuine records - a
+// hand-built state crashes renderStatus, which is the renderer's
+// business, not this oracle's).
+const verifyA = sh(["verify", "specs/pr-a.yaml"]);
+if (verifyA.status !== 0) throw new Error("fixture verify failed: " + verifyA.stdout.slice(0, 300));
+// pr-b: unverified (no runs).
 
 describe("posture rendering (PS-003)", () => {
   it("spc status renders a Posture line per spec without creating runs", () => {
