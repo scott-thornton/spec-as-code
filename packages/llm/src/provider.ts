@@ -33,6 +33,10 @@ export interface Usage {
   model: string;
   inputTokens?: number;
   outputTokens?: number;
+  /** OpenAI wire: completion_tokens_details.reasoning_tokens, when the
+   *  endpoint reports it - reasoning-token visibility for budget
+   *  diagnosis and any capability measurement. */
+  reasoningTokens?: number;
   durationMs: number;
 }
 

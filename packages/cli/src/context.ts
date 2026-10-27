@@ -119,6 +119,11 @@ export async function createProvider(config: Config, repoRoot: string): Promise<
         model,
         apiKey,
         ...(config.provider.baseURL ? { baseURL: config.provider.baseURL } : {}),
+        ...(config.provider.maxTokens !== undefined ? { maxTokens: config.provider.maxTokens } : {}),
+        ...(config.provider.timeoutMs !== undefined ? { timeoutMs: config.provider.timeoutMs } : {}),
+        ...(config.provider.reasoningEffort !== undefined ? { reasoningEffort: config.provider.reasoningEffort } : {}),
+        ...(config.provider.tokenLimitField !== undefined ? { tokenLimitField: config.provider.tokenLimitField } : {}),
+        ...(config.provider.sendTemperature !== undefined ? { sendTemperature: config.provider.sendTemperature } : {}),
       });
     }
     case "harness": {
@@ -144,6 +149,11 @@ export async function createProvider(config: Config, repoRoot: string): Promise<
         model,
         apiKey,
         ...(config.provider.baseURL ? { baseURL: config.provider.baseURL } : {}),
+        ...(config.provider.maxTokens !== undefined ? { maxTokens: config.provider.maxTokens } : {}),
+        ...(config.provider.timeoutMs !== undefined ? { timeoutMs: config.provider.timeoutMs } : {}),
+        ...(config.provider.thinkingBudgetTokens !== undefined ? { thinkingBudgetTokens: config.provider.thinkingBudgetTokens } : {}),
+        ...(config.provider.reasoningEffort !== undefined ? { reasoningEffort: config.provider.reasoningEffort } : {}),
+        ...(config.provider.sendTemperature !== undefined ? { sendTemperature: config.provider.sendTemperature } : {}),
       });
     }
   }

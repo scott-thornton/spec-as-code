@@ -5,6 +5,8 @@ export const LLM_PROVIDER_FAILURE = "LLM_PROVIDER_FAILURE";
 export const LLM_INVALID_STRUCTURED_OUTPUT = "LLM_INVALID_STRUCTURED_OUTPUT";
 export const LLM_RATE_LIMITED = "LLM_RATE_LIMITED";
 export const LLM_CONTEXT_EXHAUSTED = "LLM_CONTEXT_EXHAUSTED";
+export const LLM_EMPTY_COMPLETION = "LLM_EMPTY_COMPLETION";
+export const LLM_TRUNCATED_OUTPUT = "LLM_TRUNCATED_OUTPUT";
 
 export class LLMError extends SpcError {
   constructor(code: string, message: string, details?: unknown) {

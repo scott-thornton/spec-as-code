@@ -32,6 +32,43 @@ provider:
                        #   ANTHROPIC_API_KEY per provider)
   script: ""           # fake provider only: path to the script file
 
+  # Budget and reasoning control (provider-budget). Protocol
+  # expressibility is NOT model compatibility: these fields serialize
+  # documented wire formats; whether a given model honors a parameter
+  # shows up in the provider's error detail, never as a silent
+  # fallback. Effort labels do not compare across vendors - record the
+  # configured setting alongside measured tokens.
+  maxTokens: 16384         # per-provider token limit (anthropic:
+                           #   max_tokens; openai: the tokenLimitField)
+  timeoutMs: 600000        # per-provider fetch window (defaults: 180s
+                           #   anthropic, 120s openai)
+  # Anthropic reasoning, TWO modes - pick one:
+  thinkingBudgetTokens: 4096  # MANUAL (legacy; classic compat
+                              #   endpoints): thinking {type enabled,
+                              #   budget_tokens} - a TARGET inside
+                              #   max_tokens, not a guarantee of text
+                              #   space; deprecated Claude 4.6+,
+                              #   rejected 4.7+
+  # reasoningEffort: low      # ADAPTIVE (modern): output_config {effort}
+                              #   + thinking {type adaptive}; supported
+                              #   values depend on the model
+  # tokenLimitField: max_completion_tokens  # OpenAI dialect:
+                              #   max_tokens (default, historical) or
+                              #   max_completion_tokens (official API -
+                              #   reasoning tokens count inside the
+                              #   bound; required for o-series)
+  # sendTemperature: false    # tri-state: unset keeps the adapter's
+                              #   HISTORICAL default (anthropic omits,
+                              #   openai sends temperature 0); false
+                              #   omits (reasoning-endpoint remedy);
+                              #   true sends temperature 0
+  #
+  # Field recipes:
+  #   z.ai GLM /api/anthropic: thinkingBudgetTokens 4096,
+  #     maxTokens 16384, timeoutMs 600000
+  #   official OpenAI: tokenLimitField max_completion_tokens,
+  #     reasoningEffort low, maxTokens, timeoutMs
+
 execution:
   # Human gate before any execution: plans must be approved with
   # `spc plan approve <id>` first.

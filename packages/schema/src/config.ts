@@ -8,6 +8,24 @@ export const providerConfigSchema = z.strictObject({
   baseURL: z.string().optional(),
   apiKeyEnv: z.string().optional(),
   script: z.string().optional(),
+  /** Per-provider token limit. On the OpenAI wire this resolves with any
+   *  request-level override into ONE field emitted under tokenLimitField;
+   *  protocol expressibility is not model compatibility. */
+  maxTokens: z.number().int().positive().optional(),
+  timeoutMs: z.number().int().positive().optional(),
+  /** Anthropic manual thinking budget (legacy mode): a TARGET inside the
+   *  max_tokens ceiling - exhaustion stays detectable, never assumed away. */
+  thinkingBudgetTokens: z.number().int().positive().optional(),
+  /** Union of documented effort values across vendors; the adapter for the
+   *  configured wire refuses values it cannot express at construction. */
+  reasoningEffort: z.enum(["none", "minimal", "low", "medium", "high", "xhigh", "max"]).optional(),
+  /** OpenAI token-limit dialect: max_tokens (historical default) or
+   *  max_completion_tokens (official API; reasoning tokens count inside
+   *  the bound). */
+  tokenLimitField: z.enum(["max_tokens", "max_completion_tokens"]).optional(),
+  /** Tri-state temperature: unset preserves the adapter's HISTORICAL
+   *  default (Anthropic omits, OpenAI sends 0); false omits; true sends 0. */
+  sendTemperature: z.boolean().optional(),
 });
 
 export const executionConfigSchema = z.strictObject({
