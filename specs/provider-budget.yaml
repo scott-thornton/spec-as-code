@@ -1,0 +1,109 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: provider-budget
+  title: Provider budget and reasoning control - both wires, explicit dialects, honest compatibility
+goal: >
+  Field evidence (GLM-5.3 via api.z.ai/api/anthropic, governed run):
+  HTTP 200 in 139s, output_tokens 8192, thinking blocks only, no text -
+  a real planner/executor payload exhausts the completion budget in
+  reasoning or hits the fixed timeout, both surfacing as generic
+  LLM_PROVIDER_FAILURE, and .spc/config.yaml cannot say otherwise.
+  GLM-5.3-Flash returned what the full model could not: an instrument
+  artifact, not a capability fact - any capability-ladder measurement
+  is uninterpretable until the instrument stops deciding outcomes. The
+  harness provider path is unaffected; this gates direct-API runs.
+  The fix is EXPRESSIBILITY, not behavior change: protocol
+  expressibility is not model-and-endpoint compatibility - adapters
+  serialize documented wire formats faithfully, preserve historical
+  defaults byte-identically, and make failures self-diagnosing without
+  fallback or retry. Manual thinking budgets set a TARGET while
+  max_tokens bounds total output; neither guarantees space for the
+  structured response - exhaustion must remain detectable.
+requirements:
+  - id: PB-001
+    statement: >
+      Wire expressibility with construction-time validation. Anthropic:
+      reasoningEffort serializes as output_config {effort} plus thinking
+      {type adaptive}; thinkingBudgetTokens as thinking {type enabled,
+      budget_tokens} (manual mode - legacy, deprecated on Claude 4.6+,
+      rejected 4.7+; retained for classic compat endpoints);
+      maxTokens and timeoutMs override defaults. OpenAI: reasoningEffort
+      serializes as reasoning_effort; maxTokens resolves with any
+      request-level override into ONE effective limit emitted under a
+      single token-limit field - max_tokens (historical default) or
+      max_completion_tokens (official-API dialect) via tokenLimitField;
+      timeoutMs overrides; sendTemperature is tri-state - unset
+      preserves each adapter's HISTORICAL default (Anthropic omits,
+      OpenAI sends temperature 0), false omits explicitly, true sends
+      temperature 0. Construction refuses, naming fields in one
+      PROVIDER_CONFIG-class error: budget below 1024 or not below the
+      effective max; reasoningEffort and thinkingBudgetTokens together
+      (application policy - the Opus 4.5 coexistence exception named in
+      the error text); either reasoning control with sendTemperature
+      true; thinkingBudgetTokens or tokenLimitField on the OpenAI wire;
+      reasoningEffort values not expressible on the requesting wire
+      (none/minimal on Anthropic). The request-level override is
+      validated at SEND time: a request maxTokens at or below a
+      configured thinking budget refuses before the fetch with the same
+      named classification.
+    priority: must
+    scope:
+      include: [packages/llm-anthropic/src/**, packages/llm-openai/src/**, packages/schema/src/**]
+    acceptance:
+      - id: PB-001-A
+        type: command
+        command: pnpm --filter @spc/llm-anthropic... build > /dev/null && pnpm --filter @spc/llm-anthropic exec vitest run src/budget.test.ts && pnpm --filter @spc/llm-openai... build > /dev/null && pnpm --filter @spc/llm-openai exec vitest run src/budget.test.ts
+        discriminating: true
+  - id: PB-002
+    statement: >
+      The failure taxonomy makes exhaustion self-diagnosing, distinct
+      from timeout, without retry or fallback. LLM_EMPTY_COMPLETION:
+      no usable text (thinking-only blocks / empty message content) -
+      detail carries stop_reason or finish_reason, token counts against
+      the effective limit, the CONFIGURED reasoning setting, and a
+      remediation naming the config fields. LLM_TRUNCATED_OUTPUT: text
+      present but terminated at the token limit (stop_reason
+      max_tokens / finish_reason length) - thrown even when the
+      fragment happens to parse, because the output was bounded;
+      detail carries the same evidence set. LLM_TIMEOUT stays distinct
+      and fires even under a fetch implementation that ignores the
+      AbortSignal (the fetch is raced against the timer directly).
+      Usage records inputTokens/outputTokens on both wires and surfaces
+      completion_tokens_details.reasoning_tokens on OpenAI when
+      present. A non-OK response keeps the provider's error body in
+      the detail - endpoint incompatibility with a reasoning parameter
+      is a third failure class, diagnosable, never retried.
+    priority: must
+    scope:
+      include: [packages/llm/src/**, packages/llm-anthropic/src/**, packages/llm-openai/src/**]
+    acceptance:
+      - id: PB-002-A
+        type: command
+        command: pnpm --filter @spc/llm-anthropic... build > /dev/null && pnpm --filter @spc/llm-anthropic exec vitest run src/budget.test.ts && pnpm --filter @spc/llm-openai... build > /dev/null && pnpm --filter @spc/llm-openai exec vitest run src/budget.test.ts
+        discriminating: true
+  - id: PB-003
+    statement: >
+      The config surface parses and both construction paths thread it:
+      providerConfigSchema gains maxTokens, timeoutMs,
+      thinkingBudgetTokens, reasoningEffort (union enum: none, minimal,
+      low, medium, high, xhigh, max), tokenLimitField (max_tokens or
+      max_completion_tokens), and sendTemperature (boolean) - all
+      optional, positive-int validated; createProvider passes every
+      field to the matching adapter; and docs/usage/configuration.md
+      documents both per-endpoint recipes with the doctrine lines
+      (expressibility is not compatibility; effort labels do not
+      compare across vendors).
+    priority: must
+    scope:
+      include: [packages/schema/src/**, packages/cli/src/**, docs/**]
+    acceptance:
+      - id: PB-003-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/provider-config.test.ts
+        discriminating: true
+      - id: PB-003-B
+        type: file
+        path: docs/usage/configuration.md
+        assert:
+          contains: "max_completion_tokens"
