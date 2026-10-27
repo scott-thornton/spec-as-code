@@ -10,10 +10,7 @@ const base = { name: "anthropic" } as const;
 describe("provider config surface (provider-budget)", () => {
   it("all budget/reasoning fields parse", () => {
     const parsed = configSchema.parse({
-      provider: { ...base },
-      maxTokens: 16384,
-      timeoutMs: 600000,
-      thinkingBudgetTokens: 4096,
+      provider: { ...base, maxTokens: 16384, timeoutMs: 600000, thinkingBudgetTokens: 4096 },
     });
     expect(parsed.provider?.maxTokens).toBe(16384);
     expect(parsed.provider?.timeoutMs).toBe(600000);
