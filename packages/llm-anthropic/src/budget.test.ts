@@ -40,7 +40,7 @@ const truncated = () => anthropicResponse([{ type: "thinking", thinking: "…" }
 describe("Anthropic wire expressibility (PB-001)", () => {
   it("reasoningEffort serializes as output_config.effort + adaptive thinking", async () => {
     const { provider, calls } = recorder(okText);
-    const p = new AnthropicCompatProvider({ model: "m", apiKey: "k", fetchImpl: (async (_u, i) => { calls.push({ url: _u, body: JSON.parse(String(i.body)) }); return okText(); }) as never, reasoningEffort: "high" });
+    const p = new AnthropicCompatProvider({ model: "m", apiKey: "k", fetchImpl: (async (_u: string, i: RequestInit) => { calls.push({ url: _u, body: JSON.parse(String(i.body)) }); return okText(); }) as never, reasoningEffort: "high" });
     await p.generateStructured(REQ as never);
     expect(calls[0]!.body["output_config"]).toEqual({ effort: "high" });
     expect(calls[0]!.body["thinking"]).toEqual({ type: "adaptive" });
@@ -49,7 +49,7 @@ describe("Anthropic wire expressibility (PB-001)", () => {
 
   it("thinkingBudgetTokens serializes the manual block under max_tokens", async () => {
     const { provider: _unused, calls } = { provider: null, calls: [] as Recorded[] };
-    const p = new AnthropicCompatProvider({ model: "m", apiKey: "k", fetchImpl: (async (_u, i) => { calls.push({ url: _u, body: JSON.parse(String(i.body)) }); return okText(); }) as never, thinkingBudgetTokens: 4096, maxTokens: 16384 });
+    const p = new AnthropicCompatProvider({ model: "m", apiKey: "k", fetchImpl: (async (_u: string, i: RequestInit) => { calls.push({ url: _u, body: JSON.parse(String(i.body)) }); return okText(); }) as never, thinkingBudgetTokens: 4096, maxTokens: 16384 });
     await p.generateStructured(REQ as never);
     expect(calls[0]!.body["thinking"]).toEqual({ type: "enabled", budget_tokens: 4096 });
     expect(calls[0]!.body["max_tokens"]).toBe(16384);
@@ -68,7 +68,7 @@ describe("Anthropic wire expressibility (PB-001)", () => {
   it("sendTemperature true adds temperature 0; explicit false omits", async () => {
     const mk = (sendTemperature?: boolean) => {
       const calls: Recorded[] = [];
-      const p = new AnthropicCompatProvider({ model: "m", apiKey: "k", fetchImpl: (async (_u, i) => { calls.push({ url: _u, body: JSON.parse(String(i.body)) }); return okText(); }) as never, ...(sendTemperature !== undefined ? { sendTemperature } : {}) });
+      const p = new AnthropicCompatProvider({ model: "m", apiKey: "k", fetchImpl: (async (_u: string, i: RequestInit) => { calls.push({ url: _u, body: JSON.parse(String(i.body)) }); return okText(); }) as never, ...(sendTemperature !== undefined ? { sendTemperature } : {}) });
       return { p, calls };
     };
     const on = mk(true);
@@ -94,7 +94,7 @@ describe("Anthropic wire expressibility (PB-001)", () => {
 
   it("send-time: a request maxTokens override at or below the budget refuses BEFORE the fetch", async () => {
     const calls: Recorded[] = [];
-    const p = new AnthropicCompatProvider({ model: "m", apiKey: "k", fetchImpl: (async (_u, i) => { calls.push({ url: _u, body: JSON.parse(String(i.body)) }); return okText(); }) as never, thinkingBudgetTokens: 4096, maxTokens: 16384 });
+    const p = new AnthropicCompatProvider({ model: "m", apiKey: "k", fetchImpl: (async (_u: string, i: RequestInit) => { calls.push({ url: _u, body: JSON.parse(String(i.body)) }); return okText(); }) as never, thinkingBudgetTokens: 4096, maxTokens: 16384 });
     await expect(p.generateStructured({ ...REQ, maxTokens: 4000 } as never)).rejects.toThrow(/max_tokens.*budget|budget.*max_tokens|PROVIDER_CONFIG/i);
     expect(calls.length).toBe(0);
   });

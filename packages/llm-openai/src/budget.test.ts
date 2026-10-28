@@ -14,7 +14,7 @@ function capture(responder: () => Response): { p: OpenAICompatProvider; calls: R
   const p = new OpenAICompatProvider({
     model: "m",
     apiKey: "k",
-    fetchImpl: (async (_u, i) => { calls.push({ body: JSON.parse(String(i.body)) }); return responder(); }) as never,
+    fetchImpl: (async (_u: string, i: RequestInit) => { calls.push({ body: JSON.parse(String(i.body)) }); return responder(); }) as never,
   });
   return { p, calls };
 }
@@ -30,7 +30,7 @@ const partial = () => new Response(JSON.stringify({ choices: [{ message: { conte
 describe("OpenAI wire expressibility (PB-001)", () => {
   it("reasoningEffort serializes as reasoning_effort", async () => {
     const calls: Recorded[] = [];
-    const p = new OpenAICompatProvider({ model: "m", apiKey: "k", reasoningEffort: "low", fetchImpl: (async (_u, i) => { calls.push({ body: JSON.parse(String(i.body)) }); return ok(); }) as never });
+    const p = new OpenAICompatProvider({ model: "m", apiKey: "k", reasoningEffort: "low", fetchImpl: (async (_u: string, i: RequestInit) => { calls.push({ body: JSON.parse(String(i.body)) }); return ok(); }) as never });
     await p.generateStructured(REQ as never);
     expect(calls[0]!.body["reasoning_effort"]).toBe("low");
   });
@@ -38,7 +38,7 @@ describe("OpenAI wire expressibility (PB-001)", () => {
   it("token limit emits ONE field under the configured dialect; default is the historical max_tokens", async () => {
     const mk = (opts: Record<string, unknown>, request = REQ) => {
       const calls: Recorded[] = [];
-      const p = new OpenAICompatProvider({ model: "m", apiKey: "k", fetchImpl: (async (_u, i) => { calls.push({ body: JSON.parse(String(i.body)) }); return ok(); }) as never, ...opts });
+      const p = new OpenAICompatProvider({ model: "m", apiKey: "k", fetchImpl: (async (_u: string, i: RequestInit) => { calls.push({ body: JSON.parse(String(i.body)) }); return ok(); }) as never, ...opts });
       return { p, calls, request };
     };
     const legacy = mk({ maxTokens: 4096 });
@@ -52,7 +52,7 @@ describe("OpenAI wire expressibility (PB-001)", () => {
     expect(modern.calls[0]!.body["max_tokens"]).toBeUndefined();
 
     // request-level override wins, still one field
-    const override = mk({ maxTokens: 4096 }, { ...REQ, maxTokens: 1024 });
+    const override = mk({ maxTokens: 4096 }, { ...REQ, maxTokens: 1024 } as never);
     await override.p.generateStructured(override.request as never);
     expect(override.calls[0]!.body["max_tokens"]).toBe(1024);
   });
@@ -69,7 +69,7 @@ describe("OpenAI wire expressibility (PB-001)", () => {
 
   it("sendTemperature false OMITS temperature (the reasoning-endpoint remedy)", async () => {
     const calls: Recorded[] = [];
-    const p = new OpenAICompatProvider({ model: "m", apiKey: "k", sendTemperature: false, fetchImpl: (async (_u, i) => { calls.push({ body: JSON.parse(String(i.body)) }); return ok(); }) as never });
+    const p = new OpenAICompatProvider({ model: "m", apiKey: "k", sendTemperature: false, fetchImpl: (async (_u: string, i: RequestInit) => { calls.push({ body: JSON.parse(String(i.body)) }); return ok(); }) as never });
     await p.generateStructured(REQ as never);
     expect(calls[0]!.body["temperature"]).toBeUndefined();
   });
