@@ -44,12 +44,16 @@ describe("queue legibility (store)", () => {
     const store = new HarnessStore(root, now);
     const captured: Record<string, unknown>[] = [];
     // Each poll tick advances the clock one interval, like real time.
+    // The answer must land INSIDE the window - the loop polls on the
+    // same fake clock, so answering after it would be answering a dead
+    // request (which the guards in QL-002 will refuse).
     const sleep = async (): Promise<void> => {
       t += 1000;
       if (captured.length === 0) captured.push(readRequest("executor-T001@1-1"));
+      else store.answer("executor-T001@1-1", { ok: true });
     };
     const provider = new HarnessProvider(store, 3000, sleep, now);
-    const promise = provider.generateStructured({
+    const response = await provider.generateStructured({
       role: "executor",
       key: "T001@1",
       requestId: "r1",
@@ -59,10 +63,6 @@ describe("queue legibility (store)", () => {
       schemaName: "TestOut",
       runId: "run-abc",
     });
-    // A tick passes (request captured), then a valid answer arrives.
-    await new Promise((r) => setTimeout(r, 5));
-    store.answer("executor-T001@1-1", { ok: true });
-    const response = await promise;
     expect(response.value).toEqual({ ok: true });
     const request = captured[0]!;
     expect(Date.parse(request.expiresAt as string)).toBe(Date.parse(request.createdAt as string) + 3000);
@@ -117,9 +117,10 @@ describe("queue legibility (store)", () => {
     });
     const [before, after] = versions as [{ createdAt: string; expiresAt: string }, { createdAt: string; expiresAt: string; lastError: string }];
     expect(after.createdAt).toBe(before.createdAt);
-    // Refreshed: the new deadline is anchored near the requeue instant,
-    // not the original dispatch.
-    expect(Date.parse(after.expiresAt)).toBeGreaterThan(Date.parse(before.expiresAt) + 2000);
+    // Refreshed: the deadline moved strictly forward (anchored at the
+    // requeue instant, one poll interval in), not still the dispatch
+    // deadline.
+    expect(Date.parse(after.expiresAt)).toBeGreaterThan(Date.parse(before.expiresAt));
     expect(after.lastError).toBeTruthy();
   });
 
