@@ -192,20 +192,27 @@ describe("queue legibility (store)", () => {
   it("serializes: answer waits out a competing lock holder, then writes", async () => {
     const store = new HarnessStore(root, now);
     putRequest({ id: "executor-LOCKED@1-1", expiresAt: iso(60_000) });
-    // An external process holds the store lock for 400ms: mkdir the lock
-    // dir, wait, remove it. Same protocol, no imports needed. The answer
-    // below starts while the holder still holds - it must wait for the
-    // release instead of writing under the holder.
+    // An external process holds the store lock: mkdir the lock dir, wait,
+    // remove it. Same protocol, no imports needed. The handshake is
+    // deterministic under load - the test waits until the lock dir EXISTS
+    // before answering, so the answer always overlaps the hold (a spawned
+    // process can be late to start; measuring from a delay instead of
+    // from the dir's existence is the flake).
     const child = spawn(
       process.execPath,
-      ["-e", `const fs=require("fs");const p=${JSON.stringify(path.join(root, ".spc", "harness", ".lock"))};fs.mkdirSync(p);Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,400);fs.rmdirSync(p);`],
+      ["-e", `const fs=require("fs");const p=${JSON.stringify(path.join(root, ".spc", "harness", ".lock"))};fs.mkdirSync(p);Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,800);fs.rmdirSync(p);`],
       { stdio: "ignore" },
     );
-    await new Promise((r) => setTimeout(r, 120));
+    const lockPath = path.join(root, ".spc", "harness", ".lock");
+    const handshookAt = Date.now();
+    while (!existsSync(lockPath)) {
+      if (Date.now() - handshookAt > 5_000) throw new Error("lock holder never acquired the lock");
+      await new Promise((r) => setTimeout(r, 5));
+    }
     const started = Date.now();
     expect(store.answer("executor-LOCKED@1-1", { ok: true }).id).toBe("executor-LOCKED@1-1");
     const waited = Date.now() - started;
-    expect(waited).toBeGreaterThanOrEqual(150);
+    expect(waited).toBeGreaterThanOrEqual(100);
     expect(existsSync(path.join(root, ".spc", "harness", "answered", "executor-LOCKED@1-1.json"))).toBe(true);
     // The holder's clean exit is awaited, not assumed: answer returning
     // proves the lock was RELEASED, and only then can the holder exit.
