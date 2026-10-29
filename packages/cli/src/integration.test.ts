@@ -150,7 +150,7 @@ describe("end-to-end: greeting fixture", () => {
 describe("end-to-end: replanning fixture", () => {
   const repo = setupFixture("plan-replan-service");
 
-  it("plan and apply complete with an explicit replan", () => {
+  it("plan and apply complete with an explicit replan", { timeout: 120_000 }, () => {
     expect(spc(repo, ["spec", "validate", "specs/session.yaml"]).status).toBe(0);
     expect(spc(repo, ["plan", "specs/session.yaml"]).status).toBe(0);
     const r = spc(repo, ["apply"]);

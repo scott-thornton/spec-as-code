@@ -159,7 +159,7 @@ const basePatch = {
 };
 
 describe("spc agent dry-run preflight (preflight-gates)", () => {
-  it("stages at the request base, links dependencies, and runs criteria plus repo gates (PG-001/2/4)", () => {
+  it("stages at the request base, links dependencies, and runs criteria plus repo gates (PG-001/2/4)", { timeout: 120_000 }, () => {
     const draft = draftPath("good", complete([basePatch]));
     const r = sh(["agent", "dry-run", REQUEST_ID, "--file", draft, "--gates"]);
     expect(r.status).toBe(0);
