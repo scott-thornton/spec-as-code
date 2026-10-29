@@ -1,0 +1,58 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: run-linkage
+  title: Feed run linkage into the executor and replanner dispatches
+goal: >
+  Follow-up F-001 from run run-mvt04np2 (queue-legibility): the stamping
+  machinery is fully shipped - StructuredRequest.runId,
+  ExecuteTaskInput.runId, GenerateAmendmentInput.runId, dispatch-time
+  stamping in the harness provider, expireForRun, cancel retirement, and
+  the derived queue presentation - but the three runtime call sites that
+  feed it (the executeTask invocation and both generateAmendment
+  invocations in packages/runtime/src/apply.ts) sat outside that plan's
+  declared write scopes. Executor and replanner requests therefore
+  dispatch unstamped: every derived surface reads them window-unknown,
+  and spc run cancel cannot attribute them, so the sanctioned kill still
+  orphans the very requests it exists to retire. Verifier requests
+  already stamp (criteria.ts binds ctx.runId); pre-run planner requests
+  carry no run by design. This slice is the three pass-throughs and
+  nothing else - everything downstream of the stamp already exists and
+  is verified.
+requirements:
+  - id: RL-001
+    statement: >
+      Every dispatch inside a running apply carries its run linkage: the
+      runtime passes the run's own id (ctx.meta.runId) at all three call
+      sites in packages/runtime/src/apply.ts - into
+      ExecuteTaskInput.runId at the executeTask invocation, and into
+      GenerateAmendmentInput.runId at both generateAmendment invocations
+      - so executor and replanner harness requests are stamped at
+      dispatch. With the stamp, those requests show a derived window
+      instead of window-unknown in agent list, wait, and brief, and
+      spc run cancel retires them via expireForRun like any other
+      attributed request.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: RL-001-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/run-linkage.test.ts
+        discriminating: true
+  - id: RL-002
+    statement: >
+      Regression guard: workspace typechecks; runtime and cli suites
+      green (runtime owns the pass-throughs; cli owns the cancel and
+      presentation surfaces that consume the stamp).
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: RL-002-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/runtime... test && pnpm --filter @spc/cli... test
+outOfScope:
+  - verifier stamping (already wired at dispatch in criteria.ts)
+  - pre-run planner attribution (no run exists yet; window classification terminalizes those requests - queue-legibility's ruling)
+  - any new store, provider, or CLI behavior (expireForRun, cancel retirement, and derived presentation all shipped and verified under queue-legibility)
