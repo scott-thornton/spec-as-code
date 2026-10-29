@@ -1,0 +1,51 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: window-rendering
+  title: Truthful remaining-window rendering on every queue surface
+goal: >
+  Caught by live inspection of the slerp queue (2026-10-29): every live
+  request renders "0s left in window" regardless of actual remaining
+  time - describeRequestState computes time-left by passing a FUTURE
+  instant to the age formatter, whose negative result clamps to 0s. The
+  elapsed display ("window closed Xm ago") is correct only by algebraic
+  accident: the same construction collapses back to expiresAt, so the
+  bug is invisible there. A queue surface that misstates the clock
+  teaches agents to distrust the window - the exact wrong model
+  queue-legibility set out to remove. The oracle missed it because it
+  matched the word "live" without asserting a nonzero remaining window;
+  the replacement oracle asserts the number.
+requirements:
+  - id: WR-001
+    statement: >
+      The shared state renderer (describeRequestState in
+      packages/cli/src/commands/agent.ts) formats durations directly
+      from the stamped deadline through one duration formatter over
+      positive quantities - the age formatter is never inverted: a live
+      request renders its actual remaining window (a fresh 14-minute
+      stamp reads "14m left in window", never a clamped zero), and an
+      elapsed request renders the time since its window closed. agent
+      list, agent wait, and brief inherit the correction through the
+      shared renderer and render the same remaining window for the same
+      request.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: WR-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/window-rendering.test.ts
+        discriminating: true
+  - id: WR-002
+    statement: >
+      Regression guard: workspace typechecks; cli suite green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: WR-002-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli... test
+outOfScope:
+  - timezone conversion of rendered instants (times are labeled UTC)
+  - the brief json view's pendingHarness count (kept for shape compatibility)
