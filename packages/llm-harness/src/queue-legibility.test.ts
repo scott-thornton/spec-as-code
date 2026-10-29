@@ -16,8 +16,13 @@ const root = mkdtempSync(path.join(tmpdir(), "spc-queuelegibility-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 // Shared fake clock: the store guards classify on the same clock the
-// provider stamps with, so window arithmetic is exact in tests.
-let t = Date.parse("2026-10-29T10:00:00.000Z");
+// provider stamps with, so window arithmetic is exact in tests. Pinned
+// to REAL now at module load - a fixed fake epoch sits at a fixed
+// distance from the wall clock, and once real time passes it by an
+// hour, listPending's real-clock staleness filter (and the constructor
+// sweep) starts eating the fixtures. The WR-002 battery caught exactly
+// that, hours after the suite first ran green.
+let t = Date.now();
 const now = (): number => t;
 const iso = (offsetMs: number): string => new Date(t + offsetMs).toISOString();
 
