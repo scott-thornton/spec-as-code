@@ -1,0 +1,183 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: queue-legibility
+  title: The queue that teaches on contact - windows, refusals, derived states
+goal: >
+  Field incident (slerp, 2026-10-29): after context compression an agent
+  re-answered an orphaned request indefinitely - `respond` exits 0 on any
+  pending id regardless of age, window, or prior answer, because
+  `HarnessStore.answer` checks exactly one thing: that the pending file
+  exists. The provider already computes a response window
+  (roleTimeouts[role] ?? timeoutMs) and expires its own request at window
+  close, but none of that knowledge is on the request, and process death
+  leaves a request that reads as live for up to the one-hour stale sweep.
+  Orientation is not taught and remembered; it is re-derived on contact.
+  A command that succeeds while its effect is impossible teaches every
+  agent the wrong machine. This spec makes every queue surface either
+  show the true state or refuse with the reason: dispatch stamps the
+  window (and run linkage) on the request, the store write boundary
+  refuses dead submissions, presentation derives live/elapsed/unknown
+  states, cancellation retires its own pendings, and the answer-queue
+  skill opens with the machine model in five sentences.
+requirements:
+  - id: QL-001
+    statement: >
+      Dispatch stamps the request's own deadline and provenance:
+      `HarnessProvider.generateStructured` writes `expiresAt` (ISO
+      instant) derived from the SAME knob the poll loop uses -
+      `roleTimeouts[role] ?? timeoutMs` - plus `runId` when the
+      dispatching context has one (`StructuredRequest` gains optional
+      `runId`; executor/verifier/replanner pass it, pre-run planner
+      requests carry none). `requeueWithFeedback(id, error,
+      refreshWindowMs?)` moves `expiresAt` forward by refreshWindowMs
+      exactly while the provider also refreshes its poll anchor (under
+      the existing MAX_REQUEUE_REFRESHES cap); `createdAt` stays the
+      dispatch instant. Requests without `expiresAt` (written by older
+      CLI) remain legal forever - classification reads them as
+      window-unknown, never as expired.
+    priority: must
+    scope:
+      include: [packages/llm/src/**, packages/llm-harness/src/**, packages/executor/src/**, packages/planner/src/**, packages/verifier/src/**]
+    acceptance:
+      - id: QL-001-A
+        type: command
+        command: pnpm --filter @spc/llm-harness... build > /dev/null && pnpm --filter @spc/llm-harness exec vitest run src/queue-legibility.test.ts -t "stamps"
+        discriminating: true
+  - id: QL-002
+    statement: >
+      The store write boundary refuses dead submissions (every caller
+      inherits the guards; the CLI adds none of its own beyond surface):
+      `HarnessStore.answer(id, ...)` throws `REQUEST_WINDOW_ELAPSED`
+      when `expiresAt` is past (text: the window closed, the dispatching
+      run stopped consuming, nothing written now will be read; next
+      moves - `spc agent list` for the newest live request, or
+      `spc agent save-candidate` to keep the composed work claimable);
+      throws `REQUEST_ALREADY_ANSWERED` when an answer exists and the
+      request carries no `lastError` (text: an answer is on record and
+      has not been consumed; while the window is open the run may still
+      accept it - wait; resubmitting cannot help - consumer death is
+      declared ONLY by an elapsed window or a retired request, never
+      inferred from an unanswered poll); accepts the overwrite when
+      `lastError` is set (a rejected answer explicitly invites a
+      corrected retry). The missing-request error names both
+      resolutions: consumed (answered/ record) or retired (stale/
+      record). `save-candidate` acceptance is unchanged - composing
+      against a pending or stale request stays legal.
+    priority: must
+    scope:
+      include: [packages/llm-harness/src/**]
+    acceptance:
+      - id: QL-002-A
+        type: command
+        command: pnpm --filter @spc/llm-harness... build > /dev/null && pnpm --filter @spc/llm-harness exec vitest run src/queue-legibility.test.ts -t "refuses"
+        discriminating: true
+      - id: QL-002-B
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/queue-legibility-cli.test.ts -t "respond"
+        discriminating: true
+  - id: QL-003
+    statement: >
+      The deadline/duplicate guards and the answer write are serialized
+      against competing lifecycle updates at the store: one store lock
+      (mkdir-atomic lock dir under .spc/harness/, bounded retry,
+      stale-lock break after a crash) wraps guard-plus-write in
+      `answer()` and every lifecycle mutation - `putRequest`,
+      `requeueWithFeedback`, `clearPending`, `expirePending`,
+      `expireForRun`, `sweepStale` - so an answer is written only if
+      the pending file existed within the same critical section, and no
+      expiry/cancel can interleave between the guard and the write.
+      Reads (getRequest/getAnswer/listPending) stay lock-free.
+    priority: must
+    scope:
+      include: [packages/llm-harness/src/**]
+    acceptance:
+      - id: QL-003-A
+        type: command
+        command: pnpm --filter @spc/llm-harness... build > /dev/null && pnpm --filter @spc/llm-harness exec vitest run src/queue-legibility.test.ts -t "serializes"
+        discriminating: true
+  - id: QL-004
+    statement: >
+      Presentation derives state at read time - nothing new is
+      persisted: `spc agent list` (text and json) shows per request
+      `live` (age of the stamped window), `elapsed` (window closed Xm
+      ago - the dead zone between window close and the one-hour sweep
+      becomes visible), or `window unknown` (unstamped legacy), plus an
+      answered marker (answeredAt) and the lastError retry hint.
+      `spc agent wait` prints the same line shape. `spc brief`, when
+      pendings exist, renders the queue as one line per request with
+      its derived state instead of a bare count - the orientation
+      command every session opens with becomes the surface where an
+      orphan is obvious in seconds.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: QL-004-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/queue-legibility-cli.test.ts -t "presentation"
+        discriminating: true
+  - id: QL-005
+    statement: >
+      Cancellation retires its own queue entries (the sanctioned kill
+      must not orphan): requests stamped with `runId` are expired by
+      `spc run cancel` via a new store expiry `expireForRun(runId)`
+      (moved to stale/, kept as records, ids returned); the CLI cancel
+      command invokes it after marking the run cancelled and reports
+      what was retired. Pre-run planner requests carry no runId and are
+      not attributable - they terminalize by window classification
+      (QL-002/QL-004), which the primer states plainly.
+    priority: must
+    scope:
+      include: [packages/llm-harness/src/**, packages/cli/src/**]
+    acceptance:
+      - id: QL-005-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/queue-legibility-cli.test.ts -t "cancel"
+        discriminating: true
+  - id: QL-006
+    statement: >
+      The answer-queue skill opens with the machine model - the
+      lifecycle in five sentences and one line - so a post-compression
+      agent re-derives orientation in one glance instead of
+      skim-pasting procedure. The primer states the consumed-vs-retired
+      distinction explicitly (pending clears by consumption OR by
+      retirement; stale/ is the retirement record; disappearance alone
+      is not success), the submitted-not-consumed reading of an
+      answered-but-pending request, the stamped window and the
+      save-candidate escape hatch, cancel-vs-kill, and newest-per-role
+      serial answering. Both copies (repo-local .agents/skills and the
+      bundled packages/cli/skills) carry it; the doctrine line rides
+      verbatim.
+    priority: must
+    scope:
+      include: [.agents/skills/**, packages/cli/skills/**]
+    acceptance:
+      - id: QL-006-A
+        type: file
+        path: .agents/skills/answer-queue/SKILL.md
+        assert:
+          contains: "re-derived on contact"
+        discriminating: true
+      - id: QL-006-B
+        type: file
+        path: packages/cli/skills/answer-queue/SKILL.md
+        assert:
+          contains: "re-derived on contact"
+        discriminating: true
+  - id: QL-007
+    statement: >
+      Regression guard: workspace typechecks; llm, llm-harness, cli,
+      executor, planner, verifier, runtime suites green (the store is
+      shared infrastructure - the full battery, not just the new file).
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: QL-007-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/llm... test && pnpm --filter @spc/llm-harness... test && pnpm --filter @spc/executor... test && pnpm --filter @spc/planner... test && pnpm --filter @spc/verifier... test && pnpm --filter @spc/runtime... test && pnpm --filter @spc/cli... test
+outOfScope:
+  - shrinking the one-hour stale sweep (classification makes the dead zone visible; the sweep stays a janitorial backstop for unstamped files)
+  - run attribution for pre-run planner requests (no run exists yet; window classification terminalizes them)
+  - any persisted lifecycle state beyond the dispatch-time facts expiresAt and runId (postures and states stay derived views)
