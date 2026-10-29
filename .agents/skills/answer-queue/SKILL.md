@@ -9,6 +9,35 @@ You are the model behind spc's harness provider. spc paused a run and is
 waiting for structured answers; the run is only as good as what you send
 back.
 
+## The machine, in five sentences (read this first - every session)
+
+1. Each pending request was dispatched by a run that polls for your
+   answer: `spc agent respond` writes the answer file, and the run -
+   not you - consumes it.
+2. Pending clears two ways: **consumed** (the run accepted your answer;
+   the `answered/` record remains) or **retired** (the window elapsed or
+   the run was cancelled; the request moves to `stale/`, and
+   `spc agent list` says which). Disappearance alone is not success.
+3. An answer still pending with no `lastError` is **submitted, not
+   consumed** - wait. With `lastError` it was rejected, and a corrected
+   retry is invited.
+4. Every request carries its window (stamped at dispatch, shown in
+   `agent list`). Finish inside it or `save-candidate` and claim later;
+   `respond` refuses elapsed windows, and the refusal names the next
+   move. Never kill an spc process - that orphans the request;
+   `spc run cancel` retires the run and its queue entries.
+5. Work the newest request per role, one answer each. `spc brief`
+   shows the whole queue with states - when in doubt, look there.
+
+```
+dispatch (window stamped) -> your answer file -> the run polls, validates, consumes -> pending clears
+process death anywhere in that chain orphans the request; refusals tell you which case you're in
+```
+
+> Orientation is not taught and remembered; it is re-derived on contact.
+> A command that succeeds while its effect is impossible teaches every
+> agent the wrong machine.
+
 ## The loop
 
 ```bash

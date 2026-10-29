@@ -19,6 +19,13 @@ export interface StructuredRequest<T> {
    * for the second executor attempt). Real providers ignore it.
    */
   key?: string;
+  /**
+   * The spc run dispatching this request, when one exists (pre-run
+   * planner requests carry none). The harness provider stamps it on the
+   * pending request so cancellation can retire the run's queue entries;
+   * real providers ignore it.
+   */
+  runId?: string;
   maxTokens?: number;
   /**
    * Rejection reason from a prior attempt at this role (e.g. plan

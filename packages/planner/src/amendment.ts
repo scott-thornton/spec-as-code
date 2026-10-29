@@ -14,6 +14,8 @@ export interface GenerateAmendmentInput {
   executedTaskIds: readonly string[];
   triggeringObservations: Observation[];
   provider: LLMProvider;
+  /** The run this amendment belongs to; stamped on the replanner request. */
+  runId?: string;
   amendmentId: string;
   now?: () => string;
   onUsage?: (record: UsageRecord) => void;
@@ -50,6 +52,7 @@ export async function generateAmendment(input: GenerateAmendmentInput): Promise<
       role: "replanner",
       key: `${input.triggeringObservations[0]?.taskId ?? input.triggeringObservations[0]?.id}@${attempt}`,
       requestId,
+      ...(input.runId ? { runId: input.runId } : {}),
       system: REPLANNER_SYSTEM,
       prompt,
       schema: replannerOutputSchema,

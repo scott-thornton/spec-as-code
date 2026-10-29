@@ -5,6 +5,7 @@ import { compileSpecFile, diffStat, git } from "@spc/repo";
 import { renderPrDraft } from "@spc/renderer";
 import { cancelRun, exportRun, loadRunView, replayRun, resolveChain, runSupersede, supersededByLookup } from "@spc/runtime";
 import { loadRunMeta as loadRunMetaFromRuntime } from "@spc/runtime";
+import { HarnessStore } from "@spc/llm-harness";
 import { resolveRepoRoot } from "../context.js";
 
 /** `spc run show <runId>` - reconstruct what happened, without chat logs. */
@@ -121,7 +122,13 @@ function findSpecFileForRun(repoRoot: string, specId: string): string | null {
 export function runCancel(runId: string, cwd?: string): number {
   const repoRoot = resolveRepoRoot(cwd);
   const state = cancelRun(repoRoot, runId);
+  // The sanctioned kill must not orphan: retire this run's stamped
+  // pendings into stale/ so no agent ever answers a dead run again.
+  const retired = new HarnessStore(repoRoot).expireForRun(runId);
   console.log(`Run ${runId} cancelled (was running; task states preserved).`);
+  if (retired.length > 0) {
+    console.log(`Retired ${retired.length} harness request(s) into stale/: ${retired.join(", ")}`);
+  }
   console.log(`Run directory: ${path.join(repoRoot, ".spc", "runs", runId)}`);
   void state;
   return 0;

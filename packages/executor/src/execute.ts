@@ -20,6 +20,9 @@ export interface ExecuteTaskInput {
   worktreeRoot: string;
   attempt: number;
   priorResults: { taskId: string; summary: string }[];
+  /** The run executing this task; stamped on the dispatched request so
+   *  cancellation can retire the run's queue entries. */
+  runId?: string;
   observations: ObservationDraft[];
   failureContext?: { code: string; message: string };
   commands?: { commandsConfig: CommandsConfig; timeoutMs: number; maxOutputBytes: number };
@@ -138,6 +141,7 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
       role: "executor",
       key: `${task.id}@${attempt}`,
       requestId,
+      ...(input.runId ? { runId: input.runId } : {}),
       system: EXECUTOR_SYSTEM,
       prompt,
       schema: executorResultSchema,

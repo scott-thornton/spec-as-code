@@ -429,6 +429,7 @@ async function verifyAgent(
     role: "verifier",
     key: `${property.id}:${criterion.id}`,
     requestId,
+    runId: ctx.runId,
     system,
     prompt,
     schema: agentVerdictSchema,

@@ -1,7 +1,8 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { SpcError } from "@spc/core";
-import { HarnessStore, checkJsonSchema, claimCandidate, saveCandidate } from "@spc/llm-harness";
+import { HarnessStore, checkJsonSchema, claimCandidate, requestState, saveCandidate } from "@spc/llm-harness";
+import type { HarnessAnswer, HarnessRequest } from "@spc/llm-harness";
 import { gitOk, observeRepository } from "@spc/repo";
 import { enforceProtectedPaths, enforceWriteScope, executorResultSchema, runCommand, stageChanges } from "@spc/executor";
 import { plannerOutputSchema } from "@spc/planner";
@@ -52,6 +53,33 @@ function readPreflightCounts(repoRoot: string): Map<string, number> {
   return counts;
 }
 
+function ageOf(createdAt: string): string {
+  const ms = Date.now() - Date.parse(createdAt);
+  if (Number.isNaN(ms)) return "?";
+  if (ms < 0) return "0s";
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return `${Math.floor(ms / 1000)}s`;
+  if (m < 60) return `${m}m`;
+  return `${Math.floor(m / 60)}h`;
+}
+
+/**
+ * Derived per-request state segment, shared by list, wait, and brief:
+ * the queue's truth computed at read time, never persisted. This is the
+ * surface where an orphan (answered long ago, window closed, nothing
+ * consuming) becomes obvious in seconds.
+ */
+export function describeRequestState(request: HarnessRequest): string {
+  const state = requestState(request);
+  if (state === "unknown") return `window unknown (unstamped; age ${ageOf(request.createdAt)})`;
+  if (state === "live") {
+    const leftMs = Date.parse(request.expiresAt!) - Date.now();
+    return `live (age ${ageOf(request.createdAt)}, ${ageOf(new Date(Date.now() + leftMs).toISOString())} left in window)`;
+  }
+  const closedMs = Date.now() - Date.parse(request.expiresAt!);
+  return `elapsed (window closed ${ageOf(new Date(Date.now() - closedMs).toISOString())} ago)`;
+}
+
 export function runAgentList(cwd: string | undefined, format: "text" | "json"): number {
   const { repoRoot, store } = storeFor(cwd);
   const preflighted = readPreflightCounts(repoRoot);
@@ -65,6 +93,9 @@ export function runAgentList(cwd: string | undefined, format: "text" | "json"): 
           key: r.key,
           schemaName: r.schemaName,
           createdAt: r.createdAt,
+          state: requestState(r),
+          ...(r.expiresAt ? { expiresAt: r.expiresAt } : {}),
+          ...(store.getAnswer(r.id)?.answeredAt ? { answeredAt: store.getAnswer(r.id)!.answeredAt } : {}),
           ...(preflighted.get(r.id) ? { preflightCount: preflighted.get(r.id) } : {}),
           ...(r.lastError ? { lastError: r.lastError } : {}),
         })),
@@ -78,17 +109,12 @@ export function runAgentList(cwd: string | undefined, format: "text" | "json"): 
     console.log("No pending harness requests.");
     return 0;
   }
-  const ageOf = (createdAt: string): string => {
-    const ms = Date.now() - Date.parse(createdAt);
-    if (Number.isNaN(ms)) return "?";
-    const m = Math.floor(ms / 60000);
-    if (m < 1) return `${Math.floor(ms / 1000)}s`;
-    if (m < 60) return `${m}m`;
-    return `${Math.floor(m / 60)}h`;
-  };
   for (const r of pending) {
     const seen = preflighted.get(r.id) ?? 0;
-    console.log(`${r.id}  [${r.role}]  ${r.schemaName}  age ${ageOf(r.createdAt)}${seen > 0 ? `  preflighted ${seen}x` : ""}`);
+    const answeredAt = store.getAnswer(r.id)?.answeredAt ?? null;
+    const answered = answeredAt ? `  answered: yes (${answeredAt.slice(11, 16)} UTC)` : "  answered: no";
+    const retry = r.lastError ? "  · retry needed" : "";
+    console.log(`${r.id}  [${r.role}]  ${r.schemaName}  ${describeRequestState(r)}${answered}${retry}${seen > 0 ? `  preflighted ${seen}x` : ""}`);
     if (r.lastError) {
       console.log(`    retry needed - previous answer invalid: ${r.lastError.split("\n")[0]}`);
     }
@@ -183,10 +209,7 @@ export async function runAgentWait(options: { timeoutMs?: number; cwd?: string }
     const pending = store.listPending();
     if (pending.length > 0) {
       for (const r of pending) {
-        const ms = Date.now() - Date.parse(r.createdAt);
-        const m = Math.floor(ms / 60000);
-        const age = m < 1 ? `${Math.floor(ms / 1000)}s` : m < 60 ? `${m}m` : `${Math.floor(m / 60)}h`;
-        console.log(`${r.id}  [${r.role}]  ${r.schemaName}  age ${age}`);
+        console.log(`${r.id}  [${r.role}]  ${r.schemaName}  ${describeRequestState(r)}`);
       }
       return 0;
     }
@@ -229,7 +252,18 @@ export function runAgentRespond(options: { id: string; file?: string; stdin?: bo
   } catch (e) {
     throw new SpcError("HARNESS_RESPOND_INPUT", `answer is not valid JSON: ${(e as Error).message}`);
   }
-  const answer = store.answer(options.id, value, options.by);
+  let answer: HarnessAnswer;
+  try {
+    answer = store.answer(options.id, value, options.by);
+  } catch (e) {
+    const message = (e as Error).message;
+    // The store's refusal is the instruction: print it, exit attention.
+    if (message.startsWith("REQUEST_")) {
+      console.log(message);
+      return 1;
+    }
+    throw e;
+  }
   console.log(`Answered ${answer.id}. The waiting spc process will pick it up within a second or two.`);
   console.log("If the answer fails schema validation, the request reappears in spc agent list with feedback.");
   // Nudge, never gate: the preflight record exists precisely so the

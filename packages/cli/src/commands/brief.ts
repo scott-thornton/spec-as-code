@@ -3,6 +3,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { git } from "@spc/repo";
 import { HarnessStore } from "@spc/llm-harness";
+import { describeRequestState } from "./agent.js";
 import { postureFor, resolveChain } from "@spc/runtime";
 import { loadRepoConfig, resolveAllSpecs, resolveRepoRoot } from "../context.js";
 
@@ -101,7 +102,9 @@ export function runBrief(cwd: string | undefined, format: "text" | "json" = "tex
   const postureCounts: Record<string, number> = { standing: 0, active: 0, unverified: 0, stale: 0 };
   for (const s of specs) postureCounts[s.posture] = (postureCounts[s.posture] ?? 0) + 1;
 
-  const pendingHarness = new HarnessStore(repoRoot).listPending().length;
+  const harnessStore = new HarnessStore(repoRoot);
+  const pendingRequests = harnessStore.listPending();
+  const pendingHarness = pendingRequests.length;
 
   const unmergedRunBranches = git(repoRoot, ["branch", "--list", "spc/*", "--no-merged", "HEAD"])
     .stdout.split("\n").map((l) => l.trim().replace(/^\* /, "")).filter(Boolean);
@@ -137,7 +140,17 @@ export function runBrief(cwd: string | undefined, format: "text" | "json" = "tex
     }
   }
   console.log(`postures: ${postureCounts.standing} standing · ${postureCounts.active} active · ${postureCounts.unverified} unverified · ${postureCounts.stale} stale`);
-  console.log(`pending harness requests: ${pendingHarness}`);
+  if (pendingRequests.length > 0) {
+    // The orientation command shows the queue's derived state, not a
+    // count: an orphan is obvious here in seconds.
+    console.log(`harness queue (${pendingHarness}):`);
+    for (const r of pendingRequests) {
+      const answeredAt = harnessStore.getAnswer(r.id)?.answeredAt;
+      console.log(`  ${r.id.padEnd(34)} ${describeRequestState(r)}${answeredAt ? `  answered (${answeredAt.slice(11, 16)} UTC)` : ""}`);
+    }
+  } else {
+    console.log(`pending harness requests: ${pendingHarness}`);
+  }
   const posture = [
     config.provider?.name ?? "none",
     config.execution.inPlace ? `inPlace ${config.execution.inPlaceBranch}` : null,

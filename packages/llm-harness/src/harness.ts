@@ -53,6 +53,10 @@ export class HarnessProvider implements LLMProvider {
       jsonSchema = { type: "object", note: `schema ${request.schemaName} could not be rendered` };
     }
 
+    const windowMs = this.roleTimeouts?.[request.role ?? ""] ?? this.timeoutMs;
+    // The request carries its own deadline, stamped from the SAME knob
+    // the poll loop below uses, so every queue surface can derive
+    // liveness without sharing provider config.
     this.store.putRequest({
       id,
       role: request.role,
@@ -61,14 +65,15 @@ export class HarnessProvider implements LLMProvider {
       jsonSchema,
       system: request.system,
       prompt: `--- harness instructions ---\n${HARNESS_INSTRUCTIONS.replace("<id>", id)}\n\n${request.prompt}`,
-      createdAt: new Date().toISOString(),
+      createdAt: new Date(windowStart).toISOString(),
+      expiresAt: new Date(windowStart + windowMs).toISOString(),
+      ...(request.runId ? { runId: request.runId } : {}),
       // Seed visible feedback for retries caused AFTER the store accepted
       // the prior answer (e.g. plan validation): the answerer reads the
       // queue, not the consuming process's stderr.
       ...(request.previousRejection ? { lastError: request.previousRejection } : {}),
     });
 
-    const windowMs = this.roleTimeouts?.[request.role ?? ""] ?? this.timeoutMs;
     while (this.now() < windowStart + windowMs) {
       await this.sleep(POLL_INTERVAL_MS);
       if (!this.store.hasAnswer(id)) continue;
@@ -88,6 +93,7 @@ export class HarnessProvider implements LLMProvider {
       this.store.requeueWithFeedback(
         id,
         validation.issues.slice(0, 8).map((i) => `${i.path || "<root>"}: ${i.message}`).join("; "),
+        invalidAnswers + 1 <= MAX_REQUEUE_REFRESHES ? windowMs : undefined,
       );
       invalidAnswers += 1;
       if (invalidAnswers <= MAX_REQUEUE_REFRESHES) {
