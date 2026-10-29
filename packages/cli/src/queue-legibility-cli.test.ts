@@ -26,6 +26,8 @@ function git(args: string[]): void {
 mkdirSync(path.join(root, ".spc", "harness", "pending"), { recursive: true });
 mkdirSync(path.join(root, ".spc", "harness", "answered"), { recursive: true });
 mkdirSync(path.join(root, ".spc", "harness", "stale"), { recursive: true });
+mkdirSync(path.join(root, "specs"), { recursive: true });
+writeFileSync(path.join(root, "specs", "queue-legibility.yaml"), 'apiVersion: spc.dev/v1alpha1\nkind: Spec\nmetadata:\n  id: queue-legibility\n  title: QL\ngoal: fixture\nrequirements:\n  - id: QL-001\n    statement: holds\n    priority: must\n    acceptance:\n      - id: QL-001-A\n        type: command\n        command: "true"\n', "utf8");
 writeFileSync(path.join(root, ".gitignore"), ".spc/\n", "utf8");
 git(["init", "-q", "-b", "main"]);
 git(["config", "user.email", "t@t"]);

@@ -98,7 +98,10 @@ describe("spc brief", () => {
 
   it("reports the pending harness queue and the config posture", () => {
     const r = sh(["brief"]);
-    expect(r.stdout).toMatch(/pending harness requests: 1/i);
+    // Pendings render as the derived-state queue block, one line each;
+    // the fixture's unstamped request reads window unknown, not live.
+    expect(r.stdout).toMatch(/harness queue \(1\):/);
+    expect(r.stdout).toMatch(/planner-planner@1-1.*window unknown/);
     expect(r.stdout).toContain("requireRedPhase");
     expect(r.stdout).toContain("tests/**");
   });
