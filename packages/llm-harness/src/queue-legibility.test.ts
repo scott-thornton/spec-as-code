@@ -207,7 +207,13 @@ describe("queue legibility (store)", () => {
     const waited = Date.now() - started;
     expect(waited).toBeGreaterThanOrEqual(150);
     expect(existsSync(path.join(root, ".spc", "harness", "answered", "executor-LOCKED@1-1.json"))).toBe(true);
-    expect(child.exitCode).toBe(0);
+    // The holder's clean exit is awaited, not assumed: answer returning
+    // proves the lock was RELEASED, and only then can the holder exit.
+    const code = await new Promise<number | null>((resolve) => {
+      if (child.exitCode !== null) resolve(child.exitCode);
+      else child.on("exit", (c) => resolve(c));
+    });
+    expect(code).toBe(0);
   }, { timeout: 15_000 });
 
   it("serializes: a crashed lock holder is broken after the stale threshold", () => {

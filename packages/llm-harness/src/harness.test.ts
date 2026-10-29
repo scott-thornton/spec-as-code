@@ -108,8 +108,10 @@ describe("harness provider", () => {
     // lands at 500 (refreshing the window to 1500) and the valid one at
     // 1200 - past the ORIGINAL deadline, inside the refreshed one.
     const root = mkdtempSync(path.join(tmpdir(), "spc-harness-"));
-    const store = new HarnessStore(root);
     let clock = 0;
+    // One clock basis for provider and store alike: the store's answer
+    // guards read the same window the stamp was written on.
+    const store = new HarnessStore(root, () => clock);
     let phase = 0;
     const sleep = async (): Promise<void> => {
       clock += 10;
