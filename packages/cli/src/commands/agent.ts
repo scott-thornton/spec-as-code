@@ -63,6 +63,16 @@ function ageOf(createdAt: string): string {
   return `${Math.floor(m / 60)}h`;
 }
 
+/** Duration over a positive quantity: never inverted, never negative -
+ *  remaining windows and closed-ago spans are durations, not ages. */
+function formatDuration(ms: number): string {
+  if (Number.isNaN(ms) || ms < 0) ms = 0;
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return `${Math.floor(ms / 1000)}s`;
+  if (m < 60) return `${m}m`;
+  return `${Math.floor(m / 60)}h`;
+}
+
 /**
  * Derived per-request state segment, shared by list, wait, and brief:
  * the queue's truth computed at read time, never persisted. This is the
@@ -74,10 +84,10 @@ export function describeRequestState(request: HarnessRequest): string {
   if (state === "unknown") return `window unknown (unstamped; age ${ageOf(request.createdAt)})`;
   if (state === "live") {
     const leftMs = Date.parse(request.expiresAt!) - Date.now();
-    return `live (age ${ageOf(request.createdAt)}, ${ageOf(new Date(Date.now() + leftMs).toISOString())} left in window)`;
+    return `live (age ${ageOf(request.createdAt)}, ${formatDuration(leftMs)} left in window)`;
   }
   const closedMs = Date.now() - Date.parse(request.expiresAt!);
-  return `elapsed (window closed ${ageOf(new Date(Date.now() - closedMs).toISOString())} ago)`;
+  return `elapsed (window closed ${formatDuration(closedMs)} ago)`;
 }
 
 export function runAgentList(cwd: string | undefined, format: "text" | "json"): number {
