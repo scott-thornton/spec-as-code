@@ -14,7 +14,7 @@ import {
 } from "@spc/core";
 import type { FollowUp, Observation, Plan, RequirementState, RunState, RunStatus, SpecIR, Task, TaskState } from "@spc/schema";
 import type { LLMProvider, UsageRecord } from "@spc/llm";
-import { enforceProtectedPaths, executeTask, enforceWriteScope, revertPaths, runScheduler, type ExecutionOutcome } from "@spc/executor";
+import { enforceProtectedPaths, executeTask, enforceWriteScope, revertPaths, runScheduler, stagingRoundsFrom, type ExecutionOutcome } from "@spc/executor";
 import { classifyAmendmentRisk, generateAmendment } from "@spc/planner";
 import { commitAll, compileSpecFile, contentDelta, contentSnapshot, currentBranch, currentRevision, diffStat, git, gitOk, statusDelta, statusPorcelain, type ContentSnapshot, type WorktreeStatus } from "@spc/repo";
 import { checkoutBranch, checkoutRunBranch, createWorktree, removeWorktree } from "@spc/repo";
@@ -1305,6 +1305,10 @@ export async function executeTaskInRun(
         attempt,
         priorResults,
         runId: ctx.meta.runId,
+        // The bound survives restart: staging rounds already recorded for
+        // this task attempt, derived from the same event stream -
+        // uniformly for live execution and resume.
+        priorStageRejections: stagingRoundsFrom(ctx.events.all(), task.id, attempt),
         observations: [...ctx.observations.all()],
         ...(failureContext ? { failureContext } : {}),
         ...(openClarifications ? { openClarifications } : {}),
@@ -1314,7 +1318,15 @@ export async function executeTaskInRun(
           maxOutputBytes: ctx.config.execution.maxOutputBytes,
         },
       },
-      { provider: ctx.provider, onUsage: usageSink },
+      {
+        provider: ctx.provider,
+        onUsage: usageSink,
+        // Durable recording BEFORE the next dispatch: the event log is
+        // the restart-safety source for the staging-round bound.
+        onStageRejection: (code: string, message: string) => {
+          ctx.events.append("TASK_STAGE_REJECTED", { taskId: task.id, attempt, code, message });
+        },
+      },
     );
   } catch (e) {
     return failedOutcome(task, (e as { code?: string }).code ?? "EXECUTOR_ERROR", (e as Error).message);

@@ -23,6 +23,10 @@ export interface ExecuteTaskInput {
   /** The run executing this task; stamped on the dispatched request so
    *  cancellation can retire the run's queue entries. */
   runId?: string;
+  /** Staging rejections already recorded for this task attempt (derived
+   *  from the run's event log by the runtime, live and on resume);
+   *  offsets the requeue bound so restarts cannot reset it. */
+  priorStageRejections?: number;
   observations: ObservationDraft[];
   failureContext?: { code: string; message: string };
   commands?: { commandsConfig: CommandsConfig; timeoutMs: number; maxOutputBytes: number };
@@ -42,6 +46,9 @@ export interface ExecutionOutcome {
 export interface ExecutorDeps {
   provider: LLMProvider;
   onUsage?: (record: UsageRecord) => void;
+  /** Durable recording of a staging rejection - called BEFORE the next
+   *  dispatch (event ordering is the restart-safety guarantee). */
+  onStageRejection?: (code: string, message: string) => void;
 }
 
 function summarizeCriterion(c: AcceptanceCriterion): string {
@@ -132,94 +139,136 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
   };
 
   const prompt = buildExecutorPrompt(ctx, specIr, snapshot);
-  const requestId = crypto.randomUUID();
-  const started = Date.now();
+
+  // Bounded staging correction (specs/staging-requeue): an answer that
+  // fails staging with an answer-defect code is re-dispatched carrying
+  // the applicator's refusal as previousRejection - same task, same
+  // attempt, new request id, the rejection durably recorded BEFORE the
+  // next dispatch. Closed allowlist: scope and safety refusals are
+  // plan-agreement failures and fail immediately. The bound is three
+  // staging rounds per task attempt (offset by rounds already recorded,
+  // so restarts cannot reset it) - at most four dispatches.
+  const ELIGIBLE_STAGE_CODES = new Set([
+    "PATCH_BASE_MISSING",
+    "PATCH_BASE_MISMATCH",
+    "PATCH_ANCHOR_ABSENT",
+    "PATCH_ANCHOR_NOT_UNIQUE",
+  ]);
+  const STAGE_ROUND_BOUND = 3;
+  let stageRejections = 0;
 
   let result: ExecutorResult;
-  try {
-    const response = await deps.provider.generateStructured({
-      role: "executor",
-      key: `${task.id}@${attempt}`,
-      requestId,
-      ...(input.runId ? { runId: input.runId } : {}),
-      system: EXECUTOR_SYSTEM,
-      prompt,
-      schema: executorResultSchema,
-      schemaName: "ExecutorResult",
-    });
-    deps.onUsage?.(
-      makeUsageRecord("executor", requestId, { system: EXECUTOR_SYSTEM, prompt }, JSON.stringify(response.value), {
-        ...response.usage,
-        durationMs: Date.now() - started,
-      }, { taskId: task.id }),
-    );
-    result = response.value;
-  } catch (e) {
-    const code = e instanceof SpcError ? e.code : "EXECUTOR_PROVIDER_ERROR";
-    const message = (e as Error).message;
-    deps.onUsage?.(
-      makeUsageRecord("executor", requestId, { system: EXECUTOR_SYSTEM, prompt }, "", {
-        model: "unknown",
-        durationMs: Date.now() - started,
-      }, { taskId: task.id, status: "error", errorCode: code }),
-    );
-    throw e;
-  }
+  let stagedOk: Extract<ReturnType<typeof stageChanges>, { ok: true }> | undefined;
+  let previousRejection: string | undefined;
+  for (;;) {
+    const requestId = crypto.randomUUID();
+    const dispatchStarted = Date.now();
+    try {
+      const response = await deps.provider.generateStructured({
+        role: "executor",
+        key: `${task.id}@${attempt}`,
+        requestId,
+        ...(input.runId ? { runId: input.runId } : {}),
+        ...(previousRejection ? { previousRejection } : {}),
+        system: EXECUTOR_SYSTEM,
+        prompt,
+        schema: executorResultSchema,
+        schemaName: "ExecutorResult",
+      });
+      deps.onUsage?.(
+        makeUsageRecord("executor", requestId, { system: EXECUTOR_SYSTEM, prompt }, JSON.stringify(response.value), {
+          ...response.usage,
+          durationMs: Date.now() - dispatchStarted,
+        }, { taskId: task.id }),
+      );
+      result = response.value;
+    } catch (e) {
+      const code = e instanceof SpcError ? e.code : "EXECUTOR_PROVIDER_ERROR";
+      const message = (e as Error).message;
+      deps.onUsage?.(
+        makeUsageRecord("executor", requestId, { system: EXECUTOR_SYSTEM, prompt }, "", {
+          model: "unknown",
+          durationMs: Date.now() - dispatchStarted,
+        }, { taskId: task.id, status: "error", errorCode: code }),
+      );
+      throw e;
+    }
 
-  // Pre-flight scope validation before touching the worktree.
-  const writePatterns = task.targets?.write ?? [];
-  const proposedPaths = result.changes.map((c) => c.path);
-  const violations = enforceWriteScope(writePatterns, proposedPaths);
-  if (violations.length > 0) {
-    const v = violations[0]!;
-    return {
-      taskId: task.id,
-      status: "failed",
-      summary: `proposed changes violate the declared write scope`,
-      result,
-      appliedChanges: [],
-      failure: { code: v.code, message: `${v.code}: ${v.reason}` },
-    };
-  }
-  for (const change of result.changes) {
-    if (!isSafeRelativePath(change.path) || !isPhysicallyContained(worktreeRoot, change.path)) {
-      // Lexical safety plus PHYSICAL containment: a path whose components
-      // traverse a symlink escapes the worktree where the git delta
-      // cannot see it, so both checks reject.
+    // Pre-flight scope validation before touching the worktree.
+    const writePatterns = task.targets?.write ?? [];
+    const proposedPaths = result.changes.map((c) => c.path);
+    const violations = enforceWriteScope(writePatterns, proposedPaths);
+    if (violations.length > 0) {
+      const v = violations[0]!;
       return {
         taskId: task.id,
         status: "failed",
-        summary: "proposed an unsafe path",
+        summary: `proposed changes violate the declared write scope`,
         result,
         appliedChanges: [],
-        failure: { code: UNSAFE_PATH, message: `${UNSAFE_PATH}: ${change.path}` },
+        failure: { code: v.code, message: `${v.code}: ${v.reason}` },
       };
     }
-  }
+    for (const change of result.changes) {
+      if (!isSafeRelativePath(change.path) || !isPhysicallyContained(worktreeRoot, change.path)) {
+        // Lexical safety plus PHYSICAL containment: a path whose components
+        // traverse a symlink escapes the worktree where the git delta
+        // cannot see it, so both checks reject.
+        return {
+          taskId: task.id,
+          status: "failed",
+          summary: "proposed an unsafe path",
+          result,
+          appliedChanges: [],
+          failure: { code: UNSAFE_PATH, message: `${UNSAFE_PATH}: ${change.path}` },
+        };
+      }
+    }
 
-  // Stage the entire change set before touching disk: any refusal (stale
-  // base digest, absent or non-unique anchor) fails the whole set with
-  // nothing written. No repair, no fallback to full-file rewrite.
-  const staged = stageChanges(worktreeRoot, result.changes);
-  if (!staged.ok) {
-    return {
-      taskId: task.id,
-      status: "failed",
-      summary: `change set refused: ${staged.code}`,
-      result,
-      appliedChanges: [],
-      failure: { code: staged.code, message: staged.message },
-    };
+    // Stage the entire change set before touching disk: any refusal (stale
+    // base digest, absent or non-unique anchor) fails the whole set with
+    // nothing written. No repair, no fallback to full-file rewrite.
+    const staged = stageChanges(worktreeRoot, result.changes);
+    if (staged.ok) {
+      stagedOk = staged;
+      break;
+    }
+    if (!ELIGIBLE_STAGE_CODES.has(staged.code)) {
+      return {
+        taskId: task.id,
+        status: "failed",
+        summary: `change set refused: ${staged.code}`,
+        result,
+        appliedChanges: [],
+        failure: { code: staged.code, message: staged.message },
+      };
+    }
+    // Durably record the round BEFORE re-dispatching: a crash between
+    // the two must not lose it, and the event log is the restart-safety
+    // source for the bound.
+    deps.onStageRejection?.(staged.code, staged.message);
+    stageRejections += 1;
+    if ((input.priorStageRejections ?? 0) + stageRejections > STAGE_ROUND_BOUND) {
+      return {
+        taskId: task.id,
+        status: "failed",
+        summary: `change set refused: ${staged.code} (staging rounds exhausted)`,
+        result,
+        appliedChanges: [],
+        failure: { code: staged.code, message: staged.message },
+      };
+    }
+    previousRejection = staged.message;
   }
 
   const appliedChanges: { path: string; change: string }[] = [];
-  for (const write of staged.writes) {
+  for (const write of stagedOk!.writes) {
     const full = path.join(worktreeRoot, write.path);
     mkdirSync(path.dirname(full), { recursive: true });
     writeFileSync(full, write.content, "utf8");
     appliedChanges.push({ path: write.path, change: write.label });
   }
-  for (const p of staged.deletes) {
+  for (const p of stagedOk!.deletes) {
     rmSync(path.join(worktreeRoot, p), { force: true });
     appliedChanges.push({ path: p, change: "deleted" });
   }
@@ -268,4 +317,20 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
       ? { code: result.failure.code ?? "TASK_FAILED", message: result.failure.message }
       : undefined,
   };
+}
+
+/**
+ * Derive the recorded staging-rejection count for a task attempt from
+ * the run's event log - the restart-safety source for the requeue
+ * bound; the runtime passes it as priorStageRejections (live and on
+ * resume, uniformly, from the same event stream).
+ */
+export function stagingRoundsFrom(
+  events: readonly { type: string; payload?: Record<string, unknown> }[],
+  taskId: string,
+  attempt: number,
+): number {
+  return events.filter(
+    (e) => e.type === "TASK_STAGE_REJECTED" && e.payload?.taskId === taskId && e.payload?.attempt === attempt,
+  ).length;
 }
