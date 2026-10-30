@@ -1,0 +1,125 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: pipeline-signposting
+  title: The pipeline stated where you stand - stage headers, next-stage lines, brief positions, and spc docs
+goal: >
+  The pipeline exists as tools, not as a sequence any surface states:
+  agents skip stages not from laziness but because nothing tells them
+  where they are. Signposts teach, gates enforce, and a signpost that
+  blocks just becomes another thing a rushed agent routes around - so
+  this spec makes the pipeline ambient: every dispatched request states
+  its stage (the one surface a queue agent is guaranteed to read), every
+  command completion names the next stage (the moment the agent's
+  attention is exactly there), brief derives each run's pipeline
+  position, and a new spc docs command carries the pipeline plus a
+  derived catalog of what every command and skill does. Runs after
+  rehearse-guard in the same session, so the rehearse and pipeline
+  skills it references already exist.
+requirements:
+  - id: SG-001
+    statement: >
+      Every harness request states its stage in the instructions
+      embedded in its prompt, defined for all four roles: planner
+      requests carry stage plan; executor requests carry stage answer
+      discipline with the sequence (validate, then dry-run --gates,
+      then respond; save-candidate under window pressure) and the
+      pointer (follow: spc use-skill rehearse); replanner requests
+      carry stage replan - read the request's lastError for why the
+      prior plan was rejected and amend within the declared scopes;
+      verifier requests carry stage verify - judge each criterion on
+      recorded evidence and cite its id. Headers are role-constant
+      text in the provider's instruction constants, and the oracle
+      asserts the header present in the constructed requests for all
+      four roles. A post-compression agent reads its position and its
+      local rules on first contact with any request, without
+      remembering anything.
+    priority: must
+    scope:
+      include: [packages/llm-harness/src/**]
+    acceptance:
+      - id: SG-001-A
+        type: command
+        command: pnpm --filter @spc/llm-harness... build > /dev/null && pnpm --filter @spc/llm-harness exec vitest run src/stage-headers.test.ts
+        discriminating: true
+  - id: SG-002
+    statement: >
+      Command completions name the next command to run and never assert
+      that any stage passed: spc plan's completion names answer
+      discipline (spc agent list); spc apply's completion names spc
+      verify regardless of run status (it must never imply verification
+      passed); spc verify names the adversarial pass and the push only
+      when the verification it just ran is green. One line per
+      completion point - the terminal is where the agent's attention
+      already is, and where it is most likely to improvise the next
+      move without a signpost.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: SG-002-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/pipeline-signposting.test.ts
+        discriminating: true
+  - id: SG-003
+    statement: >
+      brief derives each run's pipeline position exhaustively from
+      state it already computes, every observed state with exactly one
+      interpretation: pending planner request -> stage plan; pending
+      replanner request -> stage replan (within a run); pending
+      executor request -> stage answer discipline; pending verifier
+      request -> stage verify; execution terminal with verification
+      incomplete -> verify next; verification green -> adversarial
+      pass, then push; failed or cancelled run -> recovery (rectify,
+      resume, or cancel guidance), never a forward stage. Pure
+      derivation - nothing new is persisted, and no adversarial-
+      completion state is fabricated (adversarial has no record to
+      derive from).
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: SG-003-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/pipeline-signposting.test.ts
+  - id: SG-004
+    statement: >
+      A new spc docs command carries the pipeline and a derived
+      catalog: the pipeline section renders the bundled pipeline skill
+      (single source of truth - the same body use-skill prints, never a
+      second authored copy that drifts), followed by a commands catalog
+      derived from the CLI's own command registry (each command with
+      its registered description) and a skills catalog derived from the
+      shipped skill copies (each with its frontmatter description and
+      its spc use-skill invocation). Derivation is the anti-drift
+      mechanism: docs cannot disagree with the commander registrations
+      or the shipped skills it enumerates. The repo-local and bundled
+      skill copies carry a byte-equivalence invariant (asserted where
+      the skills land, under rehearse-guard), so docs rendering the
+      bundled copy cannot drift from the repo-local one. The oracle
+      asserts: registered commands present with their descriptions,
+      shipped skills present with use-skill invocations, and the
+      pipeline section byte-equal to the bundled skill body.
+    priority: must
+    scope:
+      include: [packages/cli/src/**, packages/cli/skills/**]
+    acceptance:
+      - id: SG-004-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/pipeline-signposting.test.ts
+        discriminating: true
+  - id: SG-005
+    statement: >
+      Regression guard: workspace typechecks; llm-harness and cli
+      suites green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: SG-005-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/llm-harness... test && pnpm --filter @spc/cli... test
+outOfScope:
+  - any new enforced pipeline state or gate (signposts are ambient by design; the gates stay where they are - spec validate, requireRedPhase, write scope, respond friction, verify --all in CI)
+  - a second authored copy of the pipeline text (docs renders the bundled skill)
+  - interactive tutorials or onboarding wizards (docs is a printed reference, read on demand)

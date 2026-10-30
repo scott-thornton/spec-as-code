@@ -1,0 +1,84 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: staging-requeue
+  title: Staging refusals requeue with feedback instead of burning the task attempt
+goal: >
+  Field incident (slerp run-mvufo06w, 2026-10-30): a schema-valid executor
+  answer failed staging with PATCH_BASE_MISMATCH (two ops on one path
+  both declaring the original digest); with maxTaskRetries 1 the refusal
+  consumed the attempt, eight tasks blocked, and the run died - a full
+  re-apply for a fixable submission. The asymmetry is the defect: a
+  schema-invalid answer requeues with lastError and a refreshed window,
+  bounded, because it is an answer defect with an actionable message;
+  the PATCH_* staging refusals are the same class - answer defects with
+  actionable messages ("re-read and restate, compose chains with spc
+  patch build --after") - yet they fail the attempt outright. The
+  requeue machinery already exists end to end: StructuredRequest
+  carries previousRejection, the harness provider seeds it as the
+  pending request's lastError, and each dispatch opens a fresh window.
+  This spec routes staging refusals through it.
+requirements:
+  - id: SR-001
+    statement: >
+      A schema-valid executor answer whose changes fail staging requeues
+      with feedback under an explicit retry contract. ELIGIBLE: exactly
+      the four answer-defect codes PATCH_BASE_MISSING,
+      PATCH_BASE_MISMATCH, PATCH_ANCHOR_ABSENT, PATCH_ANCHOR_NOT_UNIQUE
+      - a closed allowlist; any future PATCH_* code is NOT automatically
+      retryable. INELIGIBLE: write-scope and protected-path refusals
+      and every other staging failure keep today's fail-the-attempt
+      behavior (plan-agreement failures are not composition errors).
+      MECHANICS: on an eligible refusal the executor re-dispatches
+      carrying the refusal text as previousRejection (the harness
+      provider surfaces it as the new request's lastError); each
+      re-dispatch is a NEW request id under the same task id and task
+      attempt, the rejected answer's answered/ record remains as
+      provenance, and the plan and write scope are immutable throughout.
+      ACCOUNTING: three distinct counters - task attempts (existing
+      maxTaskRetries policy, untouched), staging rounds (new, per task
+      attempt), and dispatches (the existing invocation counter). Every
+      staging rejection consumes one staging round; a corrected answer
+      consumes none. The bound is a constant three rounds per task
+      attempt - not configurable - after which the attempt fails
+      without another dispatch. Each staging rejection appends one run
+      event and the round count derives from the event log, so the
+      bound applies across restart and resume (an in-memory counter
+      alone would reset on recovery, and the invocation counter is
+      confounded by window-expiry retries). The bound is also the
+      resource bound: with window-recalibration's executor window the
+      worst case is four dispatches per attempt - a combined budget the
+      spec states rather than discovers. FEEDBACK: the requeued
+      request's lastError carries the applicator's actual refusal text
+      (including the spc patch build --after guidance for chained
+      digests), so the next attempt corrects the specific mistake.
+      ORACLE COVERAGE: all four eligible codes requeue; scope and
+      protected-path refusals and any non-eligible staging failure fail
+      the attempt; bound exhaustion fails without another dispatch; a
+      corrected answer completes the SAME attempt; the second dispatch
+      carries the refusal text as lastError; the round count survives
+      a restart via event-log derivation.
+    priority: must
+    scope:
+      include: [packages/executor/src/**, packages/llm-harness/src/**]
+    acceptance:
+      - id: SR-001-A
+        type: command
+        command: pnpm --filter @spc/executor... build > /dev/null && pnpm --filter @spc/executor exec vitest run src/staging-requeue.test.ts
+        discriminating: true
+  - id: SR-002
+    statement: >
+      Regression guard: workspace typechecks; executor, llm-harness,
+      and runtime suites green (the staging loop sits inside executeTask
+      and its consumers must be proven unchanged for the passing path).
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: SR-002-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/executor... test && pnpm --filter @spc/llm-harness... test && pnpm --filter @spc/runtime... test
+outOfScope:
+  - write-scope and protected-path refusals (plan-agreement failures fail fast by design)
+  - planner/verifier answers (staging is an executor concern; their retry paths already exist)
+  - new persisted lifecycle state (one run event per staging rejection extends the existing append-only log - records, not state; the round count derives from it)

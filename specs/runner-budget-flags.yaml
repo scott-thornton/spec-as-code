@@ -1,0 +1,88 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: runner-budget-flags
+  title: Budget and effort flags on the evals runner, with arm provenance in the record
+goal: >
+  The frontier-model eval campaign (../har, protocol 48ac04f) is staged
+  on a real blocker: evals/runner/src/main.ts constructs its real
+  providers with model/key/baseURL/timeout/maxTokens and none of the
+  budget fields provider-budget rev 3 shipped - a third, hand-rolled
+  construction site that predates the config threading. Running a
+  reasoning model through it unbudgeted is the exact thinking-only
+  starvation that produced the project's retracted table; flash changes
+  behavior under budgets too, so every arm of the ladder must run
+  budgeted on the same plumbing. Flags - not inherited config - are the
+  right shape here: eval arm configuration belongs in the recorded,
+  reproducible launch command. And the record must prove what ran: a
+  protocol that pre-registers parity configs deserves a trial artifact
+  that carries the effective provider settings, not a pointer at a
+  protocol commit.
+requirements:
+  - id: RBF-001
+    statement: >
+      The runner's real-provider branches accept three new CLI flags -
+      --thinking-budget-tokens, --reasoning-effort, --max-tokens - and
+      wire them into the constructed provider options per dialect: the
+      anthropic branch passes thinkingBudgetTokens, reasoningEffort,
+      and maxTokens (replacing the hardcoded 16384); the openai branch
+      passes reasoningEffort and maxTokens. Flag values are
+      pass-through: the adapters remain the guards, so a config that
+      violates budget < maxTokens refuses pre-fetch, a config carrying
+      both effort and budget is refused (mutually exclusive in the
+      anthropic adapter), and thinkingBudgetTokens aimed at the openai
+      adapter is refused rather than silently dropped. A run that would
+      be rigged by silent defaults cannot start. Omission semantics:
+      --max-tokens absent retains today's 16384 on the anthropic branch
+      and the current default on the openai branch - the flag makes the
+      value explicit, it does not change the default, so historical
+      comparisons stay unconfounded. The oracle asserts the
+      adapter-authority matrix: valid budget alone accepted, valid
+      effort alone accepted, both together rejected, budget at or
+      above max rejected, openai plus budget rejected - all before any
+      network fetch (the adapters' existing pre-fetch validation).
+    priority: must
+    scope:
+      include: [evals/runner/src/**]
+    acceptance:
+      - id: RBF-001-A
+        type: command
+        command: pnpm --filter @spc/evals... build > /dev/null && pnpm --filter @spc/evals exec vitest run src/provider-flags.test.ts
+        discriminating: true
+  - id: RBF-002
+    statement: >
+      Arm provenance: the provider construction is extracted into a
+      testable unit whose returned settings (model, baseURL, timeoutMs,
+      maxTokens, thinkingBudgetTokens, reasoningEffort - each present
+      only when set) are recorded into the benchmark result artifacts
+      per provider, so every trial record proves the effective provider
+      configuration that produced it. The September record's honesty is
+      the instrument's value; the new records are self-describing.
+      Provenance records the EFFECTIVE options the constructed
+      provider received, after defaults - not the CLI arguments echoed;
+      providerSettings is an optional additive field so existing
+      artifacts still load; the record includes the provider dialect
+      and never an API key.
+    priority: must
+    scope:
+      include: [evals/runner/src/**]
+    acceptance:
+      - id: RBF-002-A
+        type: command
+        command: pnpm --filter @spc/evals... build > /dev/null && pnpm --filter @spc/evals exec vitest run src/provider-flags.test.ts
+        discriminating: true
+  - id: RBF-003
+    statement: >
+      Regression guard: evals runner typechecks, builds, and its
+      existing suite stays green.
+    priority: must
+    scope:
+      include: [evals/**]
+    acceptance:
+      - id: RBF-003-A
+        type: command
+        command: pnpm --filter @spc/evals typecheck && pnpm --filter @spc/evals... build > /dev/null && pnpm --filter @spc/evals test
+outOfScope:
+  - inheriting repo .spc/config.yaml provider settings (arm configuration belongs in the launch command; flags are the interface)
+  - new adapter behavior (budget/effort/maxTokens validation all shipped in provider-budget rev 3; the runner only passes values through)
+  - campaign design changes (protocol 48ac04f owns the arms, gates, and retry rules)

@@ -1,0 +1,116 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: window-recalibration
+  title: Harness windows sized for the field - reasoning-heavy composition, not just abandonment
+goal: >
+  Field incident (slerp run-mvufo06w, 2026-10-30): a max-reasoning
+  agent spent its entire 15-minute window composing, the window died
+  mid-authorship, and the rushed retry hand-wrote chained ops instead
+  of composing with spc patch build --after - the window did not just
+  cost time, it manufactured the defect that killed the run. The 15ms
+  flat default was calibrated when a stale pending request was
+  dangerous - answerable into the void, indistinguishable from live.
+  queue-legibility removed that world: requests carry expiresAt,
+  respond refuses elapsed windows, agent list shows elapsed state, and
+  run cancel retires a run's pendings instantly. The cost of a long
+  window is now queue hygiene, not hazard - the calibration predates
+  the machinery that justified it. Recalibrate defaults to the actual
+  workload: heavy-composition roles get windows sized for reasoning
+  agents, the visible remaining-window clock (window-rendering) lets
+  agents pace themselves, and save-candidate covers overflow. The
+  numbers are an initial calibration - operational policy, adjustable;
+  the eval programme can inform later recalibration.
+requirements:
+  - id: WT-001
+    statement: >
+      Built-in windows become role-weighted: executor 3,600,000ms (60
+      minutes - changeset composition is the heaviest work), planner
+      and replanner 2,400,000ms (40 minutes), and the global default
+      rises from 900,000ms to 1,800,000ms (30 minutes - verifier and
+      any unlisted role). Configuration always beats built-ins: an
+      explicitly configured harnessTimeouts entry wins over everything;
+      an explicitly configured harnessResponseTimeoutMs beats the
+      built-in role defaults (a repo tightening globally must stay
+      able to tighten); built-ins apply only where the repo config
+      says nothing. The effective window rides the existing expiresAt
+      stamp, so every queue surface shows the real clock without
+      change. The oracle covers the full precedence matrix (explicit
+      role + explicit global, role only, global only, neither) for a
+      listed and an unlisted role, and asserts the effective window
+      lands in the dispatched request's expiresAt with agent list
+      rendering the matching remaining time. An invalid configured
+      value fails config load under the strict schema - never a silent
+      fallback.
+    priority: must
+    scope:
+      include: [packages/schema/src/**, packages/llm-harness/src/**, packages/cli/src/**]
+    acceptance:
+      - id: WT-001-A
+        type: command
+        command: pnpm --filter @spc/llm-harness... build > /dev/null && pnpm --filter @spc/llm-harness exec vitest run src/window-defaults.test.ts
+        discriminating: true
+  - id: WT-002
+    statement: >
+      docs/usage/configuration.md documents the new defaults, the
+      precedence (explicit per-role map, then explicit global, then
+      built-in role weights, then built-in global), and the
+      recalibration rationale: windows are abandonment detection under
+      the post-queue-legibility safety machinery, sized so a
+      reasoning-heavy agent can compose calmly instead of shipping a
+      rushed answer to beat the clock.
+    priority: must
+    scope:
+      include: [docs/**]
+    acceptance:
+      - id: WT-002-A
+        type: file
+        path: docs/usage/configuration.md
+        assert:
+          contains: "sized for reasoning-heavy composition"
+        discriminating: true
+      - id: WT-002-B
+        type: file
+        path: docs/usage/configuration.md
+        assert:
+          contains: "3,600,000"
+      - id: WT-002-C
+        type: file
+        path: docs/usage/configuration.md
+        assert:
+          contains: "precedence"
+  - id: WT-004
+    statement: >
+      The stale sweep never retires a stamped request whose window is
+      still open, however old it is: sweep eligibility requires age
+      beyond the threshold AND (no expiresAt stamp, or an elapsed
+      window). Executor windows at 60 minutes meet the one-hour sweep
+      head-on, and any configured window beyond it would otherwise let
+      another process's constructor sweep retire a live request out
+      from under a composing agent - a latent defect the recalibration
+      makes reachable, closed here.
+    priority: must
+    scope:
+      include: [packages/llm-harness/src/**]
+    acceptance:
+      - id: WT-004-A
+        type: command
+        command: pnpm --filter @spc/llm-harness... build > /dev/null && pnpm --filter @spc/llm-harness exec vitest run src/window-defaults.test.ts
+        discriminating: true
+  - id: WT-003
+    statement: >
+      Regression guard: workspace typechecks; schema, llm-harness, and
+      cli suites green - including the role-timeouts coverage whose
+      override semantics are unchanged (explicit config still wins;
+      only the fallback floor moves).
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: WT-003-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/schema... test && pnpm --filter @spc/llm-harness... test && pnpm --filter @spc/cli... test
+outOfScope:
+  - agent-driven heartbeats or window extension (a spin-looping agent would keep a dead request alive indefinitely - watched live for an afternoon)
+  - automatic grace refresh on unanswered expiry (recreates a longer window with more machinery; recalibration does the job)
+  - shrinking the one-hour stale sweep (classification already makes the dead zone visible)
