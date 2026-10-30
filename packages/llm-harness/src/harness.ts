@@ -72,6 +72,9 @@ export class HarnessProvider implements LLMProvider {
   constructor(
     private readonly store: HarnessStore,
     private readonly timeoutMs = 900_000,
+    /** Injected sleep must yield to the event loop. An immediately-
+     *  resolving promise causes the polling loop to spin through
+     *  microtasks, starving timers (including test timeouts). */
     private readonly sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
     private readonly now: () => number = () => Date.now(),
     /** Role-specific windows; roles without an entry use timeoutMs. */
