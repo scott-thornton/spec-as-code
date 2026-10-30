@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { isSpcError } from "@spc/core";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { OpenAICompatProvider } from "@spc/llm-openai";
-import { AnthropicCompatProvider } from "@spc/llm-anthropic";
-import { HarnessProvider, HarnessStore } from "@spc/llm-harness";
 import type { LLMProvider } from "@spc/llm";
+import { HarnessProvider, HarnessStore } from "@spc/llm-harness";
+import { buildRealProviderPair, type ProviderProvenance } from "./providers.js";
 import { runBenchmark } from "./benchmark.js";
 import type { LoadedTask } from "./task.js";
-import { RetryingProvider } from "./retry.js";
 
 const program = new Command();
 
@@ -27,6 +26,9 @@ program
   .option("--base-url <url>", "provider base URL (OpenAI- or Anthropic-compatible)")
   .option("--api-key-env <name>", "environment variable holding the API key", "OPENAI_API_KEY")
   .option("--timeout-ms <n>", "per-request timeout for real providers", "180000")
+  .option("--thinking-budget-tokens <n>", "thinking budget for the anthropic dialect (the provider-budget field; the adapter validates)")
+  .option("--reasoning-effort <level>", "reasoning effort label (dialect-specific; the adapters validate)")
+  .option("--max-tokens <n>", "output token limit (the anthropic default of 16384 is preserved when omitted)")
   .option("--keep-work", "keep working copies for debugging")
   .action(
     async (opts: {
@@ -40,9 +42,13 @@ program
       baseUrl?: string;
       apiKeyEnv: string;
       timeoutMs: string;
+      thinkingBudgetTokens?: string;
+      reasoningEffort?: string;
+      maxTokens?: string;
       harnessDir?: string;
       keepWork?: boolean;
     }) => {
+      let providerProvenance: ProviderProvenance | undefined;
       const providerFactory =
         opts.provider === "harness"
           ? (task: LoadedTask): Promise<{ control: LLMProvider; treatment: LLMProvider }> => {
@@ -60,26 +66,19 @@ program
                 const apiKey = process.env[opts.apiKeyEnv];
                 if (!apiKey) throw new Error(`${opts.apiKeyEnv} is not set`);
                 const timeoutMs = Number(opts.timeoutMs) || 180_000;
-                const make = (): LLMProvider =>
-                  opts.provider === "anthropic"
-                    ? new RetryingProvider(
-                        new AnthropicCompatProvider({
-                          model: opts.model ?? "glm-4.6",
-                          apiKey,
-                          ...(opts.baseUrl ? { baseURL: opts.baseUrl } : {}),
-                          timeoutMs,
-                          maxTokens: 16384,
-                        }),
-                      )
-                    : new RetryingProvider(
-                        new OpenAICompatProvider({
-                          model: opts.model ?? "gpt-4.1",
-                          apiKey,
-                          ...(opts.baseUrl ? { baseURL: opts.baseUrl } : {}),
-                          timeoutMs,
-                        }),
-                      );
-                return Promise.resolve({ control: make(), treatment: make() });
+                const dialect = opts.provider as "openai" | "anthropic";
+                const pair = buildRealProviderPair({
+                  provider: dialect,
+                  apiKey,
+                  timeoutMs,
+                  ...(opts.model ? { model: opts.model } : {}),
+                  ...(opts.baseUrl ? { baseUrl: opts.baseUrl } : {}),
+                  ...(opts.thinkingBudgetTokens !== undefined ? { thinkingBudgetTokens: Number(opts.thinkingBudgetTokens) } : {}),
+                  ...(opts.reasoningEffort !== undefined ? { reasoningEffort: opts.reasoningEffort } : {}),
+                  ...(opts.maxTokens !== undefined ? { maxTokens: Number(opts.maxTokens) } : {}),
+                });
+                providerProvenance = pair.provenance;
+                return Promise.resolve({ control: pair.control, treatment: pair.treatment });
               }
             : undefined;
       const result = await runBenchmark({
@@ -91,6 +90,13 @@ program
         ...(opts.keepWork ? { keepWork: true } : {}),
         ...(providerFactory ? { providerFactory } : {}),
       });
+      // Arm provenance: the effective provider options recorded into the
+      // benchmark artifacts - a protocol can then be checked against what
+      // actually ran (additive; existing consumers unaffected).
+      if (providerProvenance) {
+        mkdirSync(path.join(process.cwd(), opts.out), { recursive: true });
+        writeFileSync(path.join(process.cwd(), opts.out, "provider.json"), JSON.stringify(providerProvenance, null, 2) + "\n", "utf8");
+      }
       const errors = result.results.filter((r) => r.error);
       console.log(`Benchmark complete: ${result.results.length} task result(s), ${errors.length} error(s).`);
       console.log(`Report: ${opts.out}/summary.md`);
