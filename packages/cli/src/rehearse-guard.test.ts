@@ -14,7 +14,7 @@ import { afterAll, describe, expect, it } from "vitest";
 // shape-specific; candidate claims never see the guard; the rehearse
 // and pipeline skills ship byte-identical in both copies.
 const CLI = new URL("../dist/main.js", import.meta.url).pathname;
-const REPO = new URL("../../", import.meta.url).pathname; // spec-plan root, for skill copies
+const REPO = new URL("../../../", import.meta.url).pathname; // spec-plan root, for skill copies
 const root = mkdtempSync(path.join(tmpdir(), "spc-rehearseguard-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
@@ -30,6 +30,10 @@ function git(args: string[]): void {
 mkdirSync(path.join(root, ".spc", "harness", "pending"), { recursive: true });
 mkdirSync(path.join(root, ".spc", "harness", "answered"), { recursive: true });
 mkdirSync(path.join(root, "lib"), { recursive: true });
+// agent dry-run resolves the repo's specs directory; without one it
+// exits SPEC_FILE_NOT_FOUND before recording the preflight.
+mkdirSync(path.join(root, "specs"), { recursive: true });
+writeFileSync(path.join(root, "specs", "fixture.yaml"), 'apiVersion: spc.dev/v1alpha1\nkind: Spec\nmetadata:\n  id: fixture\n  title: F\ngoal: fixture\nrequirements:\n  - id: F-001\n    statement: holds\n    priority: must\n    acceptance:\n      - id: F-001-A\n        type: command\n        command: "true"\n', "utf8");
 writeFileSync(path.join(root, ".gitignore"), ".spc/\n", "utf8");
 writeFileSync(path.join(root, "lib", "real.txt"), "line one\nline two\n", "utf8");
 git(["init", "-q", "-b", "main"]);
@@ -49,11 +53,11 @@ putPending("executor-REAL@1-1", { expiresAt: iso(10 * 60_000), prompt: `answer\n
 
 const REAL_CONTENT = "line one\nline two\n";
 const realDigest = "sha256:" + createHash("sha256").update(REAL_CONTENT, "utf8").digest("hex");
-// A correctly-chained pair on one file: op2 binds the post-op1 content.
-const afterOp1 = REAL_CONTENT.replace("line one", "line ONE");
+// A correctly-chained pair on one file: op2 binds the post-op1
+// content, whatever op1's replacement was.
 const chainedReal = (r1: string, r2: string) => [
   { op: "patch", path: "lib/real.txt", baseDigest: realDigest, anchor: "line one", replacement: r1 },
-  { op: "patch", path: "lib/real.txt", baseDigest: "sha256:" + createHash("sha256").update(afterOp1, "utf8").digest("hex"), anchor: "line two", replacement: r2 },
+  { op: "patch", path: "lib/real.txt", baseDigest: "sha256:" + createHash("sha256").update(REAL_CONTENT.replace("line one", r1), "utf8").digest("hex"), anchor: "line two", replacement: r2 },
 ];
 function writeAnswer(file: string, changes: unknown[]): void {
   writeFileSync(path.join(root, file), JSON.stringify({ status: "completed", summary: "s", changes, commands: [], observations: [], evidenceCandidates: [], followups: [] }), "utf8");
@@ -103,6 +107,7 @@ describe("rehearse guard (CLI)", () => {
     putPending("executor-TWIN@1-1", { expiresAt: iso(10 * 60_000), prompt: `answer\n\n${JSON.stringify({ task: { id: "T002" }, repository: { revision: null } })}` });
     // Rehearse one chained twin, submit a different one: digests differ
     // -> the rehearsed record does not cover this answer.
+    writeAnswer("twin.json", chainedReal("line X", "line Y"));
     const rehearsal = sh(["agent", "dry-run", "executor-TWIN@1-1", "--file", "twin.json"]);
     expect(rehearsal.status).toBe(0);
     const twin = JSON.parse(readFileSync(path.join(root, "twin.json"), "utf8")) as { changes: unknown[] };
