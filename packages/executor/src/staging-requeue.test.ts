@@ -94,7 +94,7 @@ function makeStub(script: Array<() => ReturnType<typeof good>>, onFirstRequeue?:
       if (n > 0 && onFirstRequeue) onFirstRequeue();
       const answer = script[Math.min(n, script.length - 1)]!();
       n += 1;
-      return { value: answer as unknown as T, usage: {} };
+      return { value: answer as unknown as T, usage: { model: "stub", durationMs: 0 } };
     },
   };
   const deps = {
