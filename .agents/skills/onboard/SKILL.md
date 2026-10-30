@@ -5,6 +5,9 @@ description: Adopt spc in a repository - init, config, first spec, CI. Use when 
 
 # onboard: adopting spc in a repository
 
+The pipeline skill maps the whole workflow stage by stage (follow: spc
+use-skill pipeline).
+
 ## Setup
 
 ```bash

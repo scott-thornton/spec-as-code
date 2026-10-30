@@ -206,9 +206,11 @@ agent
   .option("--stdin", "read the JSON value from stdin")
   .option("--by <who>", "record who answered")
   .option("--from-candidate <cid>", "admit a portable candidate (atomic claim; fingerprint must match this request)")
+  .option("--no-preflight", "submit a chained-op answer despite PREFLIGHT_ADVISABLE (the advice still prints)")
   .option("--cwd <dir>", "repository directory", process.cwd())
-  .action((id: string, opts: { file?: string; stdin?: boolean; by?: string; fromCandidate?: string; cwd: string }) => {
-    process.exitCode = runAgentRespond({ id, file: opts.file, stdin: opts.stdin, by: opts.by, fromCandidate: opts.fromCandidate, cwd: opts.cwd });
+  .action((id: string, opts: { file?: string; stdin?: boolean; by?: string; fromCandidate?: string; preflight?: boolean; cwd: string }) => {
+    // Commander's negation convention: --no-preflight sets preflight=false.
+    process.exitCode = runAgentRespond({ id, file: opts.file, stdin: opts.stdin, by: opts.by, fromCandidate: opts.fromCandidate, ...(opts.preflight === false ? { noPreflight: true } : {}), cwd: opts.cwd });
   });
 agent
   .command("save-candidate")

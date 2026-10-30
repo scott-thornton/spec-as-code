@@ -38,6 +38,10 @@ process death anywhere in that chain orphans the request; refusals tell you whic
 > A command that succeeds while its effect is impossible teaches every
 > agent the wrong machine.
 
+Before answering executor requests that carry change ops, rehearse them
+(follow: spc use-skill rehearse). The full stage map is one command
+away (follow: spc use-skill pipeline).
+
 ## The loop
 
 ```bash

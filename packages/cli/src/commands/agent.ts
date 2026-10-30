@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { SpcError } from "@spc/core";
@@ -51,6 +52,55 @@ function readPreflightCounts(repoRoot: string): Map<string, number> {
     // absent: no preflights recorded yet
   }
   return counts;
+}
+
+/** Draft digests on record per request id: a preflight counts for the
+ *  guard only when it was recorded for THIS exact answer value. */
+function readPreflightDigests(repoRoot: string): Map<string, Set<string>> {
+  const digests = new Map<string, Set<string>>();
+  try {
+    const lines = readFileSync(path.join(repoRoot, ".spc", "harness", "preflights.jsonl"), "utf8").split("\n");
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t) continue;
+      try {
+        const rec = JSON.parse(t) as { id?: string; draftDigest?: string };
+        if (rec.id && rec.draftDigest) {
+          const set = digests.get(rec.id) ?? new Set<string>();
+          set.add(rec.draftDigest);
+          digests.set(rec.id, set);
+        }
+      } catch {
+        // malformed line: informational record only, skip
+      }
+    }
+  } catch {
+    // absent: no preflights recorded yet
+  }
+  return digests;
+}
+
+/** Digest of the actual submitted answer value - computed identically at
+ *  dry-run record time and respond check time, never over a staged or
+ *  intermediate representation that can diverge from what is submitted. */
+function draftDigestOf(value: unknown): string {
+  return "sha256:" + createHash("sha256").update(JSON.stringify(value), "utf8").digest("hex");
+}
+
+/** The answer's patch-op shape: null when it carries no patch ops. */
+function patchShapeOf(value: unknown): { ops: number; files: number; chained: string[] } | null {
+  if (typeof value !== "object" || value === null) return null;
+  const changes = (value as { changes?: unknown }).changes;
+  if (!Array.isArray(changes)) return null;
+  const patches = changes.filter(
+    (c): c is { op: string; path: string } =>
+      typeof c === "object" && c !== null && (c as { op?: unknown }).op === "patch" && typeof (c as { path?: unknown }).path === "string",
+  );
+  if (patches.length === 0) return null;
+  const byPath = new Map<string, number>();
+  for (const p of patches) byPath.set(p.path, (byPath.get(p.path) ?? 0) + 1);
+  const chained = [...byPath.entries()].filter(([, n]) => n > 1).map(([p]) => p);
+  return { ops: patches.length, files: byPath.size, chained };
 }
 
 function ageOf(createdAt: string): string {
@@ -231,7 +281,7 @@ export async function runAgentWait(options: { timeoutMs?: number; cwd?: string }
   }
 }
 
-export function runAgentRespond(options: { id: string; file?: string; stdin?: boolean; by?: string; cwd?: string; fromCandidate?: string }): number {
+export function runAgentRespond(options: { id: string; file?: string; stdin?: boolean; by?: string; cwd?: string; fromCandidate?: string; noPreflight?: boolean }): number {
   const { repoRoot, store } = storeFor(options.cwd);
   if (options.fromCandidate) {
     if (options.file || options.stdin) {
@@ -262,6 +312,25 @@ export function runAgentRespond(options: { id: string; file?: string; stdin?: bo
   } catch (e) {
     throw new SpcError("HARNESS_RESPOND_INPUT", `answer is not valid JSON: ${(e as Error).message}`);
   }
+  // Rehearsal friction (risk-scoped, escapable): the empirically top
+  // staging refusal is chained ops on one path composed without
+  // rehearsal. A preflight counts only when it was recorded for THIS
+  // exact answer (draft-digest identity); --no-preflight pushes
+  // through, but the advice still teaches.
+  const shape = patchShapeOf(value);
+  const rehearsed = readPreflightDigests(repoRoot).get(options.id)?.has(draftDigestOf(value)) ?? false;
+  const advice =
+    shape && !rehearsed
+      ? `note: no preflight on record for ${options.id} matches this answer (${shape.ops} ops across ${shape.files} file(s)${shape.chained.length > 0 ? `, ${shape.chained.length} chained on one path` : ""}); de-risk with: spc agent dry-run ${options.id} --file <draft> --gates`
+      : null;
+  if (shape && shape.chained.length > 0 && !rehearsed && !options.noPreflight) {
+    console.log(`PREFLIGHT_ADVISABLE: ${options.id} would receive ${shape.ops} ops with ${shape.chained.length} chained on one path, and no dry-run preflight matches this exact answer.`);
+    console.log(`Chained ops whose digests do not compose are the top staging refusal - a dry-run costs minutes, a staging refusal costs the task attempt.`);
+    console.log(`Rehearse: spc agent dry-run ${options.id} --file <draft> --gates  (follow: spc use-skill rehearse)`);
+    console.log(`Submit anyway: add --no-preflight`);
+    if (advice) console.log(advice);
+    return 1;
+  }
   let answer: HarnessAnswer;
   try {
     answer = store.answer(options.id, value, options.by);
@@ -278,7 +347,8 @@ export function runAgentRespond(options: { id: string; file?: string; stdin?: bo
   console.log("If the answer fails schema validation, the request reappears in spc agent list with feedback.");
   // Nudge, never gate: the preflight record exists precisely so the
   // cheap check is the habitual one.
-  if ((readPreflightCounts(repoRoot).get(answer.id) ?? 0) === 0) {
+  if (advice) console.log(advice);
+  else if ((readPreflightCounts(repoRoot).get(answer.id) ?? 0) === 0) {
     console.log(`note: no preflight on record for ${answer.id}; de-risk next time with: spc agent dry-run ${answer.id} --file <draft> --gates`);
   }
   return 0;
@@ -397,7 +467,10 @@ export async function runAgentDryRun(options: { id: string; file: string; gates?
     gates: Record<string, number> | null;
   }) => {
     mkdirSync(path.dirname(preflightsFile), { recursive: true });
-    appendFileSync(preflightsFile, JSON.stringify({ id: options.id, at: new Date().toISOString(), ...rec }) + "\n", "utf8");
+    // draftDigest binds the record to THIS draft value: the rehearse
+    // guard accepts a preflight only when what was rehearsed is what
+    // gets submitted.
+    appendFileSync(preflightsFile, JSON.stringify({ id: options.id, at: new Date().toISOString(), draftDigest: draftDigestOf(draft), ...rec }) + "\n", "utf8");
   };
 
   // Schema first: an invalid draft requeues at submit with the same
