@@ -65,7 +65,10 @@ const result = (changes: Changes) => ({
   evidenceCandidates: [],
   followups: [],
 });
-const good = () => result([{ op: "patch", path: "lib/base.txt", baseDigest, anchor: "alpha", replacement: "ALPHA" }]);
+// The corrected answer is a fresh create per call: it always stages and
+// never mutates the shared fixture files later tests anchor against.
+let seq = 0;
+const good = () => result([{ op: "create", path: `lib/out-${++seq}.txt`, content: "ok" }]);
 const badMismatch = () => result([{ op: "patch", path: "lib/base.txt", baseDigest: "sha256:" + "0".repeat(64), anchor: "alpha", replacement: "ALPHA" }]);
 const badMissing = () => result([{ op: "patch", path: "lib/nope.txt", baseDigest, anchor: "alpha", replacement: "x" }]);
 const badAnchor = () => result([{ op: "patch", path: "lib/base.txt", baseDigest, anchor: "zzz-not-there", replacement: "x" }]);
