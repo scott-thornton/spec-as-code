@@ -14,6 +14,24 @@ interface LastRun {
   openBlocking: { id: string; title: string }[];
 }
 
+/** Derived pipeline position for a run's line (specs/pipeline-
+ *  signposting): every observed state gets exactly one interpretation,
+ *  pure derivation from state brief already computes. */
+function pipelinePosition(lastRun: LastRun | null, pending: { role: string; runId?: string; id: string }[], lastRunId: string | undefined): string | null {
+  if (!lastRun) return null;
+  if (lastRun.status === "running") {
+    const mine = pending.filter((r) => r.runId === lastRunId);
+    const executor = mine.find((r) => r.role === "executor");
+    if (executor) return "awaiting answer (stage 4 of 7)";
+    const planner = mine.find((r) => r.role === "planner" || r.role === "replanner");
+    if (planner) return planner.role === "planner" ? "plan (stage 3 of 7)" : "replan (within the run)";
+    return "run in progress";
+  }
+  if (lastRun.status === "succeeded" || lastRun.status === "partially_satisfied") return "adversarial pass, then push";
+  if (lastRun.status === "failed" || lastRun.status === "cancelled") return "recovery (rectify, resume, or start fresh)";
+  return null;
+}
+
 interface BriefSpec {
   id: string;
   lastRun: LastRun | null;
@@ -130,7 +148,8 @@ export function runBrief(cwd: string | undefined, format: "text" | "json" = "tex
 
   console.log(`specs/ (${specs.length})`);
   for (const s of specs) {
-    const run = s.lastRun ? `${s.lastRun.id}  ${s.lastRun.status}` : "no runs";
+    const position = pipelinePosition(s.lastRun, pendingRequests.map((r) => ({ role: r.role, id: r.id, ...(r.runId ? { runId: r.runId } : {}) })), s.lastRun?.id);
+    const run = s.lastRun ? `${s.lastRun.id}  ${s.lastRun.status}${position ? ` · ${position}` : ""}` : "no runs";
     const blockers = s.lastRun && s.lastRun.openBlocking.length > 0
       ? `   ${s.lastRun.openBlocking.map((f) => f.id).join(", ")}`
       : "";

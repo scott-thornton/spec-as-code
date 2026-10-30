@@ -44,6 +44,7 @@ export function printReport(report: ApplyReport): void {
     console.log(`${report.branch} first, or they will report the run's changes as drift.`);
   }
   console.log(`Model calls: ${report.modelCalls}, replans: ${report.replans}`);
+  console.log(`Next: spc verify (stage 6 of 7), then the adversarial pass, then push (follow: spc use-skill pipeline)`);
   console.log("");
   console.log("Requirements:");
   for (const r of report.requirements) {

@@ -12,6 +12,7 @@ import { runFollowupResolve, runFollowups } from "./commands/followups.js";
 import { runCancel, runExport, runPr, runReplay, runShow, runSupersedeCommand } from "./commands/run.js";
 import { runAgentList, runAgentRespond, runAgentSaveCandidate, runAgentShow, runAgentValidate, runAgentDryRun, runAgentWait, type AgentShowPart } from "./commands/agent.js";
 import { runSkills, runUseSkill } from "./commands/skills.js";
+import { runDocs } from "./commands/docs.js";
 import { runPolicyExplain } from "./commands/policy.js";
 import { runQuickCommand } from "./commands/quick.js";
 import { runRectify } from "./commands/rectify.js";
@@ -42,6 +43,13 @@ program
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action((opts: { cwd: string }) => {
     process.exitCode = runSkills(opts.cwd);
+  });
+
+program
+  .command("docs")
+  .description("the pipeline and derived catalogs: what every command and skill does")
+  .action(() => {
+    process.exitCode = runDocs(program.commands);
   });
 
 program

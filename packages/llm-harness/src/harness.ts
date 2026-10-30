@@ -14,6 +14,25 @@ const MAX_REQUEUE_REFRESHES = 5;
 const HARNESS_INSTRUCTIONS = `You are the model backend for an spc run. Read the system and prompt, inspect the repository as needed, and produce a single JSON value satisfying jsonSchema exactly. Save your answer with: spc agent respond <id> --file <answer.json> (the file must contain the JSON value itself, not a wrapper). Then the run continues automatically.`;
 
 /**
+ * Pipeline stage headers (specs/pipeline-signposting): every dispatched
+ * request states its stage and its local rules - the one surface a
+ * queue agent is guaranteed to read. A post-compression agent reads
+ * its position on first contact, without remembering anything.
+ */
+const STAGE_HEADERS: Record<string, string> = {
+  planner:
+    "stage: plan (3 of 7) - compose the transition plan; cover every requirement; the pipeline map is one command away (follow: spc use-skill pipeline).",
+  executor:
+    "stage: answer discipline (4 of 7) - draft in a scratch file, then spc agent validate, then spc agent dry-run --gates, then spc agent respond; if the window runs out mid-rehearsal, spc agent save-candidate - never a rushed submit (follow: spc use-skill rehearse).",
+  replanner:
+    "stage: replan (within the run) - read the request's lastError for why the prior answer or plan was rejected and amend within the declared scopes (follow: spc use-skill pipeline).",
+  verifier:
+    "stage: verify - judge each criterion on the recorded evidence and cite its id (follow: spc use-skill pipeline).",
+};
+const GENERIC_STAGE_HEADER =
+  "stage: unknown - the pipeline map is one command away (follow: spc use-skill pipeline).";
+
+/**
  * Harness provider: the "model" is an external agent (a coding harness such
  * as ZCode, or a human with an editor) working in the same repository.
  * Each structured request is written to .spc/harness/pending/ with its JSON
@@ -87,7 +106,7 @@ export class HarnessProvider implements LLMProvider {
       schemaName: request.schemaName,
       jsonSchema,
       system: request.system,
-      prompt: `--- harness instructions ---\n${HARNESS_INSTRUCTIONS.replace("<id>", id)}\n\n${request.prompt}`,
+      prompt: `--- harness instructions ---\n${STAGE_HEADERS[request.role] ?? GENERIC_STAGE_HEADER}\n${HARNESS_INSTRUCTIONS.replace("<id>", id)}\n\n${request.prompt}`,
       createdAt: new Date(windowStart).toISOString(),
       expiresAt: new Date(windowStart + windowMs).toISOString(),
       ...(request.runId ? { runId: request.runId } : {}),

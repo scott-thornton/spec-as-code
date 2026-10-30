@@ -89,6 +89,8 @@ export async function runPlan(specFile: string): Promise<number> {
   console.log(renderPlan(result.plan, ir));
   console.log(`Persisted: ${path.relative(process.cwd(), paths.planFile(planId))}`);
   console.log(`Planner attempts: ${result.attempts}`);
+  console.log("");
+  console.log(`Next: answer discipline (stage 4 of 7) - spc agent list for pending requests (follow: spc use-skill rehearse)`);
   for (const f of blocking) {
     console.log(`\nBLOCKING follow-up drafted by planner: ${f.type} - ${f.title}\n  ${f.description}`);
   }

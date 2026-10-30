@@ -206,5 +206,9 @@ export async function runVerify(
     console.log(JSON.stringify(multi ? jsonReports : jsonReports[0], null, 2));
   }
 
+  if (worst === 0 && format !== "json") {
+    console.log("");
+    console.log(`Next: adversarial pass (stage 7 of 7), then push (follow: spc use-skill adversarial-loop)`);
+  }
   return worst;
 }
