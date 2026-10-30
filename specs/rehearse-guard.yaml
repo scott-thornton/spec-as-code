@@ -1,0 +1,165 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: rehearse-guard
+  title: Rehearsal as the path of least resistance - submit-boundary friction and the rehearse skill
+goal: >
+  Two field agents have now skipped spc agent dry-run and shipped
+  staging refusals that a rehearsal would have caught (one near-miss
+  caught by the author's own scratch rehearsal; slerp run-mvufo06w
+  killed by exactly the chained-digest class dry-run exists to catch).
+  The existing nudges lose to window pressure every time: the note is
+  generic boilerplate - the slerp agent piped it through grep -v note -
+  and the economics feel wrong to a rushed agent because the cost of
+  skipping is invisible until it burns the run. Sequences enforced at
+  the read boundary (skills, prose, habits) do not survive context
+  compression; sequences enforced at the write boundary do. This spec
+  makes the submit boundary ask: risk-scoped, escapable friction that
+  demands acknowledgement rather than blocking, a dedicated invocable
+  skill the refusals can name, advice specific enough to read as truth
+  rather than boilerplate, and - because the pipeline exists today as
+  tools, not as a sequence any surface states - a pipeline skill that
+  maps the seven stages, each with its exit condition and the command
+  that proves it.
+requirements:
+  - id: RG-001
+    statement: >
+      spc agent respond refuses with exit 1 - overridable by
+      --no-preflight - when BOTH hold: the submitted answer carries two
+      or more change ops on the same path (the chained-digest hazard,
+      the empirically top staging-refusal class), and no dry-run
+      preflight is on record for the request id (the preflight record
+      already exists). The refusal text teaches with specifics: the
+      hazard named (chained ops whose digests do not compose), the cost
+      asymmetry (a dry-run costs minutes; a staging refusal costs the
+      task attempt), the exact command (spc agent dry-run <id> --file
+      <draft> --gates), and the procedure (follow: spc use-skill
+      rehearse). Preflight identity: the existing informational preflight
+      record gains one field - a digest of the rehearsed draft - and a
+      preflight counts only when its digest matches the submitted
+      answer (rehearse A then submit B is correctly treated as
+      unrehearsed; today the record binds nothing, which the review
+      verified). The trigger is a risk heuristic for the dominant
+      observed hazard class, not a complete chained-digest detector.
+      The --no-preflight bypass submits normally (exit 0), still prints
+      the RG-002 advice, records nothing, and gates nothing else.
+      Never triggers on single-op or op-less answers, or on
+      --from-candidate claims (candidates carry their own fingerprint
+      validation). The oracle asserts the two skill copies byte-equal.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: RG-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/rehearse-guard.test.ts
+        discriminating: true
+  - id: RG-002
+    statement: >
+      The generic preflight note becomes specific: any patch-op answer
+      submitted with no preflight on record gets advice naming its own
+      shape (op count, files touched, same-path chaining called out),
+      so it reads as truth about this answer rather than boilerplate to
+      filter.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: RG-002-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/rehearse-guard.test.ts
+  - id: RG-003
+    statement: >
+      A dedicated rehearse skill ships in both copies (repo-local
+      .agents/skills and the bundled packages/cli/skills): when to use
+      it (before answering any executor request whose answer carries
+      change ops, and whenever window pressure appears), the five-step
+      pattern - draft in a scratch file never the live tree; build ops
+      with spc patch build and --after chains, never hand-written
+      digests; spc agent validate for the cheap schema check; spc agent
+      dry-run --gates as the real rehearsal against the request base;
+      submit with respond, or spc agent save-candidate when the window
+      runs out mid-rehearsal, never a rushed submit - and the doctrine
+      line: rehearse in the scratch, commit through the queue - the
+      irreversible thing goes last. spc skills lists it, spc use-skill
+      rehearse prints it, and answer-queue cross-references it by
+      pointer (follow: spc use-skill rehearse) without duplicating its
+      body.
+    priority: must
+    scope:
+      include: [.agents/skills/**, packages/cli/skills/**]
+    acceptance:
+      - id: RG-003-A
+        type: file
+        path: .agents/skills/rehearse/SKILL.md
+        assert:
+          contains: "irreversible thing goes last"
+        discriminating: true
+      - id: RG-003-B
+        type: file
+        path: packages/cli/skills/rehearse/SKILL.md
+        assert:
+          contains: "irreversible thing goes last"
+        discriminating: true
+      - id: RG-003-C
+        type: file
+        path: .agents/skills/rehearse/SKILL.md
+        assert:
+          contains: "spc agent dry-run"
+        discriminating: true
+      - id: RG-003-D
+        type: file
+        path: packages/cli/skills/rehearse/SKILL.md
+        assert:
+          contains: "spc agent dry-run"
+        discriminating: true
+  - id: RG-005
+    statement: >
+      A dedicated pipeline skill ships in both copies (repo-local
+      .agents/skills and the bundled packages/cli/skills): the seven
+      stages - author, red oracle, plan, answer discipline, run,
+      verify, adversarial - each stated with its exit condition and the
+      command that proves it (spec validate; red criteria recorded and
+      committed; validated persisted plan; validate then dry-run then
+      respond, save-candidate under window pressure; terminal run state
+      with evidence (the run stage includes the bounded correction
+      loop: a staging rejection re-dispatches within the same task
+      attempt - see staging-requeue); red-to-green flip plus verify
+      --all and the gates
+      before the single push; adversarial pass between verify and
+      push). The doctrine line rides verbatim: a stage without its exit
+      evidence is not done - the next stage's entry asks for it.
+      answer-queue, onboard, and the rehearse skill cross-reference it
+      by pointer (follow: spc use-skill pipeline) without duplicating
+      its body.
+    priority: must
+    scope:
+      include: [.agents/skills/**, packages/cli/skills/**]
+    acceptance:
+      - id: RG-005-A
+        type: file
+        path: .agents/skills/pipeline/SKILL.md
+        assert:
+          contains: "exit evidence is not done"
+        discriminating: true
+      - id: RG-005-B
+        type: file
+        path: packages/cli/skills/pipeline/SKILL.md
+        assert:
+          contains: "exit evidence is not done"
+        discriminating: true
+  - id: RG-004
+    statement: >
+      Regression guard: workspace typechecks; cli suite green,
+      including the existing preflight-gates and skills surfaces.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: RG-004-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli... test
+outOfScope:
+  - a hard preflight gate (the friction is escapable by design; a rushed agent with a correct answer must not be trapped)
+  - gating candidate claims (fingerprint validation is their gate)
+  - new preflight record semantics beyond one draft-digest field on the existing informational record in .spc/harness/preflights.jsonl
