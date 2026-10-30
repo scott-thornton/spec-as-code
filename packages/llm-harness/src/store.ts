@@ -175,7 +175,7 @@ export class HarnessStore {
       .filter((f) => f.endsWith(".json"))
       .sort()
       .map((f) => JSON.parse(readFileSync(path.join(dir, f), "utf8")) as HarnessRequest)
-      .filter((r) => Date.parse(r.createdAt) > cutoff);
+      .filter((r) => Date.parse(r.createdAt) > cutoff || (r.expiresAt !== undefined && Date.parse(r.expiresAt) > Date.now()));
   }
 
   /** Everything ever pending, including swept-stale requests (records). */
@@ -252,11 +252,17 @@ export class HarnessStore {
         const full = path.join(dir, f);
         try {
           const request = JSON.parse(readFileSync(full, "utf8")) as HarnessRequest;
-          if (Date.parse(request.createdAt) <= cutoff) {
+          if (
+            Date.parse(request.createdAt) <= cutoff &&
+            // An open window protects a request from sweeping however old
+            // it is (executor windows at 60 minutes meet the one-hour
+            // sweep head-on); unstamped legacy requests and elapsed
+            // windows retire as before (specs/window-recalibration WT-004).
+            (request.expiresAt === undefined || Date.parse(request.expiresAt) <= Date.now())
+          ) {
             renameSync(full, path.join(staleDir, f));
             moved += 1;
-          }
-        } catch {
+          }        } catch {
           // unreadable request file: leave it alone
         }
       }

@@ -217,3 +217,36 @@ language and no remote control plane. The options above are plain data,
 validated by schema; anything not listed does not exist, and unknown keys
 fail config parsing with the offending path named. If a knob you want is
 missing, that is a feature request, not a documentation gap.
+
+## Harness response windows
+
+Windows are abandonment detection, sized for reasoning-heavy
+composition: a max-reasoning agent that composes calmly produces better
+answers than one rushing to beat the clock (the field incident where a
+15-minute window expired mid-composition and the rushed retry shipped
+the exact chained-digest defect that killed the run). The
+post-queue-legibility machinery - stamped deadlines, refusal of elapsed
+windows, cancel-time retirement - is what makes long windows safe to
+hold.
+
+Built-in defaults (milliseconds):
+
+- executor: 3,600,000 (60 minutes)
+- planner: 2,400,000 (40 minutes)
+- replanner: 2,400,000 (40 minutes)
+- verifier and unlisted roles: 1,800,000 (30 minutes, the global
+  default)
+
+Precedence, strongest first:
+
+1. An explicit `execution.harnessTimeouts` entry for the role.
+2. An explicitly configured `execution.harnessResponseTimeoutMs` (any
+   value other than the built-in global).
+3. The built-in role weights above.
+4. The built-in global.
+
+A repo tightening globally stays able to tighten; the built-ins apply
+only where the config says nothing. The stale sweep never retires a
+request whose stamped window is still open, however old it is. These
+numbers are an initial calibration - operational policy, adjustable as
+field evidence accumulates.

@@ -23,6 +23,29 @@ const HARNESS_INSTRUCTIONS = `You are the model backend for an spc run. Read the
  * (plan validation, write-scope enforcement, verification) apply unchanged
  * to harness answers.
  */
+/** Built-in window calibration (specs/window-recalibration): windows are
+ *  abandonment detection under the post-queue-legibility safety
+ *  machinery, sized for reasoning-heavy composition - executor
+ *  changesets are the heaviest work, planner and replanner amendments
+ *  next, verifier verdicts and unlisted roles take the global. */
+export const BUILT_IN_GLOBAL_WINDOW_MS = 1_800_000;
+export const BUILT_IN_ROLE_WINDOWS: Partial<Record<string, number>> = {
+  executor: 3_600_000,
+  planner: 2_400_000,
+  replanner: 2_400_000,
+};
+
+/** Precedence: an explicit per-role entry beats everything; an
+ *  explicitly configured global (any value other than the built-in
+ *  global) beats the built-in role weights; built-ins apply only where
+ *  the config says nothing. */
+export function resolveWindowMs(role: string, explicitGlobalMs: number, explicitRole?: Partial<Record<string, number>>): number {
+  const roleExplicit = explicitRole?.[role];
+  if (roleExplicit !== undefined) return roleExplicit;
+  if (explicitGlobalMs !== BUILT_IN_GLOBAL_WINDOW_MS) return explicitGlobalMs;
+  return BUILT_IN_ROLE_WINDOWS[role] ?? BUILT_IN_GLOBAL_WINDOW_MS;
+}
+
 export class HarnessProvider implements LLMProvider {
   readonly name = "harness";
   readonly model = "harness-agent";
@@ -53,7 +76,7 @@ export class HarnessProvider implements LLMProvider {
       jsonSchema = { type: "object", note: `schema ${request.schemaName} could not be rendered` };
     }
 
-    const windowMs = this.roleTimeouts?.[request.role ?? ""] ?? this.timeoutMs;
+    const windowMs = resolveWindowMs(request.role ?? "", this.timeoutMs, this.roleTimeouts);
     // The request carries its own deadline, stamped from the SAME knob
     // the poll loop below uses, so every queue surface can derive
     // liveness without sharing provider config.

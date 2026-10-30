@@ -74,7 +74,7 @@ export const executionConfigSchema = z.strictObject({
    */
   inPlaceBranch: z.enum(["run", "current"]).default("run"),
   /** Harness provider: how long to wait for an external agent's answer per request. */
-  harnessResponseTimeoutMs: z.number().int().positive().default(900_000),
+  harnessResponseTimeoutMs: z.number().int().positive().default(1_800_000),
   /**
    * Scoped dirt exemptions (strengthened contract): listed paths may be
    * dirty at preflight, but must remain unchanged, must never appear in
