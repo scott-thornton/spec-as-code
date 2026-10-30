@@ -220,9 +220,9 @@ missing, that is a feature request, not a documentation gap.
 
 ## Harness response windows
 
-Windows are abandonment detection, sized for reasoning-heavy
-composition: a max-reasoning agent that composes calmly produces better
-answers than one rushing to beat the clock (the field incident where a
+Windows are abandonment detection, sized for reasoning-heavy composition:
+a max-reasoning agent that composes calmly produces better answers than
+one rushing to beat the clock (the field incident where a
 15-minute window expired mid-composition and the rushed retry shipped
 the exact chained-digest defect that killed the run). The
 post-queue-legibility machinery - stamped deadlines, refusal of elapsed
@@ -237,7 +237,7 @@ Built-in defaults (milliseconds):
 - verifier and unlisted roles: 1,800,000 (30 minutes, the global
   default)
 
-Precedence, strongest first:
+The precedence ladder, strongest first:
 
 1. An explicit `execution.harnessTimeouts` entry for the role.
 2. An explicitly configured `execution.harnessResponseTimeoutMs` (any
