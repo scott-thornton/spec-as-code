@@ -119,10 +119,11 @@ export class HarnessProvider implements LLMProvider {
       schemaName: request.schemaName,
       jsonSchema,
       system: request.system,
-      prompt: `--- harness instructions ---\n${STAGE_HEADERS[request.role] ?? GENERIC_STAGE_HEADER}\n${HARNESS_INSTRUCTIONS}\n${requestTail(id)}\n\n${request.prompt}`,
+      prompt: `--- harness instructions ---\n${STAGE_HEADERS[request.role] ?? GENERIC_STAGE_HEADER}\n${HARNESS_INSTRUCTIONS}\n${requestTail(id)}${request.note ? `\nNOTE: ${request.note}` : ""}\n\n${request.prompt}`,
       createdAt: new Date(windowStart).toISOString(),
       expiresAt: new Date(windowStart + windowMs).toISOString(),
       ...(request.runId ? { runId: request.runId } : {}),
+      ...(request.note ? { note: request.note } : {}),
       // Seed visible feedback for retries caused AFTER the store accepted
       // the prior answer (e.g. plan validation): the answerer reads the
       // queue, not the consuming process's stderr.

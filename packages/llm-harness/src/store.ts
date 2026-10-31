@@ -39,6 +39,10 @@ export interface HarnessRequest {
   runId?: string;
   /** Set when a previous answer failed validation; the reason is included. */
   lastError?: string;
+  /** Advisory: the tree already contains uncommitted work from a prior
+   *  answer of this task (specs/redispatch-signpost) - rendered by
+   *  agent list so a re-dispatched composer verifies before rebuilding. */
+  note?: string;
 }
 
 export interface HarnessAnswer {

@@ -34,6 +34,11 @@ export interface StructuredRequest<T> {
    * is a retry, not just that there is one.
    */
   previousRejection?: string;
+  /** Advisory note surfaced by the harness provider on the request
+   *  (specs/redispatch-signpost): e.g. the tree already contains
+   *  uncommitted work from a prior answer of this task. Pure text -
+   *  refused by nothing, carried for the composer to read. */
+  note?: string;
 }
 
 export interface Usage {

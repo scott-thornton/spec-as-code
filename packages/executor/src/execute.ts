@@ -4,7 +4,7 @@ import { globMatchAny, isPhysicallyContained, isSafeRelativePath, SpcError } fro
 import type { AcceptanceCriterion, CommandsConfig, ObservationDraft, RepositorySnapshot, SpecIR, Task } from "@spc/schema";
 import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { makeUsageRecord } from "@spc/llm";
-import { readExcerpt, listMatchingFiles } from "@spc/repo";
+import { listMatchingFiles, readExcerpt, statusPorcelain } from "@spc/repo";
 import { enforceWriteScope, UNSAFE_PATH } from "./enforce.js";
 import { buildExecutorPrompt, EXECUTOR_SYSTEM, type ExecutorTaskContext } from "./prompts.js";
 import { executorResultSchema, type ExecutorResult } from "./result.js";
@@ -160,6 +160,25 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
   let result: ExecutorResult;
   let stagedOk: Extract<ReturnType<typeof stageChanges>, { ok: true }> | undefined;
   let previousRejection: string | undefined;
+  // Redispatch signpost (specs/redispatch-signpost): on a re-dispatch
+  // (staging requeue or attempt > 1), if the worktree is dirty UNDER THE
+  // TASK'S OWN write targets, the prior answer already staged its work -
+  // tell the composer before it rebuilds against a moved base.
+  const workPresentNote =
+    previousRejection !== undefined || attempt > 1
+      ? (() => {
+          const dirty = statusPorcelain(worktreeRoot);
+          if (!dirty.dirty) return undefined;
+          const writeTargets = task.targets?.write ?? [];
+          if (writeTargets.length === 0) return undefined;
+          const own = [...dirty.entries.keys()].some((p) =>
+            globMatchAny(writeTargets, p) || globMatchAny(writeTargets, p.split(path.sep).join("/")),
+          );
+          return own
+            ? "the tree already contains uncommitted work from a prior answer of this task - verify what is present before rebuilding; a no-changes completion is honest when the work is done"
+            : undefined;
+        })()
+      : undefined;
   for (;;) {
     const requestId = crypto.randomUUID();
     const dispatchStarted = Date.now();
@@ -170,6 +189,7 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
         requestId,
         ...(input.runId ? { runId: input.runId } : {}),
         ...(previousRejection ? { previousRejection } : {}),
+        ...(workPresentNote ? { note: workPresentNote } : {}),
         system: EXECUTOR_SYSTEM,
         prompt,
         schema: executorResultSchema,

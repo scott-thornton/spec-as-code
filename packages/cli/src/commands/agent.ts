@@ -175,6 +175,9 @@ export function runAgentList(cwd: string | undefined, format: "text" | "json"): 
     const answered = answeredAt ? `  answered: yes (${answeredAt.slice(11, 16)} UTC)` : "  answered: no";
     const retry = r.lastError ? "  · retry needed" : "";
     console.log(`${r.id}  [${r.role}]  ${r.schemaName}  ${describeRequestState(r)}${answered}${retry}${seen > 0 ? `  preflighted ${seen}x` : ""}`);
+    if (r.note) {
+      console.log(`    note: ${r.note}`);
+    }
     if (r.lastError) {
       console.log(`    retry needed - previous answer invalid: ${r.lastError.split("\n")[0]}`);
     }
