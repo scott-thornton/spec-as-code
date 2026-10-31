@@ -11,7 +11,17 @@ const POLL_INTERVAL_MS = 1_000;
  * garbage submissions cannot keep a request pending forever. */
 const MAX_REQUEUE_REFRESHES = 5;
 
-const HARNESS_INSTRUCTIONS = `You are the model backend for an spc run. Read the system and prompt, inspect the repository as needed, and produce a single JSON value satisfying jsonSchema exactly. Save your answer with: spc agent respond <id> --file <answer.json> (the file must contain the JSON value itself, not a wrapper). Then the run continues automatically.`;
+// Prefix stability (specs/prompt-stability): the constant text below
+// contains NO per-request data - the volatile request id and its
+// respond command land as the final line, so requests of the same role
+// share their prefix through the entire constant block (every prompt
+// cache regime keys on that prefix, the answering agent's session
+// cache included).
+const HARNESS_INSTRUCTIONS = `You are the model backend for an spc run. Read the system and prompt, inspect the repository as needed, and produce a single JSON value satisfying jsonSchema exactly (the file must contain the JSON value itself, not a wrapper). Then the run continues automatically.`;
+
+/** The per-request tail: id first mention and the respond command. */
+const requestTail = (id: string): string =>
+  `Request id: ${id}. Answer with: spc agent respond ${id} --file <answer.json>`;
 
 /**
  * Pipeline stage headers (specs/pipeline-signposting): every dispatched
@@ -109,7 +119,7 @@ export class HarnessProvider implements LLMProvider {
       schemaName: request.schemaName,
       jsonSchema,
       system: request.system,
-      prompt: `--- harness instructions ---\n${STAGE_HEADERS[request.role] ?? GENERIC_STAGE_HEADER}\n${HARNESS_INSTRUCTIONS.replace("<id>", id)}\n\n${request.prompt}`,
+      prompt: `--- harness instructions ---\n${STAGE_HEADERS[request.role] ?? GENERIC_STAGE_HEADER}\n${HARNESS_INSTRUCTIONS}\n${requestTail(id)}\n\n${request.prompt}`,
       createdAt: new Date(windowStart).toISOString(),
       expiresAt: new Date(windowStart + windowMs).toISOString(),
       ...(request.runId ? { runId: request.runId } : {}),

@@ -259,5 +259,10 @@ export function listMatchingFiles(repoRoot: string, patterns: readonly string[],
   walk(repoRoot, "", 0, state, (rel, isDir) => {
     if (!isDir && out.length < limit && globMatchAny(patterns, rel)) out.push(rel);
   });
-  return out;
+  // Sort contract (specs/prompt-stability): Node's readdir order is
+  // OS-dependent and unguaranteed, and every executor prompt's excerpt
+  // list composes from this - the same tree must produce the same list
+  // on every platform and at every moment, or every prompt-cache regime
+  // busts at once.
+  return out.sort();
 }
