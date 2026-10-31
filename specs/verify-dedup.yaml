@@ -1,0 +1,118 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: verify-dedup
+  title: The execution memo belongs to the invocation - shared command runs across specs in verify --all
+goal: >
+  Measured (2026-10-31): spc verify --all executes 255 command criteria
+  over 64 specs, of which only 164 are distinct command strings - the
+  cli suite runs ~29 times, the runtime suite 14, executor 10, and 29
+  criteria each run a full workspace typecheck, serialized, because
+  every spec's regression guard re-runs the shared batteries. The
+  dedup machinery already exists and is scoped wrong: verifyProperties
+  memoizes per sweep (one run per distinct command, the tree fixed
+  within the sweep), but the --all loop calls createVerifyRun once per
+  spec, each with a fresh memo - the same answer recomputed 20 times.
+  The unit of verification evidence is a criterion; the unit of
+  execution can be shared across criteria and specs. This spec hoists
+  the memo to the invocation - nothing else: no cross-invocation
+  caching, no new key semantics, no parallelism, no authoring policy.
+requirements:
+  - id: VD-001
+    statement: >
+      Invocation-scoped memoization: the CLI --all loop creates ONE
+      commandRuns map and threads it through every spec's verification;
+      createVerifyRun, verifyStandalone, and verifyProperties accept an
+      optional commandRuns map, defaulting to a fresh map per sweep
+      exactly as today (single-spec verify, apply red phases, reconcile
+      unchanged). No module-level state; the shared map is a parameter
+      of one standalone all-spec invocation and is never retained
+      beyond it. Cache-key semantics are preserved unchanged (command
+      + expected exit + timeout). The oracle integrates through the
+      real CLI: a fixture repo with two specs whose criteria run the
+      same side-effecting command - the command executes exactly ONCE
+      physically (side-effect counter), both criteria independently
+      supported.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**, packages/cli/src/**, packages/verifier/src/**]
+    acceptance:
+      - id: VD-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/verify-dedup.test.ts
+        discriminating: true
+  - id: VD-002
+    statement: >
+      Execution identity and audit precision: each real command
+      execution carries an executionId (with the runId that performed
+      it); the memo stores {executionId, result, originRunId}; a memo
+      hit emits COMMAND_RESULT_REUSED (new schema event type; payload:
+      command, executionId, originRunId, criterionId) and NEVER a
+      second COMMAND_EXECUTED for the same execution; every criterion
+      still gets its own evidence record, its payload carrying the
+      executionId and, on reuse, reusedFrom naming the originating run.
+      Two facts stay separately legible: each criterion was
+      independently evaluated; the underlying command physically
+      executed once. Audit precision must not degrade because
+      verification got faster.
+    priority: must
+    scope:
+      include: [packages/schema/src/**, packages/verifier/src/**, packages/runtime/src/**]
+    acceptance:
+      - id: VD-002-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/verify-dedup.test.ts
+        discriminating: true
+  - id: VD-003
+    statement: >
+      The fixed-execution-context invariant, stated as the memo's
+      contract rather than an inherited comment: within one invocation,
+      command criteria are deterministic observations of a fixed tree;
+      permitted mutations are untracked, self-regenerating build
+      outputs (the existing per-sweep premise, unchanged); memo entries
+      never outlive the invocation; eligibility is the exact runKey.
+      The oracle's boundary assertions pin the contract: the shared map
+      is not observable after the invocation, and the single-spec path
+      constructs its own map (behavior identical to today).
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: VD-003-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/verify-dedup.test.ts
+  - id: VD-004
+    statement: >
+      Acceptance discipline: execution counts are measured by physical
+      side effect (the command's own counter), never inferred from
+      COMMAND_EXECUTED events; the oracle asserts the exact collapse
+      (one physical execution for N identical criteria across two
+      specs, one COMMAND_EXECUTED plus N-1 COMMAND_RESULT_REUSED
+      events, shared executionId across all N evidence records);
+      wall-clock duration on the real corpus is a measured benchmark
+      reported in the run record, not an acceptance gate; the oracle's
+      integration test carries a generous safety timeout.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: VD-004-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/verify-dedup.test.ts
+  - id: VD-005
+    statement: >
+      Regression guard: workspace typechecks; runtime, verifier, and
+      cli suites green - single-spec verification and apply red-phase
+      semantics unchanged.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: VD-005-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/runtime... test && pnpm --filter @spc/verifier... test && pnpm --filter @spc/cli... test
+outOfScope:
+  - cross-invocation caching and tree-digest keys (separate decision, sized only after this ships and the remainder is measured)
+  - parallel command execution (smaller win, real flake risk)
+  - spec-authoring policy for regression guards (a spec stays independently verifiable; composition cost belongs to the runtime)
+  - build-system redesign (135 criteria carry build prefixes in otherwise-distinct strings; the memo does not dedup prefixes and the wall-clock estimate stays a hypothesis until measured)
