@@ -1,0 +1,195 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: suite-references
+  title: Batteries as named repository facts - one definition, referenced by name, executed once
+goal: >
+  Measured baseline (2026-10-31): the specification layer authors the
+  same battery command into spec after spec - the cli battery appears
+  as an identical command criterion in 6 specs, near-miss runtime and
+  llm-harness compounds in more - so verify-dedup and verify-cache can
+  only recognize duplication AFTER parsing, execution identity is
+  string-luck, and every future battery change is a 6-file edit. The
+  architectural move is a naming layer over the existing
+  execution-identity machinery: a suite is a named command definition
+  living in the repository (suites/*.yaml, version-controlled,
+  schema-validated repository facts, NOT spec-owned); a criterion can
+  reference it by name ({type: suite, ref: cli-battery}); and
+  resolution happens BEFORE the memo and cache ever see anything, so
+  two specs referencing one suite resolve to the same command string
+  and the existing dedup, execution identity, COMMAND_RESULT_REUSED
+  and provenance do the rest with zero new sharing code. Same suite
+  becomes visible to the machinery as same command. The complete
+  execution descriptor is fixed by resolution: expected exit 0, the
+  invocation-wide default timeout - two references can never diverge
+  on timeout and defeat dedup. Suites resolve to the CURRENT
+  definition at verify time (a spec's guard says "the repo's battery
+  passes", whatever the repo currently means by that); the suite's
+  digest is recorded in evidence as provenance, never pinning the
+  spec. Suite identity (id + digest: which battery was referenced) is
+  distinct from execution identity (executionId: which physical run
+  produced the result) - one execution, many independently
+  attributable criterion evaluations, both legible in the record.
+  Doctrine: the evaluations are many; the executions are few; the
+  record names both.
+requirements:
+  - id: SR-001
+    statement: >
+      Suite registry. suites/*.yaml beside specs/ are schema-validated
+      repository facts: {apiVersion: spc.dev/v1alpha1, kind: Suite,
+      metadata: {id, title}, command}. The loader reads the directory
+      once per invocation, validates every file, computes a digest per
+      definition (id + title + command), and fails loud (named error,
+      offending file) on a malformed file or a duplicate id. Suite
+      discovery is additive: a repo with no suites/ directory has an
+      empty registry.
+    priority: must
+    scope:
+      include: [packages/schema/src/**, packages/repo/src/**]
+    acceptance:
+      - id: SR-001-A
+        type: command
+        command: pnpm --filter @spc/schema... build > /dev/null && pnpm --filter @spc/repo... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/suite-references.test.ts
+        discriminating: true
+  - id: SR-002
+    statement: >
+      Suite-reference criteria resolve before execution identity. A
+      criterion {type: suite, ref} normalizes into the existing
+      command-criterion representation BEFORE the evaluator sees it -
+      command = the suite's current command, expected exit 0, NO
+      per-spec timeout (invocation default; two references to one
+      suite resolve to the identical complete execution descriptor) -
+      with the suite id and digest carried as provenance metadata in
+      the criterion's evidence payload. No second execution pathway:
+      policy, approval, environment-readiness, memo and cache lookup
+      all see an ordinary command criterion. Two specs referencing one
+      suite therefore produce exactly one physical execution (measured
+      by the command's own side effect, never inferred from events),
+      one COMMAND_EXECUTED plus one COMMAND_RESULT_REUSED, evidence
+      records sharing the executionId, and each criterion's payload
+      naming its suite. The registry is loaded, validated and frozen
+      once per verification invocation before any criterion executes.
+    priority: must
+    scope:
+      include: [packages/schema/src/**, packages/verifier/src/**, packages/runtime/src/**, packages/cli/src/**]
+    acceptance:
+      - id: SR-002-A
+        type: command
+        command: pnpm --filter @spc/schema... build > /dev/null && pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/suite-references.test.ts
+        discriminating: true
+  - id: SR-003
+    statement: >
+      Unknown reference is a compile error, not a silent no-op. spc
+      spec validate is repository-aware: a suite reference that names
+      no suite in the registry fails validation with an error naming
+      the reference and the criterion. spc verify fails the same way
+      BEFORE any verification command executes - the registry is
+      loaded and every reference resolved before the first criterion
+      runs, so a typo'd ref can never manifest as a skipped criterion
+      or a half-executed sweep.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: SR-003-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/suite-references.test.ts
+        discriminating: true
+  - id: SR-004
+    statement: >
+      Standalone independence preserved. Single-spec verification
+      resolves and executes a suite-reference criterion exactly as
+      --all does: no dependency on another spec, on loop context, or
+      on a prior sweep. A suite criterion may be marked
+      discriminating and then enforces the red -> green flip like any
+      deterministic criterion.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**, packages/verifier/src/**]
+    acceptance:
+      - id: SR-004-A
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/suite-references.test.ts
+        discriminating: true
+  - id: SR-005
+    statement: >
+      Tooling: `spc suite validate` validates the registry (exit 0
+      green, named diagnostics on malformed files or duplicate ids);
+      `spc suite list` renders id, title, command and the number of
+      criteria across specs/ referencing each suite - so changing a
+      battery shows its blast radius during review.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: SR-005-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/suite-references.test.ts
+        discriminating: true
+  - id: SR-006
+    statement: >
+      Companion correctness fix in the verify-cache scope parser
+      (disclosed, not buried): compound commands aggregate scope
+      across ALL command segments - any recursive pnpm invocation
+      (-r or --recursive) anywhere in the compound widens the
+      effective execution scope to the whole workspace; multiple
+      --filter segments union (sorted, deterministic); a filter using
+      the ... deps form widens withDeps for the aggregate; segments
+      that are not pnpm invocations (e.g. grep -r) contribute
+      nothing; when parsing is ambiguous the parser falls back to the
+      BROADER scope rather than risk an invalid cache hit. The
+      last-filter-wins under-scoping bug (a compound whose -r prefix
+      reads the whole workspace keyed on the final --filter package -
+      a possible false cache hit) is closed by this rule and pinned by
+      unit tests.
+    priority: must
+    scope:
+      include: [packages/verifier/src/**]
+    acceptance:
+      - id: SR-006-A
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/verifier exec vitest run src/suite-scope.test.ts
+        discriminating: true
+  - id: SR-007
+    statement: >
+      Seed suites and exact-duplicate conversion only. Four suites
+      land as repository facts: typecheck (pnpm -r typecheck, seeded
+      forward-looking, zero current references), cli-battery (pnpm -r
+      typecheck > /dev/null && pnpm --filter @spc/cli... test),
+      runtime-battery (pnpm -r typecheck > /dev/null && pnpm
+      --filter @spc/runtime... test && pnpm --filter @spc/cli...
+      test), llm-harness-battery (pnpm -r typecheck > /dev/null &&
+      pnpm --filter @spc/llm-harness... test && pnpm --filter
+      @spc/cli... test). Exactly the criteria whose command strings
+      are byte-identical to a seeded suite convert to {type: suite,
+      ref}; near-miss compounds (same packages, different combos) are
+      NOT converted because that would silently change what those
+      specs execute - they convert in the mechanical follow-up with
+      per-spec review. The converted set after this slice: cli-battery
+      6, runtime-battery 2, llm-harness-battery 1.
+    priority: should
+    scope:
+      include: [suites/**, specs/**]
+    acceptance:
+      - id: SR-007-A
+        type: file
+        path: suites/cli-battery.yaml
+        assert:
+          contains: "@spc/cli... test"
+  - id: SR-008
+    statement: >
+      Measured payoff, reported never gated. After conversion the next
+      verify --all wall-clock and execution count are REPORTED to the
+      author as a measurement, never an acceptance criterion - the
+      acceptance-discipline rule carried forward from verify-dedup and
+      verify-cache.
+    priority: may
+outOfScope:
+  - >
+    Full conversion of all ~70 specs to suite references (mechanical
+    follow-up; includes the per-test executor guards at 5x each and
+    the cli per-test guards at 5x/4x, and near-miss compound
+    canonicalization with per-spec review).
+  - >
+    Parameterized suites, suite dependency graphs, cross-repository
+    suites, suite-level timeouts or expected-exit overrides.
