@@ -1,0 +1,48 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: rehearsal-visibility
+  title: The record names how an answer was rehearsed, and the preflight counts its cost
+goal: >
+  The record distinguishes WHAT was rehearsed (the draft digest, shipped
+  in rehearse-guard) but not HOW - scratch versus dry-run versus blind -
+  and no surface adds up rehearsal cost, so full-weight-per-typo habits
+  survive on invisibility. Two small surfaces: spc agent submit's
+  --rehearsed-with is recorded on the answer record (answered note
+  line), and the dry-run preflight prints the cumulative count and
+  elapsed spend per request, so the fourth identical rehearsal cycle
+  reads as what it is.
+requirements:
+  - id: RV2-001
+    statement: >
+      The answer record carries the rehearsal shape: spc agent submit
+      --rehearsed-with dry-run|scratch|none is written into the
+      answered record (a rehearsedWith field or the answeredBy note) and
+      rendered by spc agent show for answered requests; submit without
+      the flag records nothing new. The dry-run preflight (the step
+      inside submit, and bare spc agent dry-run) prints the cumulative
+      preflight count and total elapsed time for the request id from
+      the existing preflights.jsonl record. The oracle drives the real
+      CLI: submit with --rehearsed-with records and shows it; a second
+      dry-run prints preflight #2 with cumulative time.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: RV2-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/rehearsal-visibility.test.ts
+        discriminating: true
+  - id: RV2-002
+    statement: >
+      Regression guard: workspace typechecks; the cli suite green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: RV2-002-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli... test
+outOfScope:
+  - guard policy changes (the flag records; nothing refuses on it yet)
+  - cost surfacing beyond the preflight count (per-suite timing is the batteries' conversation)
