@@ -1,0 +1,66 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: agent-submit
+  title: spc agent submit - the disciplined tail as one command
+goal: >
+  The three-command tail (patch verify, dry-run, respond) is where
+  composition errors and skipped rehearsals live - the verify-dedup and
+  verify-cache incidents both happened between those commands. This
+  spec makes the tail one command: spc agent submit <id> --file
+  <answer> runs the chain check, the dry-run preflight (recording the
+  draft digest), and the respond, stopping at the first refusal with
+  the named cause. --no-preflight and --rehearsed-with pass through to
+  their underlying surfaces. The rehearse skill names the split it
+  conflated: develop however you like (scratch, targeted runs), but the
+  composed answer passes submit.
+requirements:
+  - id: AS-001
+    statement: >
+      spc agent submit <id> --file <answer.json> [--no-preflight]
+      [--rehearsed-with dry-run|scratch|none]: one command executing the
+      chain validation (the respond-side PATCH_CHAIN_INVALID guard),
+      then the dry-run preflight (spc agent dry-run, recording the
+      draft digest unless --no-preflight), then the respond. First
+      refusal stops with its named cause and exit 1; full success
+      prints the respond's confirmation. The oracle drives the real CLI:
+      a broken chain dies at step one with nothing submitted; a valid
+      answer submits with the preflight on record.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: AS-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/agent-submit.test.ts
+        discriminating: true
+  - id: AS-002
+    statement: >
+      The rehearse skill (both copies) names the develop/rehearse split
+      and makes submit the tail: develop however you like (scratch with
+      targeted runs); the composed answer goes through spc agent
+      submit, never a bare respond.
+    priority: must
+    scope:
+      include: [.agents/skills/**, packages/cli/skills/**]
+    acceptance:
+      - id: AS-002-A
+        type: file
+        path: .agents/skills/rehearse/SKILL.md
+        assert:
+          contains: "spc agent submit"
+        discriminating: true
+  - id: AS-003
+    statement: >
+      Regression guard: workspace typechecks; the cli suite green -
+      bare respond and every existing surface unchanged.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: AS-003-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli... test
+outOfScope:
+  - wrapping op BUILDING (anchors are semantic choices; patch build stays manual)
+  - new validation semantics (submit composes existing guards; no second checker)
