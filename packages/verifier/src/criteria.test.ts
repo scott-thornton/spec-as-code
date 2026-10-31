@@ -5,7 +5,7 @@ import path from "node:path";
 import { DEFAULT_CONFIG, type DesiredProperty, type Evidence } from "@spc/schema";
 import type { LLMProvider, StructuredRequest, StructuredResponse } from "@spc/llm";
 import type { CommandRunResult } from "@spc/executor";
-import { verifyCriterion } from "./criteria.js";
+import { verifyCriterion , type SharedCommandRun } from "./criteria.js";
 import { evaluateProperty } from "./evaluate.js";
 
 const cwd = mkdtempSync(path.join(tmpdir(), "spc-verify-"));
@@ -92,7 +92,7 @@ describe("sweep command dedup", () => {
   it("identical commands execute once per sweep, evidence per criterion", async () => {
     rmSync(marker, { force: true });
     const command = append(marker, "x");
-    const commandRuns = new Map<string, CommandRunResult>();
+    const commandRuns = new Map<string, SharedCommandRun>();
     const r1 = await verifyCriterion(
       { id: "P1-A", type: "command", command },
       property,
@@ -113,7 +113,7 @@ describe("sweep command dedup", () => {
 
   it("distinct commands run separately within one sweep", async () => {
     rmSync(marker, { force: true });
-    const commandRuns = new Map<string, CommandRunResult>();
+    const commandRuns = new Map<string, SharedCommandRun>();
     await verifyCriterion({ id: "P1-A", type: "command", command: append(marker, "a") }, property, ctx({ commandRuns }));
     await verifyCriterion({ id: "P2-A", type: "command", command: append(marker, "b") }, property, ctx({ commandRuns }));
     expect(readFileSync(marker, "utf8")).toBe("ab");
