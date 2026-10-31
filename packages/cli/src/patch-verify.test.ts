@@ -96,7 +96,9 @@ describe("respond-side validation (PV-002)", () => {
 
   it("a valid chained array submits unchanged (green-keeper)", () => {
     const good = resultWith(JSON.parse(readFileSync(path.join(root, "ops-good.json"), "utf8")));
-    const r = sh(["agent", "respond", "executor-PV@1-1", "--file", good]);
+    // --no-preflight focuses this test on the chain check; the rehearsal
+    // guard would (correctly) fire on a chained-op answer with no preflight.
+    const r = sh(["agent", "respond", "executor-PV@1-1", "--file", good, "--no-preflight"]);
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/Answered executor-PV@1-1/);
   });
