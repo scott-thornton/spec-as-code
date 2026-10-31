@@ -1,0 +1,62 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: rename-coverage-recipe
+  title: The rename criterion recipe - zero residual references or an explicit alias
+goal: >
+  Field defect, three independent sightings across two models and three
+  months (September post-fix, probe, ladder campaign 2026-10-30): the
+  schema-rename-field task false-completes under spc at every tier -
+  the only completion loss at both tiers of the ladder campaign. The
+  verifier is not broken; the criteria are incomplete. A rename updates
+  the definition and the references the executor can see, and
+  verification blesses it, because nothing in the criteria forces
+  coverage of every residual reference. The fix is criteria
+  authorship, not machinery: teach the author-spec skill the rename
+  pattern - a rename's acceptance criteria must include a
+  zero-residual-references criterion - with the migration alias as the
+  author's explicit, declared exception.
+requirements:
+  - id: RN-001
+    statement: >
+      The author-spec skill (both copies, repo-local and bundled,
+      byte-identical by construction) teaches the rename pattern: any
+      spec whose intent renames a field, function, or identifier must
+      carry a zero-residual-references acceptance criterion - a
+      command criterion counting references to the old name across the
+      write scope and expecting zero - with the note that keeping an
+      old-name alias for a migration period is legitimate and is the
+      author's exception to declare explicitly in the criterion's
+      expectation rather than leave implicit. The pattern names the
+      failure it prevents (rename false-completion, three campaign
+      sightings) so authors understand why the one-liner is owed.
+    priority: must
+    scope:
+      include: [.agents/skills/**, packages/cli/skills/**]
+    acceptance:
+      - id: RN-001-A
+        type: file
+        path: .agents/skills/author-spec/SKILL.md
+        assert:
+          contains: "zero residual references"
+        discriminating: true
+      - id: RN-001-B
+        type: file
+        path: packages/cli/skills/author-spec/SKILL.md
+        assert:
+          contains: "zero residual references"
+        discriminating: true
+  - id: RN-002
+    statement: >
+      Regression guard: workspace typechecks; the cli suite green
+      (skills surfaces and the existing byte-equality checks).
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: RN-002-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli... test
+outOfScope:
+  - a machine-side rename lint (a heuristic cannot know whether an old name is a legitimate migration alias; the exception is the author's declaration)
+  - touching the eval task corpus (the benchmark's ground truth belongs to the campaign repo)
