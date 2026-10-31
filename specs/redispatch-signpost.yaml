@@ -1,0 +1,63 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: redispatch-signpost
+  title: A re-dispatched task says whether the tree already carries its work
+goal: >
+  Field incident (verify-dedup and verify-cache, 2026-10-31, twice): a
+  consumed answer stages its changes onto the in-place tree, the task
+  re-dispatches anyway (attempt retry or staging requeue), and the
+  composer rebuilds ops against a base the tree has moved past - three
+  ghost rebuilds in one incident, each refused correctly, none
+  necessary. Nothing surfaced that the work was already present: the
+  new request looked like any other, and the collision was only
+  diagnosable by diffing the tree by hand. The missing surface: when a
+  request is dispatched for a task whose worktree already contains
+  staged-but-uncommitted work from a prior answer of the same task,
+  the request carries a marker, visible in agent list, telling the
+  composer to verify before rebuilding. State moved under the
+  composer; the queue surfaces it - the same family as every guard
+  shipped this month.
+requirements:
+  - id: RS-001
+    statement: >
+      On dispatch (staging requeue within an attempt, or task retry
+      across attempts), the executor detects whether the worktree
+      differs from the request's composed base because a prior answer
+      of THIS task already staged its changes: the pending request
+      gains an optional note field (e.g. "the tree already contains
+      uncommitted work from a prior answer of this task - verify what
+      is present before rebuilding; a no-changes completion is honest
+      when the work is done"), and spc agent list renders it on the
+      request's line. The detection is conservative and cheap: compare
+      git status (or the staged digest of the task's declared write
+      targets) at dispatch; dirty-because-of-this-task marks, unrelated
+      dirt (e.g. allowDirtyPaths) does not. The oracle drives the real
+      machinery: a task whose first answer stages successfully and then
+      re-dispatches (forced retry) shows the marker in agent list; a
+      clean re-dispatch does not.
+    priority: must
+    scope:
+      include: [packages/executor/src/**, packages/llm-harness/src/**, packages/cli/src/**]
+    acceptance:
+      - id: RS-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/redispatch-signpost.test.ts
+        discriminating: true
+  - id: RS-002
+    statement: >
+      Regression guard: workspace typechecks; executor, llm-harness,
+      and cli suites green - requests without the marker render exactly
+      as today, and the marker changes no protocol semantics (the note
+      is advisory text on the request record, refused by nothing).
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: RS-002-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/executor... test && pnpm --filter @spc/llm-harness... test && pnpm --filter @spc/cli... test
+outOfScope:
+  - automatic rollback of staged-but-uncommitted work on re-dispatch (the data is insufficient to revert safely; the marker makes the state visible instead)
+  - protocol changes to respond or staging (the note is advisory; the composer decides)
+  - worktree-mode runs (in-place is where the collision occurs; worktree isolation already prevents it)
