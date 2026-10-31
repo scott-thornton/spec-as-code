@@ -1,0 +1,122 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: verify-cache
+  title: Scope-addressed cross-invocation command reuse - the gates battery pays once per real change
+goal: >
+  Measured baseline (2026-10-31): spc verify --all costs 32-34 minutes
+  across ~91 distinct command executions, and a whole-tree cache key
+  would never hit - every push follows a commit, so the tree digest
+  always changed. The design that works is scope-addressed: criteria
+  commands are pnpm filter commands, the filter NAMES the packages, and
+  a cache entry keyed on (command, digest of the named packages'
+  tracked sources + workspace deps, digest of those packages' dist
+  artifacts) reuses exactly when re-execution would be a deterministic
+  no-op. A commit touching executor invalidates executor/cli/runtime
+  commands and leaves llm-openai's entry valid. The artifact chain is
+  closed by recording the dist digest the command left behind: reuse
+  requires inputs unchanged AND outputs still as recorded (a cleaned or
+  hand-edited dist is a miss; a deterministic rebuild of unchanged
+  sources reproduces the recorded digest and stays a hit). Commands
+  with no recognizable filter scope are never cached (conservative).
+  Standalone verification only in v1 - apply-run sweeps (red and green)
+  keep invocation-memo semantics untouched, so run evidence stays that
+  run's own execution. Audit precision does not degrade: a cache hit
+  emits COMMAND_RESULT_REUSED carrying the entry's original
+  executionId, and the criterion's evidence references that identity
+  with reusedFrom naming the cache - the verifier-dedup doctrine,
+  extended one layer.
+requirements:
+  - id: VC-001
+    statement: >
+      A command cache module (packages/verifier/src/command-cache.ts)
+      with four pure-or-nearly-pure pieces, all unit-tested: (a) scope
+      parsing - pnpm commands yield the filter spec (pkg or pkg... or
+      -r = whole workspace); anything else yields none, never cached;
+      (b) scope resolution - the filter's package directories plus, for
+      the ... form, the transitive workspace dependency closure read
+      from package.json workspace:* deps; (c) digests - the tracked
+      files (git ls-files) under the scope directories EXCLUDING
+      node_modules and dist, and separately the dist trees' content
+      digest (or absent); (d) the entry store - load/persist a JSON
+      cache at .spc/cache/verify-commands.json mapping command to
+      {scopeKey, sourceDigest, distDigest, executionId, exitCode,
+      stdout, stderr, timedOut, recordedAt}; reusable(command) holds iff
+      the entry exists, its scopeKey matches the command's current
+      scope, and the CURRENT computed digests equal the entry's
+      recorded digests. The oracle is a decision matrix over a fixture
+      git workspace: same tree hit; source change in scope miss;
+      source change in an unrelated package hit; dist deleted miss;
+      dist restored to identical content hit; unscoped command never
+      cached.
+    priority: must
+    scope:
+      include: [packages/verifier/src/**]
+    acceptance:
+      - id: VC-001-A
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/verifier exec vitest run src/verify-cache.test.ts
+        discriminating: true
+  - id: VC-002
+    statement: >
+      The standalone verification path consults the cache beneath the
+      invocation memo: lookup order is invocation commandRuns, then the
+      persisted cache, then execute-and-store (storing into both). A
+      cache hit supplies the recorded result with its original
+      executionId; the runtime emits COMMAND_RESULT_REUSED (never a
+      second COMMAND_EXECUTED) with the origin named as the cache
+      (reusedFrom: cache), and the criterion's evidence carries the
+      entry's executionId - the same audit contract as
+      invocation-level reuse, one layer down. The CLI verify paths
+      (single-spec and --all) load one cache before the loop and
+      persist it after; the cache is plain data, gitignored, never
+      evidence itself. The oracle integrates through the real CLI: a
+      fixture repo whose criterion command is a scoped pnpm command
+      with a SEEDED valid cache entry verifies satisfied with a
+      COMMAND_RESULT_REUSED event and no physical execution (the
+      command, if executed, fails on the uninstalled fixture - success
+      itself proves the hit); the same fixture with no seeded entry
+      executes and reports honestly.
+    priority: must
+    scope:
+      include: [packages/verifier/src/**, packages/runtime/src/**, packages/cli/src/**]
+    acceptance:
+      - id: VC-002-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/verify-cache.test.ts
+        discriminating: true
+  - id: VC-003
+    statement: >
+      Doctrine guards, executable: apply-run sweeps never receive the
+      cache (red-phase and green-phase evidence remains that run's own
+      execution - asserted by an existing-suite green-keeper and by the
+      wiring passing the cache only from the standalone verify paths);
+      freshness (run-level) semantics unchanged; and the wall-clock
+      effect on the real corpus is a MEASURED BENCHMARK reported in the
+      run record context, never an acceptance gate (the
+      acceptance-discipline rule from verify-dedup, carried forward).
+    priority: must
+    scope:
+      include: [packages/runtime/src/**, packages/cli/src/**]
+    acceptance:
+      - id: VC-003-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/runtime... test && pnpm --filter @spc/cli... test
+  - id: VC-004
+    statement: >
+      Regression guard: workspace typechecks; verifier, runtime, and
+      cli suites green - single-spec verify without a cache file, with
+      an empty cache, and with a corrupt cache file (tolerated: treated
+      as absent, logged) all behave as today.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: VC-004-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/verifier... test && pnpm --filter @spc/runtime... test && pnpm --filter @spc/cli... test
+outOfScope:
+  - apply-run sweep caching (v1 is standalone verification - where the 34 minutes live; run evidence stays that run's own)
+  - input-set tracking beyond package scope (file-level read tracking would be finer-grained; the package scope is the honest v1 granularity the filter already names)
+  - parallel execution (independent decision, parked)
+  - caching unscoped commands (conservative default; a future marker could opt them in deliberately)
