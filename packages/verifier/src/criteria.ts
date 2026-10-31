@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { digestOf } from "@spc/core";
@@ -39,7 +40,7 @@ export interface CriterionContext {
    * does not change within a sweep, so a shared run is valid evidence for
    * every criterion that names it. Created by the sweep, not per criterion.
    */
-  commandRuns?: Map<string, CommandRunResult>;
+  commandRuns?: Map<string, SharedCommandRun>;
   /**
    * False only when the execution environment failed to prepare: the
    * criterion COULD NOT meaningfully execute. Command criteria then
@@ -65,10 +66,23 @@ export interface CriterionContext {
   inheritedFlips?: ReadonlyMap<string, string>;
 }
 
+/** A memoized command execution: identity travels with the result so
+ *  every criterion sharing it can reference the same physical
+ *  execution (specs/verify-dedup). */
+export interface SharedCommandRun {
+  executionId: string;
+  result: CommandRunResult;
+  originRunId: string;
+}
+
 export interface CriterionResult {
   evidence: Evidence;
   followUp?: FollowUpDraft & { criterionId: string };
   commandRun?: CommandRunResult;
+  /** Execution identity: present when a command ran or a memo hit
+   *  supplied the outcome - the runtime emits COMMAND_EXECUTED for a
+   *  real execution, COMMAND_RESULT_REUSED for a hit. */
+  execution?: { executionId: string; reused: boolean; originRunId: string };
 }
 
 /**
@@ -177,9 +191,13 @@ async function verifyCommand(
   const expected = criterion.expect?.exitCode ?? 0;
   const runKey = `${criterion.command}\u0000${expected}\u0000${timeoutMs}`;
   const cached = ctx.commandRuns?.get(runKey);
-  const run =
-    cached ??
-    (await runCommand(criterion.command, {
+  let run: CommandRunResult;
+  let execution: CriterionResult["execution"] | undefined;
+  if (cached) {
+    run = cached.result;
+    execution = { executionId: cached.executionId, reused: true, originRunId: cached.originRunId };
+  } else {
+    run = await runCommand(criterion.command, {
       cwd: ctx.cwd,
       timeoutMs,
       maxOutputBytes: ctx.config.execution.maxOutputBytes,
@@ -189,8 +207,13 @@ async function verifyCommand(
         // approval policy category; deny-class policies still hold.
         ...(decision.policy === "approval" ? { [decision.category]: "allow" } : {}),
       } as Config["commands"],
-    }));
-  ctx.commandRuns?.set(runKey, run);
+    });
+    if (ctx.commandRuns) {
+      const entry: SharedCommandRun = { executionId: randomUUID(), result: run, originRunId: ctx.runId };
+      ctx.commandRuns.set(runKey, entry);
+      execution = { executionId: entry.executionId, reused: false, originRunId: ctx.runId };
+    }
+  }
   const outcome: EvidenceOutcome = run.deniedReason
     ? "inconclusive"
     : run.exitCode === expected
@@ -251,11 +274,13 @@ async function verifyCommand(
             : {}
         ),
         ...(run.deniedReason ? { deniedReason: run.deniedReason } : {}),
+        ...(execution?.executionId ? { executionId: execution.executionId } : {}),
+        ...(execution?.reused ? { reusedFrom: execution.originRunId } : {}),
       },
     },
     ctx.now,
   );
-  const result: CriterionResult = { evidence, commandRun: run };
+  const result: CriterionResult = { evidence, commandRun: run, ...(execution ? { execution } : {}) };
   if (run.deniedReason) {
     result.followUp = {
       criterionId: criterion.id,

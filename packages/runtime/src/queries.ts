@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { SpcError } from "@spc/core";
 import { configSchema, type Config, type Event, type Evidence, type FollowUp, type RequirementState, type RunState, type SpecIR } from "@spc/schema";
 import type { LLMProvider } from "@spc/llm";
+import type { SharedCommandRun } from "@spc/verifier";
 import { currentBranch, currentRevision, git, statusPorcelain } from "@spc/repo";
 import { renderRunSummary } from "@spc/renderer";
 import { evaluateProperty } from "@spc/verifier";
@@ -243,6 +244,10 @@ export interface StandaloneVerifyOptions {
   /** Prepared-environment outcome for --run verification: recorded as
    *  evidence, and a failure classifies command criteria inconclusive. */
   prepareOutcome?: { mode: "installed" | "linked" | "none" | "failed"; exitCode?: number; detail?: string };
+  /** Invocation-owned command memo (specs/verify-dedup): the --all loop
+   *  threads ONE map across every spec's verification; absent = fresh
+   *  per sweep. Never retained beyond the invocation. */
+  commandRuns?: Map<string, SharedCommandRun>;
 }
 
 export interface StandaloneVerifyReport {
@@ -347,6 +352,7 @@ export async function createVerifyRun(options: StandaloneVerifyOptions): Promise
     events,
     revision,
     now,
+    ...(options.commandRuns ? { commandRuns: options.commandRuns } : {}),
   });
   } catch (e) {
     // A sweep killed by the harness response timeout must not leave a

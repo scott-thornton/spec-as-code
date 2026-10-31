@@ -1,6 +1,6 @@
 import type { Config, DesiredProperty, Evidence, FollowUp, RequirementState, SpecIR } from "@spc/schema";
 import type { LLMProvider, UsageRecord } from "@spc/llm";
-import type { CommandRunResult } from "@spc/executor";
+import type { SharedCommandRun } from "@spc/verifier";
 import { evaluateProperty, verifyCriterion } from "@spc/verifier";
 import type { EventStore } from "./events.js";
 import type { EvidenceStore, FollowupStore } from "./stores.js";
@@ -35,6 +35,10 @@ export interface VerifySweepInput {
   enforceRedPhase?: boolean;
   now?: () => string;
   onUsage?: (record: UsageRecord) => void;
+  /** Invocation-owned command memo (specs/verify-dedup): when provided,
+   *  repeated commands share ONE physical execution across sweeps and
+   *  specs. Absent = fresh map per sweep (historical behavior). */
+  commandRuns?: Map<string, SharedCommandRun>;
   /** Run-owned agent-verdict cache shared across sweeps (apply runs). */
   agentVerdicts?: Map<string, { outcome: "supports" | "contradicts" | "inconclusive"; justification: string }>;
   /** Criterion-level chain flips (criterionId -> prior runId), final sweep only. */
@@ -62,9 +66,12 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
     }
   }
 
-  // One run per distinct command per sweep: the tree is fixed within a sweep,
-  // so repeated criteria share the execution instead of re-running it.
-  const commandRuns = new Map<string, CommandRunResult>();
+  // One run per distinct command per sweep: the tree is fixed within a
+  // sweep, so repeated criteria share the execution instead of re-running
+  // it. The memo belongs to the INVOCATION (specs/verify-dedup): a caller
+  // may thread one across sweeps and specs - default is a fresh map,
+  // exactly the historical per-sweep behavior.
+  const commandRuns = input.commandRuns ?? new Map<string, SharedCommandRun>();
 
   for (const property of input.properties) {
     for (const criterion of property.acceptance) {
@@ -101,7 +108,20 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
         ...(input.taskId ? { taskId: input.taskId } : {}),
         ...(input.phase ? { phase: input.phase } : {}),
       });
-      if (result.commandRun && result.commandRun.allowed) {
+      // Audit precision (specs/verify-dedup): one COMMAND_EXECUTED per
+      // real execution; a memo hit emits COMMAND_RESULT_REUSED naming
+      // the execution identity - the criterion was independently
+      // evaluated, the command physically ran once.
+      if (result.execution?.reused) {
+        input.events.append("COMMAND_RESULT_REUSED", {
+          command: result.commandRun?.command ?? "",
+          executionId: result.execution.executionId,
+          originRunId: result.execution.originRunId,
+          criterionId: criterion.id,
+          ...(input.taskId ? { taskId: input.taskId } : {}),
+          ...(input.phase ? { phase: input.phase } : {}),
+        });
+      } else if (result.commandRun && result.commandRun.allowed) {
         input.events.append("COMMAND_EXECUTED", {
           command: result.commandRun.command,
           cwd: result.commandRun.cwd,
@@ -110,6 +130,7 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
           stdoutDigest: result.commandRun.stdoutDigest,
           stderrDigest: result.commandRun.stderrDigest,
           timedOut: result.commandRun.timedOut,
+          ...(result.execution ? { executionId: result.execution.executionId } : {}),
           ...(input.taskId ? { taskId: input.taskId } : {}),
           ...(input.phase ? { phase: input.phase } : {}),
         });
@@ -173,6 +194,9 @@ export interface StandaloneVerifyInput {
   /** Outcome of preparing the execution environment (verify --run);
    *  recorded as structured evidence before criteria run. */
   prepareOutcome?: { mode: "installed" | "linked" | "none" | "failed"; exitCode?: number; detail?: string };
+  /** Invocation-owned command memo (specs/verify-dedup): threaded to
+   *  verifyProperties; absent = fresh per sweep. */
+  commandRuns?: Map<string, SharedCommandRun>;
 }
 
 export async function verifyStandalone(input: StandaloneVerifyInput): Promise<VerifySweepResult> {
@@ -206,5 +230,6 @@ export async function verifyStandalone(input: StandaloneVerifyInput): Promise<Ve
     events: input.events,
     ...(input.now ? { now: input.now } : {}),
     ...(input.onUsage ? { onUsage: input.onUsage } : {}),
+    ...(input.commandRuns ? { commandRuns: input.commandRuns } : {}),
   });
 }
