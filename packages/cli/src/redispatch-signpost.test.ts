@@ -47,7 +47,7 @@ function stubProvider(calls: { key?: string; note?: string }[]) {
     name: "stub",
     model: "stub",
     async generateStructured<T>(request: { role: string; key?: string; previousRejection?: string; note?: string; schemaName: string }) {
-      calls.push({ key: request.key, ...(request.note ? { note: request.note } : {}) });
+      calls.push({ key: request.key, note: request.note });
       void request;
       const value = {
         status: "completed",
