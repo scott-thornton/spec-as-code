@@ -1,0 +1,89 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: prompt-stability
+  title: Prefix stability as a contract - sorted listings, volatile ids at the tail, deterministic composition
+goal: >
+  The deeper lever, made structural (field note 2026-10-30): prompt
+  caching in every regime - anthropic markers, automatic prefix floors,
+  and the answering agent's session cache in the harness world - keys on
+  a byte-stable prefix, and composition today only accidentally provides
+  one. Two concrete defects: listMatchingFiles (every executor prompt's
+  excerpt list) returns files in walk order with no sort contract - Node
+  readdir order is OS-dependent and unguaranteed, so the same tree can
+  compose different prompts at different moments, busting every cache
+  regime and wobbling reproducibility; and the harness instructions
+  embed the volatile request id mid-block, cutting the answering
+  agent's stable prefix at exactly the line where the instructions
+  begin. The executor payload head is already stable-first by
+  construction (spec, then repository, then task) - this spec enforces
+  what is accidental and pins what must never regress.
+requirements:
+  - id: PST-001
+    statement: >
+      listMatchingFiles gains an explicit sort contract: matching files
+      are returned in deterministically sorted path order regardless of
+      filesystem enumeration order (a sorted return plus a contract
+      comment in packages/repo/src/observer.ts). The oracle pins the
+      contract: a fixture tree whose entries are created in
+      non-alphabetical order lists sorted on every platform.
+    priority: must
+    scope:
+      include: [packages/repo/src/**]
+    acceptance:
+      - id: PST-001-A
+        type: command
+        command: pnpm --filter @spc/repo... build > /dev/null && pnpm --filter @spc/repo exec vitest run src/prompt-stability.test.ts
+  - id: PST-002
+    statement: >
+      The volatile request id moves to the tail of the harness
+      instructions: the constant instruction text (role header, the
+      backend-model description, the answer-file requirements, and the
+      run-continues note) contains no per-request data, and the request
+      id and its respond command land as the final line(s) of the
+      block. The shared prefix across requests of the same role then
+      covers the entire constant text. The oracle dispatches two
+      executor requests with different ids and asserts their common
+      prefix includes the full constant block through the
+      run-continues sentence.
+    priority: must
+    scope:
+      include: [packages/llm-harness/src/**]
+    acceptance:
+      - id: PST-002-A
+        type: command
+        command: pnpm --filter @spc/llm-harness... build > /dev/null && pnpm --filter @spc/llm-harness exec vitest run src/prompt-stability.test.ts
+        discriminating: true
+  - id: PST-003
+    statement: >
+      Determinism pins in the executor prompt builder: building the
+      same executor context twice produces byte-identical prompts, and
+      two different tasks over the same spec and repository share their
+      prefix through the entire spec and repository blocks (the common
+      prefix ends only where the task object begins). These pin the
+      stable-first payload order so later composition changes cannot
+      silently regress it.
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: PST-003-A
+        type: command
+        command: pnpm --filter @spc/executor... build > /dev/null && pnpm --filter @spc/executor exec vitest run src/prompt-stability.test.ts
+  - id: PST-004
+    statement: >
+      Regression guard: workspace typechecks; repo, llm-harness,
+      executor, and cli suites green - existing assertions that
+      reference the instruction wording (integration, harness e2e)
+      updated where the id relocation changes their expected strings.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: PST-004-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/repo... test && pnpm --filter @spc/llm-harness... test && pnpm --filter @spc/executor... test && pnpm --filter @spc/cli... test
+outOfScope:
+  - reordering the executor payload itself (already stable-first; PST-003 pins it rather than changes it)
+  - a third cache marker on the payload head (parks until the one-flag marker experiment shows engagement - separate decision)
+  - cross-run prompt memoization (a cached answer replayed across runs is testimony wearing observation's clothes)

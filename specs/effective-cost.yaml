@@ -1,0 +1,50 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: effective-cost
+  title: Cost-true token accounting in the runner - cache-weighted effective input
+goal: >
+  Cache capture made the fields visible; this makes the numbers mean
+  what they cost. Raw token ratios overstate spc's overhead in cached
+  regimes because cache reads bill at a steep discount and writes at a
+  premium; the runner can compute a cache-weighted effective input
+  figure from the fields it already records, so the next campaign
+  reports cost multiples instead of token multiples. Anthropic-family
+  tariffs are the normalization (reads at 0.1x base input, writes at
+  1.25x - the 5-minute ephemeral tier); the row label names its tariff,
+  and the coefficients live as documented constants rather than hidden
+  arithmetic.
+requirements:
+  - id: EC2-001
+    statement: >
+      compare.ts gains effectiveInputTokens on ArmTotals: the
+      cache-weighted input figure computed per arm from recorded tokens
+      as (inputTokens - cacheReadTokens - cacheCreationTokens) +
+      cacheReadTokens * 0.1 + cacheCreationTokens * 1.25, with the
+      coefficients as named, documented constants (READ_COEFFICIENT
+      0.1, WRITE_COEFFICIENT 1.25, anthropic-family tariff). The
+      summary renders an 'Effective input (cache-weighted)' row with
+      the tariff named, alongside the cached-tokens row, only when some
+      arm reports cache activity - absent or zero stays silent exactly
+      as the cached-tokens row does.
+    priority: must
+    scope:
+      include: [evals/runner/src/**]
+    acceptance:
+      - id: EC2-001-A
+        type: command
+        command: pnpm --filter @spc/evals... build > /dev/null && pnpm --filter @spc/evals exec vitest run src/effective-cost.test.ts
+        discriminating: true
+  - id: EC2-002
+    statement: >
+      Regression guard: workspace typechecks; the evals suite green.
+    priority: must
+    scope:
+      include: [evals/**]
+    acceptance:
+      - id: EC2-002-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/evals test
+outOfScope:
+  - per-dialect tariff switching (one documented normalization; a second tariff is a one-constant change if a future campaign needs it)
+  - monetary cost (currencies and price books churn; token-weighted is stable and comparable)
