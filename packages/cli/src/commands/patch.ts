@@ -25,6 +25,44 @@ export interface PatchBuildOptions {
  * read it. The tool verifies and never decides: refusals happen here,
  * at composition time, instead of costing a task retry.
  */
+
+/**
+ * `spc patch verify <ops.json>` - composition-time validation of a whole
+ * changes array (specs/patch-verify): the array runs through the SAME
+ * applicator that will apply it, in memory, touching nothing - per
+ * path, first-op digest against the live tree, every chain position
+ * against the overlay the previous ops produced, anchor uniqueness
+ * throughout. The verify-dedup incidents paid queue round-trips
+ * because this check existed only at staging; here it costs a local
+ * command. One checker, no drift: this IS staging, run dry.
+ */
+export function runPatchVerify(opsFile: string, options: { root?: string } = {}): number {
+  const root = options.root ? path.resolve(options.root) : process.cwd();
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(path.resolve(process.cwd(), opsFile), "utf8"));
+  } catch (e) {
+    throw new SpcError("SPC_RUNTIME_ERROR", `ops file is not valid JSON: ${(e as Error).message}`);
+  }
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new SpcError("SPC_RUNTIME_ERROR", `ops file must be a non-empty JSON array of change ops`);
+  }
+  const staged = stageChanges(root, raw as ProposedChange[]);
+  if (!staged.ok) {
+    console.log(`PATCH_VERIFY_FAILED: ${staged.code}`);
+    console.log(staged.message);
+    return 1;
+  }
+  const byPath = new Map<string, number>();
+  for (const op of raw as ProposedChange[]) {
+    byPath.set(op.path, (byPath.get(op.path) ?? 0) + 1);
+  }
+  console.log(`Chain valid: ${raw.length} op(s) across ${byPath.size} path(s), nothing written.`);
+  for (const [p, n] of [...byPath.entries()].sort()) {
+    console.log(`  ${p}  ${n} op(s)`);
+  }
+  return 0;
+}
 export function runPatchBuild(fileArg: string, options: PatchBuildOptions): number {
   const root = options.root ? path.resolve(options.root) : process.cwd();
 

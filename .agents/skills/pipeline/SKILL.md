@@ -17,7 +17,9 @@ description: The spc pipeline - the seven stages from authored spec to pushed re
    dry-run --gates`, then respond - or save-candidate under window
    pressure (follow: spc use-skill rehearse). Exit: a rehearsed answer
    submitted.
-5. **Run** - `spc apply <plan>`: staged changes, write-scope
+5. **Run** - `spc apply <plan>` (by explicit file name, after the plan
+   process has exited; never by newest-file glob - a retrying plan
+   process rewrites the newest file mid-glob): staged changes, write-scope
    enforcement, atomic refusals. A staging rejection of an
    answer-defect class (PATCH_*) re-dispatches within the same task
    attempt, bounded - read the request's lastError and correct (see

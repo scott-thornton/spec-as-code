@@ -312,6 +312,30 @@ export function runAgentRespond(options: { id: string; file?: string; stdin?: bo
   } catch (e) {
     throw new SpcError("HARNESS_RESPOND_INPUT", `answer is not valid JSON: ${(e as Error).message}`);
   }
+  // Composition-time chain validation (specs/patch-verify): an answer
+  // carrying changes runs through the SAME applicator that will stage
+  // it, in memory, BEFORE anything is written - an order-broken array
+  // (a chained op sorted before its sibling) or a stale first-op digest
+  // dies here, named, for the price of a local command instead of a
+  // queue round-trip and a task attempt.
+  const proposedChanges = (value as { changes?: unknown } | null)?.changes;
+  if (Array.isArray(proposedChanges) && proposedChanges.length > 0) {
+    const staged = stageChanges(repoRoot, proposedChanges as never);
+    // Only COMPOSITION-DEFECT codes refuse here (wrong chain order,
+    // stale digest, absent/non-unique anchor) - never PATCH_BASE_MISSING,
+    // which a foreign-base composition (worktree-mode runs, ops against
+    // files the live tree lacks) hits legitimately; the run's staging
+    // remains authoritative for those.
+    const compositionDefect =
+      staged.ok === false &&
+      (staged.code === "PATCH_BASE_MISMATCH" || staged.code === "PATCH_ANCHOR_ABSENT" || staged.code === "PATCH_ANCHOR_NOT_UNIQUE");
+    if (compositionDefect) {
+      console.log(`PATCH_CHAIN_INVALID: the changes array would be refused at staging - fix it here, at composition time:`);
+      console.log(staged.message);
+      console.log(`Assemble op arrays in explicit chain order (spc patch build --after), then check with: spc patch verify <ops.json>`);
+      return 1;
+    }
+  }
   // Rehearsal friction (risk-scoped, escapable): the empirically top
   // staging refusal is chained ops on one path composed without
   // rehearsal. A preflight counts only when it was recorded for THIS

@@ -19,6 +19,10 @@ is the whole skill.
    build <path> --anchor-file <a> --replacement-file <r>`. For multiple
    ops on one file, chain them with `--after <prior-ops.json>` so each
    op's digest binds the content after the previous op applies.
+   Assemble op arrays in explicit chain order, never by filename sort -
+   an --after-chained op sorted before its sibling is the top staging
+   refusal - and check the whole array with `spc patch verify
+   <ops.json>` before respond.
 3. **Cheap check first:** `spc agent validate <id> --file <draft>` -
    schema issues surface locally instead of as a submit-requeue round
    trip.
