@@ -1,0 +1,77 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: cache-capture
+  title: Cache economics in Usage - the endpoint already returns them, the records should keep them
+goal: >
+  Field correction from the ladder campaign (2026-10-30): the ~3x
+  token-overhead figure is a raw token-count ratio because the adapters
+  discard the cache fields the endpoint already returns - the word
+  "cache" appears nowhere in the provider interface, the adapters, or
+  the runner. This is instrument completeness, not cost philosophy: the
+  same class as reasoningTokens (provider-budget rev 3) - model
+  economics belong in the diagnostic surface so that claims like "our
+  cache rate mitigates this" are measured facts instead of assertions
+  from a field report. spc remains indifferent to what operators
+  conclude from the numbers.
+requirements:
+  - id: CC-001
+    statement: >
+      Usage gains two optional fields - cacheReadTokens and
+      cacheCreationTokens - and both adapters map them from the wire:
+      the anthropic adapter maps usage.cache_read_input_tokens and
+      usage.cache_creation_input_tokens; the openai adapter maps
+      usage.prompt_tokens_details.cached_tokens to cacheReadTokens (the
+      dialect has no creation concept; cacheCreationTokens stays
+      absent). Fields are omitted when the endpoint does not report
+      them; nothing is inferred or defaulted. The oracle asserts the
+      mappings through mocked fetch responses, and absence when
+      unreported.
+    priority: must
+    scope:
+      include: [packages/llm/src/**, packages/llm-anthropic/src/**, packages/llm-openai/src/**]
+    acceptance:
+      - id: CC-001-A
+        type: command
+        command: pnpm --filter @spc/llm-anthropic... build > /dev/null && pnpm --filter @spc/llm-anthropic exec vitest run src/cache-capture.test.ts
+        discriminating: true
+      - id: CC-001-B
+        type: command
+        command: pnpm --filter @spc/llm-openai... build > /dev/null && pnpm --filter @spc/llm-openai exec vitest run src/cache-capture.test.ts
+        discriminating: true
+  - id: CC-002
+    statement: >
+      The evals runner carries the fields through: the control arm
+      accumulates cacheReadTokens and cacheCreationTokens across its
+      provider calls into its result record; the treatment arm
+      accumulates them from the runtime's usage records (which already
+      spread provider usage wholesale, so the fields flow once Usage
+      carries them); per-task results and arm totals expose them; and
+      the summary renders a cache row only when some arm reports a
+      nonzero figure - absent or zero stays silent, so records written
+      before this change read identically. The oracle asserts the
+      control-arm accumulation through a stub provider with
+      cache-bearing usage, and the summary's cache row through the
+      compare module.
+    priority: must
+    scope:
+      include: [evals/runner/src/**]
+    acceptance:
+      - id: CC-002-A
+        type: command
+        command: pnpm --filter @spc/evals... build > /dev/null && pnpm --filter @spc/evals exec vitest run src/cache-capture.test.ts
+        discriminating: true
+  - id: CC-003
+    statement: >
+      Regression guard: workspace typechecks; llm, llm-anthropic,
+      llm-openai, and evals suites green.
+    priority: must
+    scope:
+      include: [packages/**, evals/**]
+    acceptance:
+      - id: CC-003-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/llm... test && pnpm --filter @spc/llm-anthropic... test && pnpm --filter @spc/llm-openai... test && pnpm --filter @spc/evals test
+outOfScope:
+  - any spc-side cost policy or budget philosophy (operators conclude; spc measures)
+  - requesting cache_control breakpoints on input blocks (capture first; opt-in caching is an operator decision)
