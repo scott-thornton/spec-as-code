@@ -86,7 +86,7 @@ describe("redispatch signpost (RS-001)", () => {
       kind: "modify",
       intent: "i",
       targets: { read: ["lib/**"], write: ["lib/**"] },
-    } as never;
+    };
 
     const run = async (dirty: boolean): Promise<{ key?: string; note?: string }[]> => {
       if (dirty) {
@@ -98,7 +98,7 @@ describe("redispatch signpost (RS-001)", () => {
       const calls: { key?: string; note?: string }[] = [];
       await executeTask(
         {
-          task: dirty ? task : { ...task, id: "T002" } as never,
+          task: dirty ? task : { ...task, id: "T002" },
           specIr: ir,
           snapshot: observeRepository(repo, null) as never,
           worktreeRoot: repo,
