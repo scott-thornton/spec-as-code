@@ -1,0 +1,85 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: cache-markers
+  title: Opt-in prompt caching for the anthropic wire - markered blocks, schema-first, measured
+goal: >
+  Field note (2026-10-30, conversation): Anthropic-protocol caching is
+  opt-in per block - cache_control: ephemeral on the stable blocks - and
+  today's adapter cannot express it: system is a string and the schema
+  hint sits at the TAIL of a single prompt string, so there is no block
+  boundary between stable prefix and variable task payload. That defeats
+  marker caching AND marker-less prefix caching alike. One restructure
+  fixes both levers: with the flag on, system becomes a markered block
+  and the schema hint becomes its own leading markered block ahead of
+  the prompt - stable-before-variable becomes structural. The flag
+  defaults OFF and changes nothing until an operator opts in
+  (expressibility, not policy); the cache-capture metering just shipped
+  is the empirical check - cache_read_input_tokens above zero means the
+  endpoint engaged, zero means it tolerated the markers by ignoring
+  them, and the record says which.
+requirements:
+  - id: CM-001
+    statement: >
+      AnthropicProviderOptions gains cacheControl?: boolean. When true,
+      the request body changes shape and only then: system is sent as a
+      block array whose single text block carries cache_control
+      {type: "ephemeral"}, and the user message content is a block
+      array - the schema hint as its own leading text block carrying
+      the same marker, the prompt as the following unmarked block. When
+      absent or false, the wire is byte-identical to today: system a
+      string, content a single string with the prompt first and the
+      schema hint after, and the stringified body contains no
+      cache_control anywhere. Nothing else moves - response parsing,
+      reasoning modes, and send-time guards are untouched, and the
+      markers ride alongside budget and effort modes unchanged.
+    priority: must
+    scope:
+      include: [packages/llm-anthropic/src/**]
+    acceptance:
+      - id: CM-001-A
+        type: command
+        command: pnpm --filter @spc/llm-anthropic... build > /dev/null && pnpm --filter @spc/llm-anthropic exec vitest run src/cache-markers.test.ts
+        discriminating: true
+  - id: CM-002
+    statement: >
+      The flag is operator-expressible: provider.cacheControl (optional
+      boolean) joins the provider config schema and threads through
+      context.ts into the adapter. configuration.md documents the field
+      with the two recipes (z.ai and Anthropic proper), the economics
+      caveat - cache writes bill at a premium (~1.25x on creation
+      tokens), so the flag pays off in repetition-heavy runs, which spc
+      runs are by construction (planner, executor xN, verifier sharing
+      the system and schema prefixes) - and the metering tie-in: watch
+      cache_read_input_tokens; zero reads on a markered run means the
+      endpoint ignored the markers.
+    priority: must
+    scope:
+      include: [packages/schema/src/**, packages/cli/src/**, docs/**]
+    acceptance:
+      - id: CM-002-A
+        type: command
+        command: pnpm --filter @spc/schema... build > /dev/null && pnpm --filter @spc/schema exec vitest run src/cache-control.test.ts
+        discriminating: true
+      - id: CM-002-B
+        type: file
+        path: docs/usage/configuration.md
+        assert:
+          contains: "cacheControl"
+        discriminating: true
+  - id: CM-003
+    statement: >
+      Regression guard: workspace typechecks; llm-anthropic, schema,
+      and cli suites green - the default-off wire must be provably
+      unchanged.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: CM-003-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/llm-anthropic... test && pnpm --filter @spc/schema... test && pnpm --filter @spc/cli... test
+outOfScope:
+  - defaulting the flag on (expressibility, not policy - operators opt in per endpoint)
+  - openai-dialect changes (automatic prefix caching; nothing to mark)
+  - reordering the default wire (prompt-then-schema stays the off-shape; the restructure rides the flag)
