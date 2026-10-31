@@ -26,6 +26,27 @@ Read on for the judgment the machine cannot render.
 - A criterion that cannot fail is decoration. Ask of every one: what
   change would make this red? If nothing, delete or strengthen it.
 
+## Renames: zero residual references
+
+A rename's criteria must force coverage of every residual reference.
+The rename updates the definition and the references the executor can
+see - which is not every reference. The same rename task
+false-completed in three campaigns across two models and three months:
+it satisfied every written criterion and left a caller on the old name,
+and the verifier blessed it, because nothing in the criteria forced
+coverage. Add a zero residual references criterion - a command counting
+references to the old name across the write scope, expecting zero:
+
+    - id: X-001-B
+      type: command
+      command: "! grep -rq 'oldFieldName' src/"
+      discriminating: true
+
+Keeping an old-name alias for a migration period is legitimate - it is
+your exception to declare explicitly in the criterion's expectation
+(expect the alias file and nothing else), never an implicit gap the
+verifier cannot see.
+
 ## Classification
 
 - Behavior the change introduces: `command` criteria, marked
