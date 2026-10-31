@@ -3,7 +3,7 @@ import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { gitOk, statusPorcelain } from "@spc/repo";
 import { renderGithubAnnotations, renderGithubSummary } from "@spc/renderer";
 import { createVerifyRun, freshnessCheck, inPlaceHandoffWarning, prepareDisposableWorktree, verifyBundle } from "@spc/runtime";
-import type { SharedCommandRun } from "@spc/verifier";
+import { CommandCache, type SharedCommandRun } from "@spc/verifier";
 import { createProvider, loadRepoConfig, resolveAllSpecs, resolveRepoRoot } from "../context.js";
 
 /**
@@ -108,6 +108,7 @@ export async function runVerify(
       console.log(prepLine);
       const report = await createVerifyRun({
         repoRoot,
+        commandCache: new CommandCache(repoRoot, path.join(repoRoot, ".spc", "cache", "verify-commands.json")),
         specIr: spec.ir,
         config,
         provider,
@@ -145,7 +146,17 @@ export async function runVerify(
   // ONE map threaded through every spec's verification, so repeated
   // commands across specs share a physical execution. Created here,
   // dies here - no module state, no retention beyond this loop.
+  // Beneath it, the persisted cache (specs/verify-cache): loaded once,
+  // threaded through every spec, persisted at the end - a criterion
+  // command whose scope digests are unchanged since its last clean
+  // execution reuses the recorded result instead of re-running.
   const invocationCommandRuns = new Map<string, SharedCommandRun>();
+  const commandCache = new CommandCache(repoRoot, path.join(repoRoot, ".spc", "cache", "verify-commands.json"));
+  try {
+    commandCache.persist();
+  } catch {
+    // best-effort cache dir creation; verification proceeds without it
+  }
   for (const { ir } of specs) {
     const handoff = inPlaceHandoffWarning(path.join(repoRoot, ".spc", "runs"), ir.spec.metadata.id, repoRoot);
     if (handoff && format === "text") console.log(handoff);
@@ -160,7 +171,7 @@ export async function runVerify(
         continue;
       }
     }
-    const report = await createVerifyRun({ repoRoot, specIr: ir, config, provider, commandRuns: invocationCommandRuns });
+    const report = await createVerifyRun({ repoRoot, specIr: ir, config, provider, commandRuns: invocationCommandRuns, commandCache });
     const ok = report.states.every((s) => s.status === "satisfied" || s.status === "waived");
     if (!ok) worst = 1;
 
@@ -215,6 +226,11 @@ export async function runVerify(
   if (worst === 0 && format !== "json") {
     console.log("");
     console.log(`Next: adversarial pass (stage 7 of 7), then push (follow: spc use-skill adversarial-loop)`);
+  }
+  try {
+    commandCache.persist();
+  } catch {
+    // best-effort persistence; the next invocation re-runs what it must
   }
   return worst;
 }

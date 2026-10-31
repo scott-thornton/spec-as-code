@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { SpcError } from "@spc/core";
 import { configSchema, type Config, type Event, type Evidence, type FollowUp, type RequirementState, type RunState, type SpecIR } from "@spc/schema";
 import type { LLMProvider } from "@spc/llm";
-import type { SharedCommandRun } from "@spc/verifier";
+import { CommandCache, type SharedCommandRun } from "@spc/verifier";
 import { currentBranch, currentRevision, git, statusPorcelain } from "@spc/repo";
 import { renderRunSummary } from "@spc/renderer";
 import { evaluateProperty } from "@spc/verifier";
@@ -248,6 +248,9 @@ export interface StandaloneVerifyOptions {
    *  threads ONE map across every spec's verification; absent = fresh
    *  per sweep. Never retained beyond the invocation. */
   commandRuns?: Map<string, SharedCommandRun>;
+  /** Persisted command cache (specs/verify-cache): standalone verify
+   *  loads one, threads it, persists after; apply passes none. */
+  commandCache?: CommandCache;
 }
 
 export interface StandaloneVerifyReport {
@@ -353,6 +356,7 @@ export async function createVerifyRun(options: StandaloneVerifyOptions): Promise
     revision,
     now,
     ...(options.commandRuns ? { commandRuns: options.commandRuns } : {}),
+    ...(options.commandCache ? { commandCache: options.commandCache } : {}),
   });
   } catch (e) {
     // A sweep killed by the harness response timeout must not leave a

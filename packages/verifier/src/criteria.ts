@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
+import type { CachedRunResult } from "./command-cache.js";
 import path from "node:path";
 import { digestOf } from "@spc/core";
 import type {
@@ -41,6 +42,14 @@ export interface CriterionContext {
    * every criterion that names it. Created by the sweep, not per criterion.
    */
   commandRuns?: Map<string, SharedCommandRun>;
+  /**
+   * Persisted command cache (specs/verify-cache): consulted BENEATH the
+   * invocation memo, standalone verification only. A hit supplies the
+   * recorded result with its original execution identity and origin
+   * "cache" - the audit contract of invocation-level reuse, one layer
+   * down. Owned by the verify invocation; apply sweeps never see it.
+   */
+  commandCache?: { reusable(command: string): CachedRunResult | null; record(command: string, result: CachedRunResult): void };
   /**
    * False only when the execution environment failed to prepare: the
    * criterion COULD NOT meaningfully execute. Command criteria then
@@ -191,11 +200,18 @@ async function verifyCommand(
   const expected = criterion.expect?.exitCode ?? 0;
   const runKey = `${criterion.command}\u0000${expected}\u0000${timeoutMs}`;
   const cached = ctx.commandRuns?.get(runKey);
+  const cacheHit = cached ? null : (ctx.commandCache?.reusable(criterion.command) ?? null);
   let run: CommandRunResult;
   let execution: CriterionResult["execution"] | undefined;
   if (cached) {
     run = cached.result;
     execution = { executionId: cached.executionId, reused: true, originRunId: cached.originRunId };
+  } else if (cacheHit) {
+    run = cacheHit as unknown as CommandRunResult;
+    // Persisted-cache hit: the recorded result carries its original
+    // execution identity; origin "cache" distinguishes the layer in
+    // events and evidence (reusedFrom: "cache").
+    execution = { executionId: cacheHit.executionId, reused: true, originRunId: "cache" };
   } else {
     run = await runCommand(criterion.command, {
       cwd: ctx.cwd,
@@ -212,6 +228,17 @@ async function verifyCommand(
       const entry: SharedCommandRun = { executionId: randomUUID(), result: run, originRunId: ctx.runId };
       ctx.commandRuns.set(runKey, entry);
       execution = { executionId: entry.executionId, reused: false, originRunId: ctx.runId };
+    }
+    if (ctx.commandCache && run.exitCode === expected && !run.deniedReason && !run.timedOut) {
+      // Only clean, matching executions are cached: a refusal, timeout,
+      // or unexpected exit is honest work that must re-run next time.
+      ctx.commandCache.record(criterion.command, {
+        executionId: execution?.executionId ?? randomUUID(),
+        exitCode: run.exitCode,
+        stdout: run.stdout,
+        stderr: run.stderr,
+        timedOut: run.timedOut,
+      });
     }
   }
   const outcome: EvidenceOutcome = run.deniedReason

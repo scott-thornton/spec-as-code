@@ -1,6 +1,6 @@
 import type { Config, DesiredProperty, Evidence, FollowUp, RequirementState, SpecIR } from "@spc/schema";
 import type { LLMProvider, UsageRecord } from "@spc/llm";
-import type { SharedCommandRun } from "@spc/verifier";
+import { CommandCache, type SharedCommandRun } from "@spc/verifier";
 import { evaluateProperty, verifyCriterion } from "@spc/verifier";
 import type { EventStore } from "./events.js";
 import type { EvidenceStore, FollowupStore } from "./stores.js";
@@ -39,6 +39,10 @@ export interface VerifySweepInput {
    *  repeated commands share ONE physical execution across sweeps and
    *  specs. Absent = fresh map per sweep (historical behavior). */
   commandRuns?: Map<string, SharedCommandRun>;
+  /** Persisted command cache (specs/verify-cache): standalone
+   *  verification only - threaded to verifyProperties -> criteria;
+   *  apply sweeps never receive one. */
+  commandCache?: CommandCache;
   /** Run-owned agent-verdict cache shared across sweeps (apply runs). */
   agentVerdicts?: Map<string, { outcome: "supports" | "contradicts" | "inconclusive"; justification: string }>;
   /** Criterion-level chain flips (criterionId -> prior runId), final sweep only. */
@@ -90,6 +94,7 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
         ...(approvedCommands.size > 0 ? { approvedCommands } : {}),
         ...(input.phase ? { phase: input.phase } : {}),
         commandRuns,
+        ...(input.commandCache ? { commandCache: input.commandCache } : {}),
         ...(input.environmentReady === false ? { environmentReady: false } : {}),
         ...(input.agentVerdicts ? { agentVerdicts: input.agentVerdicts } : {}),
         ...(input.inheritedFlips ? { inheritedFlips: input.inheritedFlips } : {}),
@@ -197,6 +202,9 @@ export interface StandaloneVerifyInput {
   /** Invocation-owned command memo (specs/verify-dedup): threaded to
    *  verifyProperties; absent = fresh per sweep. */
   commandRuns?: Map<string, SharedCommandRun>;
+  /** Persisted command cache (specs/verify-cache): standalone verify
+   *  paths thread one; apply sweeps pass none. */
+  commandCache?: CommandCache;
 }
 
 export async function verifyStandalone(input: StandaloneVerifyInput): Promise<VerifySweepResult> {
@@ -231,5 +239,6 @@ export async function verifyStandalone(input: StandaloneVerifyInput): Promise<Ve
     ...(input.now ? { now: input.now } : {}),
     ...(input.onUsage ? { onUsage: input.onUsage } : {}),
     ...(input.commandRuns ? { commandRuns: input.commandRuns } : {}),
+    ...(input.commandCache ? { commandCache: input.commandCache } : {}),
   });
 }
