@@ -40,6 +40,8 @@ export interface ControlResult {
   modelCalls: number;
   tokensIn: number;
   tokensOut: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
 }
 
 export async function runControlArm(options: {
@@ -56,6 +58,8 @@ export async function runControlArm(options: {
   const repoDump = options.repoFiles ?? [];
   let tokensIn = 0;
   let tokensOut = 0;
+  let cacheReadTokens = 0;
+  let cacheCreationTokens = 0;
 
   const plan = await provider.generateStructured({
     role: "planner",
@@ -68,6 +72,8 @@ export async function runControlArm(options: {
   });
   tokensIn += plan.usage.inputTokens ?? 0;
   tokensOut += plan.usage.outputTokens ?? 0;
+  cacheReadTokens += plan.usage.cacheReadTokens ?? 0;
+  cacheCreationTokens += plan.usage.cacheCreationTokens ?? 0;
   // PLAN.md is the control arm's plan artifact.
   writeFileSync(path.join(repoDir, "PLAN.md"), plan.value.planMarkdown, "utf8");
 
@@ -82,6 +88,8 @@ export async function runControlArm(options: {
   });
   tokensIn += implement.usage.inputTokens ?? 0;
   tokensOut += implement.usage.outputTokens ?? 0;
+  cacheReadTokens += implement.usage.cacheReadTokens ?? 0;
+  cacheCreationTokens += implement.usage.cacheCreationTokens ?? 0;
 
   for (const change of implement.value.changes) {
     const full = path.join(repoDir, change.path);
@@ -100,5 +108,7 @@ export async function runControlArm(options: {
     modelCalls: 2,
     tokensIn,
     tokensOut,
+    cacheReadTokens,
+    cacheCreationTokens,
   };
 }

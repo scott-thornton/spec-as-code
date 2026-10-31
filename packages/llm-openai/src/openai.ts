@@ -43,6 +43,7 @@ interface ChatCompletionResponse {
   usage?: {
     prompt_tokens?: number;
     completion_tokens?: number;
+    prompt_tokens_details?: { cached_tokens?: number };
     completion_tokens_details?: { reasoning_tokens?: number };
   };
   error?: { message?: string; type?: string };
@@ -186,6 +187,9 @@ export class OpenAICompatProvider implements LLMProvider {
       outputTokens: json?.usage?.completion_tokens,
       ...(json?.usage?.completion_tokens_details?.reasoning_tokens !== undefined
         ? { reasoningTokens: json.usage.completion_tokens_details.reasoning_tokens }
+        : {}),
+      ...(json?.usage?.prompt_tokens_details?.cached_tokens !== undefined
+        ? { cacheReadTokens: json.usage.prompt_tokens_details.cached_tokens }
         : {}),
     };
     return { value, usage };

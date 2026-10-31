@@ -25,6 +25,8 @@ export interface TaskArmResult extends ArmMetrics {
   modelCalls: number;
   tokensIn?: number;
   tokensOut?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
 }
 
 export interface ControlArmResult extends TaskArmResult {
@@ -134,6 +136,8 @@ async function runOneTrial(task: LoadedTask, trial: number, workRoot: string, pr
     claimedDone: controlRun.claimedDone,
     tokensIn: controlRun.tokensIn,
     tokensOut: controlRun.tokensOut,
+    cacheReadTokens: controlRun.cacheReadTokens,
+    cacheCreationTokens: controlRun.cacheCreationTokens,
   };
 
   // Treatment arm.
@@ -170,6 +174,8 @@ async function runOneTrial(task: LoadedTask, trial: number, workRoot: string, pr
     replanReasons: treatmentRun.replanReasons,
     tokensIn: treatmentRun.tokensIn,
     tokensOut: treatmentRun.tokensOut,
+    cacheReadTokens: treatmentRun.cacheReadTokens,
+    cacheCreationTokens: treatmentRun.cacheCreationTokens,
   };
 
   return {

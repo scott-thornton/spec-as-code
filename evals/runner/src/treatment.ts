@@ -21,6 +21,8 @@ export interface TreatmentResult {
   replanReasons: string[];
   tokensIn: number;
   tokensOut: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
 }
 
 const RUNTIME_STATE_GITIGNORE = ".spc/runs/\n.spc/worktrees/\n.spc/plans/\n";
@@ -76,6 +78,8 @@ export async function runTreatmentArm(options: {
     options.repoFiles ?? snapshot.relevantArtifacts.slice(0, 6).map((a) => ({ path: a.path, content: "" }));
   let tokensIn = 0;
   let tokensOut = 0;
+  let cacheReadTokens = 0;
+  let cacheCreationTokens = 0;
   const generated = await generatePlan({
     specIr,
     snapshot,
@@ -85,6 +89,8 @@ export async function runTreatmentArm(options: {
     onUsage: (record) => {
       tokensIn += record.inputTokens ?? 0;
       tokensOut += record.outputTokens ?? 0;
+      cacheReadTokens += record.cacheReadTokens ?? 0;
+      cacheCreationTokens += record.cacheCreationTokens ?? 0;
     },
   });
   if (!generated.plan) {
@@ -103,9 +109,11 @@ export async function runTreatmentArm(options: {
   try {
     const usageText = readFileSync(paths.usageFile(report.runId), "utf8");
     for (const line of usageText.trim().split("\n").filter((l) => l !== "")) {
-      const record = JSON.parse(line) as { inputTokens?: number; outputTokens?: number };
+      const record = JSON.parse(line) as { inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheCreationTokens?: number };
       tokensIn += record.inputTokens ?? 0;
       tokensOut += record.outputTokens ?? 0;
+      cacheReadTokens += record.cacheReadTokens ?? 0;
+      cacheCreationTokens += record.cacheCreationTokens ?? 0;
     }
   } catch {
     // no usage file (blocked before execution)
@@ -130,6 +138,8 @@ export async function runTreatmentArm(options: {
     replanReasons,
     tokensIn,
     tokensOut,
+    cacheReadTokens,
+    cacheCreationTokens,
   };
 }
 

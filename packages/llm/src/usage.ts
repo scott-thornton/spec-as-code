@@ -14,6 +14,8 @@ export interface UsageRecord {
   outputDigest: string;
   inputTokens?: number;
   outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
   durationMs: number;
   status: "success" | "error";
   errorCode?: string;
@@ -37,6 +39,8 @@ export function makeUsageRecord(
     outputDigest: digestOf(output),
     ...(usage.inputTokens !== undefined ? { inputTokens: usage.inputTokens } : {}),
     ...(usage.outputTokens !== undefined ? { outputTokens: usage.outputTokens } : {}),
+    ...(usage.cacheReadTokens !== undefined ? { cacheReadTokens: usage.cacheReadTokens } : {}),
+    ...(usage.cacheCreationTokens !== undefined ? { cacheCreationTokens: usage.cacheCreationTokens } : {}),
     durationMs: usage.durationMs,
     status: options.status ?? "success",
     ...(options.errorCode ? { errorCode: options.errorCode } : {}),

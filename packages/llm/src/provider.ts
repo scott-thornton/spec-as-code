@@ -44,6 +44,12 @@ export interface Usage {
    *  endpoint reports it - reasoning-token visibility for budget
    *  diagnosis and any capability measurement. */
   reasoningTokens?: number;
+  /** Endpoint-reported cache economics (anthropic wire:
+   *  cache_read_input_tokens / cache_creation_input_tokens; openai
+   *  wire: prompt_tokens_details.cached_tokens, read side only).
+   *  Measurement surface, not policy - the reasoningTokens precedent. */
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
   durationMs: number;
 }
 

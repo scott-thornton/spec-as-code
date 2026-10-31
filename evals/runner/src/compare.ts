@@ -27,6 +27,8 @@ export interface ArmTotals {
   followupsRaised: number;
   tokensIn: number;
   tokensOut: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
 }
 
 export function armTotals(results: TaskResult[], arm: "control" | "treatment"): ArmTotals {
@@ -46,6 +48,8 @@ export function armTotals(results: TaskResult[], arm: "control" | "treatment"): 
     followupsRaised: sum((r) => (arm === "treatment" ? r.treatment.followupsRaised : 0)),
     tokensIn: sum((r) => pick(r).tokensIn ?? 0),
     tokensOut: sum((r) => pick(r).tokensOut ?? 0),
+    cacheReadTokens: sum((r) => pick(r).cacheReadTokens ?? 0),
+    cacheCreationTokens: sum((r) => pick(r).cacheCreationTokens ?? 0),
   };
 }
 
@@ -99,6 +103,9 @@ export function renderSummary(result: BenchmarkResult): string {
   lines.push(`| Model calls | ${control.modelCalls} | ${treatment.modelCalls} |`);
   if (control.tokensIn + control.tokensOut + treatment.tokensIn + treatment.tokensOut > 0) {
     lines.push(`| Tokens (in / out) | ${control.tokensIn.toLocaleString()} / ${control.tokensOut.toLocaleString()} | ${treatment.tokensIn.toLocaleString()} / ${treatment.tokensOut.toLocaleString()} |`);
+  }
+  if (control.cacheReadTokens + control.cacheCreationTokens + treatment.cacheReadTokens + treatment.cacheCreationTokens > 0) {
+    lines.push(`| Cached tokens (read / created) | ${control.cacheReadTokens.toLocaleString()} / ${control.cacheCreationTokens.toLocaleString()} | ${treatment.cacheReadTokens.toLocaleString()} / ${treatment.cacheCreationTokens.toLocaleString()} |`);
   }
   lines.push(`| Replans | n/a | ${treatment.replans} |`);
   lines.push(`| Human follow-ups raised | n/a | ${treatment.followupsRaised} |`);

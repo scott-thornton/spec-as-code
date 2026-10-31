@@ -37,7 +37,12 @@ export interface AnthropicProviderOptions {
 
 interface MessagesResponse {
   content?: { type: string; text?: string }[];
-  usage?: { input_tokens?: number; output_tokens?: number };
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+  };
   stop_reason?: string;
   error?: { message?: string; type?: string };
 }
@@ -211,6 +216,8 @@ export class AnthropicCompatProvider implements LLMProvider {
       durationMs: Date.now() - started,
       inputTokens: json?.usage?.input_tokens,
       outputTokens: json?.usage?.output_tokens,
+      ...(json?.usage?.cache_read_input_tokens !== undefined ? { cacheReadTokens: json.usage.cache_read_input_tokens } : {}),
+      ...(json?.usage?.cache_creation_input_tokens !== undefined ? { cacheCreationTokens: json.usage.cache_creation_input_tokens } : {}),
     };
     return { value, usage };
   }
