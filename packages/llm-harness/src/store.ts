@@ -51,6 +51,9 @@ export interface HarnessAnswer {
   value: unknown;
   answeredBy?: string;
   answeredAt: string;
+  /** How the answer was rehearsed (dry-run | scratch | none) when the
+   *  composer declared it via submit --rehearsed-with. */
+  rehearsedWith?: string;
   /** Present when this answer admitted a portable candidate: the
    *  candidate's id and the request it was composed against (RFC v3
    *  lineage - both identities travel with the answer record). */
@@ -296,7 +299,7 @@ export class HarnessStore {
    *   A lastError present means the prior answer was REJECTED and a
    *   corrected retry is invited: the overwrite is the intent.
    */
-  answer(id: string, value: unknown, answeredBy?: string): HarnessAnswer {
+  answer(id: string, value: unknown, answeredBy?: string, rehearsedWith?: string): HarnessAnswer {
     return this.withLock(() => {
       const request = this.getRequest(id);
       if (!request) {
@@ -319,6 +322,7 @@ export class HarnessStore {
         value,
         answeredAt: new Date().toISOString(),
         ...(answeredBy ? { answeredBy } : {}),
+        ...(rehearsedWith ? { rehearsedWith } : {}),
       };
       writeFileSync(path.join(this.base, "answered", `${id}.json`), JSON.stringify(answer, null, 2), "utf8");
       return answer;

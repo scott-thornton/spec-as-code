@@ -317,9 +317,8 @@ export async function runAgentSubmit(options: { id: string; file?: string; stdin
 
   // Step 3: respond - which re-runs its own guards (idempotent) and
   // writes the answer.
-  const rehearsedNote = options.rehearsedWith ? ` (rehearsed with: ${options.rehearsedWith})` : "";
-  const result = runAgentRespond({ id: options.id, file: options.file, stdin: options.stdin, by: options.by, ...(options.noPreflight ? { noPreflight: true } : {}), cwd: options.cwd });
-  if (result === 0 && options.rehearsedWith) console.log(`rehearsal shape recorded:${rehearsedNote}`);
+  const result = runAgentRespond({ id: options.id, file: options.file, stdin: options.stdin, by: options.by, ...(options.noPreflight ? { noPreflight: true } : {}), ...(options.rehearsedWith ? { rehearsedWith: options.rehearsedWith } : {}), cwd: options.cwd });
+  if (result === 0 && options.rehearsedWith) console.log(`rehearsed with: ${options.rehearsedWith}`);
   return result;
 }
 
@@ -348,7 +347,7 @@ export async function runAgentWait(options: { timeoutMs?: number; cwd?: string }
   }
 }
 
-export function runAgentRespond(options: { id: string; file?: string; stdin?: boolean; by?: string; cwd?: string; fromCandidate?: string; noPreflight?: boolean }): number {
+export function runAgentRespond(options: { id: string; file?: string; stdin?: boolean; by?: string; cwd?: string; fromCandidate?: string; noPreflight?: boolean; rehearsedWith?: string }): number {
   const { repoRoot, store } = storeFor(options.cwd);
   if (options.fromCandidate) {
     if (options.file || options.stdin) {
@@ -424,7 +423,7 @@ export function runAgentRespond(options: { id: string; file?: string; stdin?: bo
   }
   let answer: HarnessAnswer;
   try {
-    answer = store.answer(options.id, value, options.by);
+    answer = store.answer(options.id, value, options.by, options.rehearsedWith);
   } catch (e) {
     const message = (e as Error).message;
     // The store's refusal is the instruction: print it, exit attention.
@@ -749,6 +748,11 @@ export async function runAgentDryRun(options: { id: string; file: string; gates?
 
     recordPreflight({ staged: staged.writes.length, refusals: [], criteria: { pass: criteriaPassed, total: criteriaTotal }, gates: gateResults });
     console.log("Advisory only - the run's own verification remains authoritative. The working tree was not modified.");
+    // Cost surfacing (specs/rehearsal-visibility): the cumulative
+    // preflight count for this request, so the fourth identical
+    // rehearsal cycle reads as what it is.
+    const n = readPreflightCounts(repoRoot).get(options.id) ?? 0;
+    console.log(`preflight #${n} for ${options.id} (cumulative ${n}x this cycle)`);
     return 0;
   } finally {
     try {
