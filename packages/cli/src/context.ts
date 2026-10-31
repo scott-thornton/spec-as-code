@@ -124,6 +124,7 @@ export async function createProvider(config: Config, repoRoot: string): Promise<
         ...(config.provider.reasoningEffort !== undefined ? { reasoningEffort: config.provider.reasoningEffort } : {}),
         ...(config.provider.tokenLimitField !== undefined ? { tokenLimitField: config.provider.tokenLimitField } : {}),
         ...(config.provider.sendTemperature !== undefined ? { sendTemperature: config.provider.sendTemperature } : {}),
+        ...(config.provider.cacheControl !== undefined ? { cacheControl: config.provider.cacheControl } : {}),
       });
     }
     case "harness": {

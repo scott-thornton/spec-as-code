@@ -32,6 +32,15 @@ export interface AnthropicProviderOptions {
   tokenLimitField?: "max_tokens" | "max_completion_tokens";
   /** Tri-state: undefined = omit (historical); false = omit explicitly; true = send temperature 0. */
   sendTemperature?: boolean;
+  /** Opt-in prompt caching for the anthropic wire (specs/cache-markers):
+   *  when true, system is sent as a markered block and the schema hint
+   *  becomes its own leading markered block ahead of the prompt -
+   *  stable-before-variable, structurally. Off leaves the wire
+   *  byte-identical to today. The operator opts in per endpoint; the
+   *  shipped cache metering verifies engagement (zero
+   *  cache_read_input_tokens on a markered run means the endpoint
+   *  ignored the markers). */
+  cacheControl?: boolean;
   fetchImpl?: FetchLike;
 }
 
@@ -95,6 +104,7 @@ export class AnthropicCompatProvider implements LLMProvider {
   private readonly reasoningEffort?: ReasoningEffort;
   private readonly thinkingBudgetTokens?: number;
   private readonly sendTemperature?: boolean;
+  private readonly cacheControl?: boolean;
   private readonly fetchImpl: FetchLike;
 
   constructor(opts: AnthropicProviderOptions) {
@@ -110,6 +120,7 @@ export class AnthropicCompatProvider implements LLMProvider {
     this.reasoningEffort = opts.reasoningEffort;
     this.thinkingBudgetTokens = opts.thinkingBudgetTokens;
     this.sendTemperature = opts.sendTemperature;
+    this.cacheControl = opts.cacheControl;
     this.fetchImpl = opts.fetchImpl ?? ((url, init) => fetch(url, init));
   }
 
@@ -128,17 +139,38 @@ export class AnthropicCompatProvider implements LLMProvider {
         : "no reasoning control configured";
     const remediation = `raise provider.maxTokens, lower provider.thinkingBudgetTokens, or lower provider.reasoningEffort (${reasoningDesc})`;
 
-    const body: Record<string, unknown> = {
-      model: this.model,
-      max_tokens: effectiveMax,
-      system: request.system,
-      messages: [
-        {
-          role: "user",
-          content: `${request.prompt}\n\n${schemaHint(request.schema as never, request.schemaName)}`,
-        },
-      ],
-    };
+    const ephemeral = { type: "ephemeral" } as const;
+    const body: Record<string, unknown> = this.cacheControl
+      ? {
+          model: this.model,
+          max_tokens: effectiveMax,
+          // Markered blocks: system carries the role-constant prefix,
+          // and the schema hint becomes its own leading cached block so
+          // the stable prefix ends at a block boundary (the off-shape
+          // buries the schema hint at the tail of one string - the
+          // worst order for prefix caching).
+          system: [{ type: "text", text: request.system, cache_control: ephemeral }],
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: schemaHint(request.schema as never, request.schemaName), cache_control: ephemeral },
+                { type: "text", text: request.prompt },
+              ],
+            },
+          ],
+        }
+      : {
+          model: this.model,
+          max_tokens: effectiveMax,
+          system: request.system,
+          messages: [
+            {
+              role: "user",
+              content: `${request.prompt}\n\n${schemaHint(request.schema as never, request.schemaName)}`,
+            },
+          ],
+        };
     if (this.reasoningEffort !== undefined) {
       body["output_config"] = { effort: this.reasoningEffort };
       body["thinking"] = { type: "adaptive" };

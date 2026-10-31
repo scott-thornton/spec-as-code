@@ -26,6 +26,10 @@ export const providerConfigSchema = z.strictObject({
   /** Tri-state temperature: unset preserves the adapter's HISTORICAL
    *  default (Anthropic omits, OpenAI sends 0); false omits; true sends 0. */
   sendTemperature: z.boolean().optional(),
+  /** Opt-in prompt caching for the anthropic wire (cache_control
+   *  markers on the system and schema blocks). Expressibility, not
+   *  policy - operators opt in per endpoint. */
+  cacheControl: z.boolean().optional(),
 });
 
 export const executionConfigSchema = z.strictObject({

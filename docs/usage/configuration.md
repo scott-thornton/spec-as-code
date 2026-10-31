@@ -66,6 +66,11 @@ provider:
   # Field recipes:
   #   z.ai GLM /api/anthropic: thinkingBudgetTokens 4096,
   #     maxTokens 16384, timeoutMs 600000
+  #   anthropic-compatible endpoints that cache: cacheControl true -
+  #     markered system+schema blocks (cache writes bill ~1.25x; pays
+  #     off across a run's repeated planner/executor/verifier prefixes;
+  #     watch cache_read_input_tokens - zero reads on a markered run
+  #     means the endpoint ignored the markers)
   #   official OpenAI: tokenLimitField max_completion_tokens,
   #     reasoningEffort low, maxTokens, timeoutMs
 
