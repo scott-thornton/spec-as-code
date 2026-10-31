@@ -29,7 +29,17 @@ export interface ArmTotals {
   tokensOut: number;
   cacheReadTokens: number;
   cacheCreationTokens: number;
+  /** Cache-weighted input figure - cost-true under the anthropic-family
+   *  tariff; see the constants below. */
+  effectiveInputTokens: number;
 }
+
+/** Anthropic-family tariff (5-minute ephemeral tier): cache reads bill
+ *  at 0.1x base input, cache writes at 1.25x. One documented
+ *  normalization - a second tariff is a constant change if a future
+ *  campaign needs it. */
+export const CACHE_READ_COEFFICIENT = 0.1;
+export const CACHE_WRITE_COEFFICIENT = 1.25;
 
 export function armTotals(results: TaskResult[], arm: "control" | "treatment"): ArmTotals {
   const pick = arm === "control" ? (r: TaskResult) => r.control : (r: TaskResult) => r.treatment;
@@ -50,6 +60,10 @@ export function armTotals(results: TaskResult[], arm: "control" | "treatment"): 
     tokensOut: sum((r) => pick(r).tokensOut ?? 0),
     cacheReadTokens: sum((r) => pick(r).cacheReadTokens ?? 0),
     cacheCreationTokens: sum((r) => pick(r).cacheCreationTokens ?? 0),
+    effectiveInputTokens:
+      sum((r) => (pick(r).tokensIn ?? 0) - (pick(r).cacheReadTokens ?? 0) - (pick(r).cacheCreationTokens ?? 0)) +
+      sum((r) => Math.round((pick(r).cacheReadTokens ?? 0) * CACHE_READ_COEFFICIENT)) +
+      sum((r) => Math.round((pick(r).cacheCreationTokens ?? 0) * CACHE_WRITE_COEFFICIENT)),
   };
 }
 
@@ -106,6 +120,7 @@ export function renderSummary(result: BenchmarkResult): string {
   }
   if (control.cacheReadTokens + control.cacheCreationTokens + treatment.cacheReadTokens + treatment.cacheCreationTokens > 0) {
     lines.push(`| Cached tokens (read / created) | ${control.cacheReadTokens.toLocaleString()} / ${control.cacheCreationTokens.toLocaleString()} | ${treatment.cacheReadTokens.toLocaleString()} / ${treatment.cacheCreationTokens.toLocaleString()} |`);
+    lines.push(`| Effective input (cache-weighted, 0.1x/1.25x tariff) | ${control.effectiveInputTokens.toLocaleString()} | ${treatment.effectiveInputTokens.toLocaleString()} |`);
   }
   lines.push(`| Replans | n/a | ${treatment.replans} |`);
   lines.push(`| Human follow-ups raised | n/a | ${treatment.followupsRaised} |`);
