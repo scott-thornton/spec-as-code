@@ -260,6 +260,70 @@ export function runAgentShow(id: string, cwd: string | undefined, part?: AgentSh
 }
 
 /**
+ * `spc agent submit` (specs/agent-submit): the disciplined tail as one
+ * command - chain validation, dry-run preflight, respond - stopping at
+ * the first refusal with the named cause. Composes the existing
+ * guards; no second checker to drift.
+ */
+export async function runAgentSubmit(options: { id: string; file?: string; stdin?: boolean; by?: string; cwd?: string; noPreflight?: boolean; rehearsedWith?: string }): Promise<number> {
+  const { repoRoot, store } = storeFor(options.cwd);
+
+  let raw: string;
+  if (options.file) {
+    raw = readFileSync(path.resolve(process.cwd(), options.file), "utf8");
+  } else if (options.stdin) {
+    raw = readFileSync(0, "utf8");
+  } else {
+    throw new SpcError("HARNESS_RESPOND_INPUT", "pass --file <answer.json> or --stdin");
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch (e) {
+    throw new SpcError("HARNESS_RESPOND_INPUT", `answer is not valid JSON: ${(e as Error).message}`);
+  }
+
+  // Step 1: chain validation - the same composition-defect check respond
+  // runs, FIRST, so an order-broken or stale array dies here with
+  // nothing written and no preflight spent.
+  const proposedChanges = (value as { changes?: unknown } | null)?.changes;
+  if (Array.isArray(proposedChanges) && proposedChanges.length > 0) {
+    const staged = stageChanges(repoRoot, proposedChanges as never);
+    const compositionDefect =
+      staged.ok === false &&
+      (staged.code === "PATCH_BASE_MISMATCH" || staged.code === "PATCH_ANCHOR_ABSENT" || staged.code === "PATCH_ANCHOR_NOT_UNIQUE");
+    if (compositionDefect) {
+      console.log(`PATCH_CHAIN_INVALID: the changes array would be refused at staging - fix it here, at composition time:`);
+      console.log(staged.message);
+      console.log(`Assemble op arrays in explicit chain order (spc patch build --after), then check with: spc patch verify <ops.json>`);
+      return 1;
+    }
+  }
+
+  // Step 2: the dry-run preflight (records the draft digest) unless
+  // explicitly skipped. Advisory as ever - the run's verification stays
+  // authoritative.
+  if (!options.noPreflight) {
+    if (!options.file) {
+      throw new SpcError("HARNESS_RESPOND_INPUT", "the dry-run step needs --file (write the draft to disk, or pass --no-preflight)");
+    }
+    void store;
+    const preflight = await runAgentDryRun({ id: options.id, file: options.file, gates: false, cwd: options.cwd });
+    if (preflight !== 0) {
+      console.log(`submit stopped: the dry-run preflight refused this draft (exit ${preflight}); fix and submit again, or pass --no-preflight to push through`);
+      return 1;
+    }
+  }
+
+  // Step 3: respond - which re-runs its own guards (idempotent) and
+  // writes the answer.
+  const rehearsedNote = options.rehearsedWith ? ` (rehearsed with: ${options.rehearsedWith})` : "";
+  const result = runAgentRespond({ id: options.id, file: options.file, stdin: options.stdin, by: options.by, ...(options.noPreflight ? { noPreflight: true } : {}), cwd: options.cwd });
+  if (result === 0 && options.rehearsedWith) console.log(`rehearsal shape recorded:${rehearsedNote}`);
+  return result;
+}
+
+/**
  * `spc agent wait` - block until a harness request appears, then print
  * it. The answering agent's loop becomes: answer, wait, answer - no
  * sleep-polling (the CHK3555 agent polled all day).

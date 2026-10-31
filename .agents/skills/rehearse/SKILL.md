@@ -32,7 +32,11 @@ is the whole skill.
    gates, and touches nothing. Iterate in the scratch until clean. The
    rehearsal records a digest of your draft - submitting a different
    answer than you rehearsed reads as unrehearsed.
-5. **Submit, or bank it:** `spc agent respond <id> --file <draft>`.
+5. **Submit, or bank it:** `spc agent submit <id> --file <draft>` - the
+   disciplined tail as ONE command (chain check, dry-run preflight,
+   respond; first refusal stops with the named cause). Develop however
+   you like - scratch worktrees, targeted single-file test runs - but
+   the composed answer goes through submit, never a bare respond.
    Running out of window mid-rehearsal? `spc agent save-candidate
    --file <draft> --request <id>` keeps the composed work claimable by
    a live successor. Never rush the submit to beat the clock - a

@@ -10,7 +10,7 @@ import { runReconcile } from "./commands/reconcile.js";
 import { runDiff, runStatus } from "./commands/status.js";
 import { runFollowupResolve, runFollowups } from "./commands/followups.js";
 import { runCancel, runExport, runPr, runReplay, runShow, runSupersedeCommand } from "./commands/run.js";
-import { runAgentList, runAgentRespond, runAgentSaveCandidate, runAgentShow, runAgentValidate, runAgentDryRun, runAgentWait, type AgentShowPart } from "./commands/agent.js";
+import { runAgentList, runAgentRespond, runAgentSaveCandidate, runAgentShow, runAgentValidate, runAgentDryRun, runAgentSubmit, runAgentWait, type AgentShowPart } from "./commands/agent.js";
 import { runSkills, runUseSkill } from "./commands/skills.js";
 import { runDocs } from "./commands/docs.js";
 import { runPolicyExplain } from "./commands/policy.js";
@@ -219,6 +219,20 @@ agent
   .action((id: string, opts: { file?: string; stdin?: boolean; by?: string; fromCandidate?: string; preflight?: boolean; cwd: string }) => {
     // Commander's negation convention: --no-preflight sets preflight=false.
     process.exitCode = runAgentRespond({ id, file: opts.file, stdin: opts.stdin, by: opts.by, fromCandidate: opts.fromCandidate, ...(opts.preflight === false ? { noPreflight: true } : {}), cwd: opts.cwd });
+  });
+
+agent
+  .command("submit <id>")
+  .description("the disciplined tail as one command: chain check, dry-run preflight, respond - first refusal stops with the named cause")
+  .requiredOption("--file <path>", "file containing the JSON value (the dry-run step needs it on disk)")
+  .option("--no-preflight", "skip the dry-run preflight step")
+  .option("--rehearsed-with <how>", "record how the answer was rehearsed (dry-run | scratch | none)")
+  .option("--by <who>", "record who answered")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action((id: string, opts: { file: string; noPreflight?: boolean; rehearsedWith?: string; by?: string; cwd: string }) => {
+    void runAgentSubmit({ id, file: opts.file, noPreflight: opts.noPreflight, rehearsedWith: opts.rehearsedWith, by: opts.by, cwd: opts.cwd }).then((code) => {
+      process.exitCode = code;
+    });
   });
 agent
   .command("save-candidate")

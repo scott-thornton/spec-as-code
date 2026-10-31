@@ -14,9 +14,11 @@ description: The spc pipeline - the seven stages from authored spec to pushed re
    queue. Exit: a validated plan persisted under .spc/plans/.
 4. **Answer discipline** - for every executor request: scratch-draft,
    build ops with spc patch build, `spc agent validate`, `spc agent
-   dry-run --gates`, then respond - or save-candidate under window
-   pressure (follow: spc use-skill rehearse). Exit: a rehearsed answer
-   submitted.
+   dry-run --gates`, then `spc agent submit` (the disciplined tail as
+   one command: chain check, preflight, respond) - or save-candidate
+   under window pressure (follow: spc use-skill rehearse). Develop
+   however you like; the composed answer goes through submit, never a
+   bare respond. Exit: a rehearsed answer submitted.
 5. **Run** - `spc apply <plan>` (by explicit file name, after the plan
    process has exited; never by newest-file glob - a retrying plan
    process rewrites the newest file mid-glob): staged changes, write-scope
