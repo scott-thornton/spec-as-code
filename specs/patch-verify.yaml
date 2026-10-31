@@ -1,0 +1,102 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: patch-verify
+  title: Composition-time chain validation - the check at the near end, not the far end
+goal: >
+  Field incidents (verify-dedup, 2026-10-31): the same composition error
+  class burned queue round-trips because the only place a changes array's
+  internal consistency is checked is the applicator - the far end of the
+  loop. An agent assembled op arrays with a filename-sorted glob, putting
+  a chained op (built --after a sibling, its baseDigest binding the
+  post-sibling overlay) BEFORE its sibling; the applicator correctly
+  refused PATCH_BASE_MISMATCH, the refusal read as staleness, two
+  rebuilds chased a ghost (the digest was never stale - the array order
+  was wrong), and each cycle cost a requeue round-trip. The pre-submit
+  check that caught it instantly was nine lines of inline Python. This
+  spec productizes it: spc patch verify validates an ops array in array
+  order against the live tree - every first-op digest, every chain
+  position, anchor uniqueness throughout - and agent respond runs the
+  same validation on any answer carrying changes BEFORE writing the
+  answer file, so an order-broken or stale array dies at composition
+  time for the price of a local command.
+requirements:
+  - id: PV-001
+    statement: >
+      spc patch verify <ops.json> [--root <dir>]: parses the change-ops
+      array and validates it through the SAME applicator that will later
+      apply it (stageChanges, in-memory, touching nothing) - per path,
+      the first op's baseDigest against the live tree, each subsequent
+      op against the overlay the previous ops produced, anchor
+      occurrence exactly once at every chain position. A valid array
+      exits 0 with a one-line summary (paths, op counts); an invalid
+      array exits 1 with the applicator's refusal code, the failing
+      path, and the remediation (rebuild with spc patch build --after).
+      The oracle asserts: a correctly-chained array passes; the same two
+      ops REVERSED fail with the mismatch named; an array whose first op
+      was built against a since-changed file fails with the stale digest
+      named.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: PV-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/patch-verify.test.ts
+        discriminating: true
+  - id: PV-002
+    statement: >
+      agent respond validates any answer carrying a changes array
+      through the same check BEFORE writing the answer file: an
+      order-broken or stale-digest array is refused locally (exit 1,
+      PATCH_CHAIN_INVALID prefix plus the applicator's named refusal;
+      nothing written, the request stays pending), while a valid array
+      submits unchanged. The oracle asserts both directions through the
+      real CLI against a pending request fixture.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: PV-002-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/patch-verify.test.ts
+        discriminating: true
+  - id: PV-003
+    statement: >
+      The rehearse skill gains the composition rule (assemble op arrays
+      in explicit chain order, never by filename sort; spc patch verify
+      before respond) and the pipeline skill gains the apply-discipline
+      line (apply a plan by explicit file name after the plan process
+      has exited; never by newest-file glob) - both copies of each,
+      byte-identical by construction.
+    priority: must
+    scope:
+      include: [.agents/skills/**, packages/cli/skills/**]
+    acceptance:
+      - id: PV-003-A
+        type: file
+        path: .agents/skills/rehearse/SKILL.md
+        assert:
+          contains: "spc patch verify"
+        discriminating: true
+      - id: PV-003-B
+        type: file
+        path: .agents/skills/pipeline/SKILL.md
+        assert:
+          contains: "never by newest-file glob"
+        discriminating: true
+  - id: PV-004
+    statement: >
+      Regression guard: workspace typechecks; the full cli suite green -
+      existing respond behavior for answers without changes (planner,
+      op-less executor answers) unchanged.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: PV-004-A
+        type: command
+        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli... test
+outOfScope:
+  - new validation semantics beyond what the applicator already enforces (the command reuses stageChanges verbatim; no second checker to drift)
+  - blocking answers whose changes reference paths absent from the live tree when the run would stage in a separate worktree (the refusal message names the cause; the composer rebuilds)
