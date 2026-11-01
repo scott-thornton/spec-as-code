@@ -18,5 +18,14 @@ jobs:
           node-version: 22
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      # Scope-addressed command cache (specs/verify-cache): restore the
+      # most recent entry file; digest validation inside spc decides
+      # reuse per command, so a stale cache can only miss, never lie.
+      # Keyed per-commit with a prefix fallback; saved post-run.
+      - uses: actions/cache@v4
+        with:
+          path: .spc/cache/verify-commands.json
+          key: spc-verify-commands-${{ github.sha }}
+          restore-keys: spc-verify-commands-
       - name: Verify spec satisfaction (self-verification)
         run: node packages/cli/dist/main.js verify --all --format github
