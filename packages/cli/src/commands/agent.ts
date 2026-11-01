@@ -301,7 +301,15 @@ function submissionGuardRefusal(repoRoot: string, id: string): { code: string; m
     try {
       attributionStoreExists = existsSync(path.join(repoRoot, ".spc", "runs", request.runId, "attribution.json"));
       const eventsLog = readFileSync(path.join(repoRoot, ".spc", "runs", request.runId, "events.jsonl"), "utf8");
-      priorRecordedWork = eventsLog.split("\n").some((l) => l.includes('"FILE_CHANGED"') && l.includes(`"taskId": "${taskId}"`));
+      // Parse, never string-match: JSON serialization spacing is not a contract.
+      priorRecordedWork = eventsLog.split("\n").filter(Boolean).some((l) => {
+        try {
+          const ev = JSON.parse(l) as { type?: string; payload?: { taskId?: string } };
+          return ev.type === "FILE_CHANGED" && ev.payload?.taskId === taskId;
+        } catch {
+          return false;
+        }
+      });
     } catch {
       // unreadable run record: no skew evidence, ordinary naming
     }
