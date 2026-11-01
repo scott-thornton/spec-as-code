@@ -244,8 +244,12 @@ agent
   .option("--rehearsed-with <how>", "record how the answer was rehearsed (dry-run | scratch | none)")
   .option("--by <who>", "record who answered")
   .option("--cwd <dir>", "repository directory", process.cwd())
-  .action((id: string, opts: { file: string; noPreflight?: boolean; rehearsedWith?: string; by?: string; cwd: string }) => {
-    void runAgentSubmit({ id, file: opts.file, noPreflight: opts.noPreflight, rehearsedWith: opts.rehearsedWith, by: opts.by, cwd: opts.cwd }).then((code) => {
+  .action((id: string, opts: { file: string; preflight?: boolean; rehearsedWith?: string; by?: string; cwd: string }) => {
+    // Commander's negation convention: --no-preflight sets preflight=false
+    // (the old opts.noPreflight read was always undefined - the flag never
+    // worked on submit; caught when a repair-on-attributed-work draft
+    // genuinely needed the skip).
+    void runAgentSubmit({ id, file: opts.file, ...(opts.preflight === false ? { noPreflight: true } : {}), rehearsedWith: opts.rehearsedWith, by: opts.by, cwd: opts.cwd }).then((code) => {
       process.exitCode = code;
     });
   });
@@ -409,7 +413,7 @@ spec
 
 const patch = program.command("patch").description("anchored patch composition (verifies, never decides)");
 patch
-  .command("build <path>")
+  .command("build [path]")
   .description("emit a verified patch op for <path>: digest from the actual tree, anchor uniqueness checked")
   .option("--anchor <text>", "anchor text (exact bytes)")
   .option("--anchor-file <file>", "read anchor from file (exact bytes)")
@@ -417,9 +421,16 @@ patch
   .option("--replacement-file <file>", "read replacement from file (exact bytes)")
   .option("--after <ops.json>", "JSON array of prior change ops to overlay before anchoring")
   .option("--expect-digest <sha256>", "refuse if the tree's digest differs from this (what the request showed you)")
+  .option("--batch <spec.json>", "compose a whole chain in one invocation: JSON array of op entries, array order = chain order (specs/patch-build-batch)")
+  .option("--out <ops.json>", "with --batch: write the composed ops array to this file instead of stdout")
   .option("--root <dir>", "tree root (defaults to cwd)")
-  .action((path: string, opts) => {
-    process.exitCode = runPatchBuild(path, opts);
+  .action((path: string | undefined, opts) => {
+    if (path === undefined && opts.batch === undefined) {
+      console.error("error: provide <path> (single op) or --batch <spec.json> (chain)");
+      process.exitCode = 1;
+      return;
+    }
+    process.exitCode = runPatchBuild(path ?? "", opts);
   });
 
 patch

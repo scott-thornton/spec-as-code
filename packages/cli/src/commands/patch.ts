@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { SpcError } from "@spc/core";
+import { isSafeRelativePath, SpcError } from "@spc/core";
 import { fileDigest, stageChanges, type ProposedChange } from "@spc/executor";
 
 type PatchOp = Extract<ProposedChange, { op: "patch" }>;
@@ -12,6 +12,11 @@ export interface PatchBuildOptions {
   replacementFile?: string;
   after?: string;
   expectDigest?: string;
+  /** Batch composition (specs/patch-build-batch): a JSON array of op
+   *  entries composed in one invocation, array order = chain order. */
+  batch?: string;
+  /** Where the composed ops array is written; stdout when absent. */
+  out?: string;
   root?: string;
 }
 
@@ -64,6 +69,99 @@ export function runPatchVerify(opsFile: string, options: { root?: string } = {})
   return 0;
 }
 export function runPatchBuild(fileArg: string, options: PatchBuildOptions): number {
+  if (options.batch !== undefined) return runPatchBuildBatch(options);
+
+/**
+ * The composer's batch form (specs/patch-build-batch): one invocation
+ * composes the whole chain - the receipt was an agent shadow-building a
+ * python driver around single builds to chain 15 hunks. Array order is
+ * chain order; patch entries ride the exact single-op machinery (base
+ * digest from the live tree or the overlay of prior entries, anchor
+ * uniqueness at each position); create/update/delete pass through
+ * verbatim. All-or-nothing: any refusal composes nothing and writes
+ * nothing - the applicator's contract, at composition time.
+ */
+function runPatchBuildBatch(options: PatchBuildOptions): number {
+  const root = options.root ? path.resolve(options.root) : process.cwd();
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(path.resolve(process.cwd(), options.batch!), "utf8"));
+  } catch (e) {
+    throw new SpcError("SPC_RUNTIME_ERROR", `batch file unreadable or not valid JSON: ${(e as Error).message}`);
+  }
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new SpcError("SPC_RUNTIME_ERROR", "batch spec must be a non-empty JSON array of op entries");
+  }
+  interface Entry {
+    op?: string;
+    path?: string;
+    anchor?: string;
+    anchorFile?: string;
+    replacement?: string;
+    replacementFile?: string;
+    content?: string;
+  }
+  const chain: ProposedChange[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const e = raw[i] as Entry;
+    if (typeof e.path !== "string" || !isSafeRelativePath(e.path)) {
+      throw new SpcError("SPC_RUNTIME_ERROR", `batch entry ${i}: missing or unsafe path`);
+    }
+    const kind = e.op ?? "patch";
+    if (kind === "create" || kind === "update") {
+      if (typeof e.content !== "string") {
+        throw new SpcError("SPC_RUNTIME_ERROR", `batch entry ${i}: ${kind} requires content`);
+      }
+      chain.push({ op: kind, path: e.path, content: e.content });
+      continue;
+    }
+    if (kind === "delete") {
+      chain.push({ op: "delete", path: e.path });
+      continue;
+    }
+    if (kind !== "patch") {
+      throw new SpcError("SPC_RUNTIME_ERROR", `batch entry ${i}: unknown op "${kind}"`);
+    }
+    const pick = (v: string | undefined, f: string | undefined, label: string): string => {
+      if ((v === undefined) === (f === undefined)) {
+        throw new SpcError("SPC_RUNTIME_ERROR", `batch entry ${i}: provide exactly one of ${label} or ${label}File`);
+      }
+      return v !== undefined ? v : readFileSync(path.resolve(process.cwd(), f!), "utf8");
+    };
+    const anchor = pick(e.anchor, e.anchorFile, "anchor");
+    const replacement = pick(e.replacement, e.replacementFile, "replacement");
+    const overlay = stageChanges(root, chain);
+    if (!overlay.ok) {
+      throw new SpcError(overlay.code, overlay.message);
+    }
+    const prior = overlay.writes.find((w) => w.path === e.path);
+    let base: string;
+    if (prior) {
+      base = prior.content;
+    } else {
+      try {
+        base = readFileSync(path.join(root, e.path), "utf8");
+      } catch {
+        throw new SpcError("PATCH_BASE_MISSING", `PATCH_BASE_MISSING: ${e.path} does not exist under ${root}; a patch op needs an existing base`);
+      }
+    }
+    const op = { op: "patch" as const, path: e.path, baseDigest: fileDigest(base), anchor, replacement };
+    const verified = stageChanges(root, [...chain, op]);
+    if (!verified.ok) {
+      throw new SpcError(verified.code, verified.message);
+    }
+    chain.push(op);
+  }
+  const json = JSON.stringify(chain, null, 1);
+  if (options.out) {
+    writeFileSync(options.out, json, "utf8");
+  } else {
+    console.log(json);
+  }
+  return 0;
+}
+
+
   const root = options.root ? path.resolve(options.root) : process.cwd();
 
   const exactlyOne = (text: string | undefined, file: string | undefined, label: string): string => {
