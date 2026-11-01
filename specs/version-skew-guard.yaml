@@ -1,0 +1,97 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: version-skew-guard
+  title: A guard that misnames its cause is a lying instrument - version skew is named as version skew
+goal: >
+  Two receipts, one class (2026-11-01). First: a run started on the
+  pre-attribution binary was answered with post-attribution CLI doors;
+  the run never wrote an attribution store, so the submission guard saw
+  unattributed dirt under task targets and refused UNMEDIATED_CHANGES -
+  an accusation that was wrong about CAUSE (the agent had done nothing
+  unmediated; the run binary simply predated attribution recording).
+  Cost: a cancelled run, a WIP commit, a re-apply cycle. Second: the
+  dry-run preflight stages its throwaway worktree at the request's BASE
+  revision, so a repair draft composed against the in-flight tree
+  (base + attributed prior-attempt ops) digest-mismatches in the
+  throwaway while staging clean against the live tree - again a
+  PATCH_BASE_MISMATCH that misnames the situation.
+
+
+  The class: advisory and enforcement surfaces whose WORLDVIEW (base
+  revision, pre-attribution binary) diverges from the in-flight state,
+  reporting their own staleness as the agent's fault. The doctrine this
+  spec enforces: a refusal must name its true cause, because the
+  recovery instructions differ - unmediated changes are recovered by
+  reverting and proposing; version skew is recovered by restarting the
+  run on the current binary; a worldview-divergent preflight is
+  recovered by trusting the runtime door. Detection is by EVIDENCE,
+  not binary stamps: a run whose event log records FILE_CHANGED work
+  but whose attribution store does not exist is a signature no
+  current-binary run can produce.
+requirements:
+  - id: VSG-001
+    statement: >
+      The submission boundary distinguishes version skew from unmediated
+      changes by evidence. When the guard would refuse - dirt under the
+      task's write targets, no attribution covering it - AND the run's
+      attribution store does not exist AND the run's event log records
+      FILE_CHANGED work for prior attempts of this task (a signature
+      impossible for a run binary that records attribution), the refusal
+      is GUARD_VERSION_SKEW with the recovery instruction "restart the
+      run on the current binary - this run predates attribution
+      recording; the dirt is likely its own unrecorded mediated work",
+      NOT UNMEDIATED_CHANGES. Exact-cover refusals (store exists, coverage
+      incomplete), baseline-divergence refusals, and normal guard behavior
+      are unchanged. Both doors agree: the runtime predicate and the CLI
+      submission guard detect the same signature and print the same code
+      and remedy.
+    priority: must
+    scope:
+      include: [packages/executor/src/**, packages/cli/src/**]
+    acceptance:
+      - id: VSG-001-A
+        type: command
+        command: pnpm --filter @spc/executor... build > /dev/null && pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/version-skew.test.ts
+        discriminating: true
+  - id: VSG-002
+    statement: >
+      The dry-run preflight names its worldview divergence honestly. A
+      draft whose changes stage cleanly against the LIVE tree (the
+      submit chain check passes) but fail staging in the throwaway at
+      the base revision is a repair composed against in-flight state -
+      the preflight prints a named divergence line ("the draft composes
+      against the in-flight tree (base + prior applied work); the
+      throwaway cannot represent it - not validated here, the runtime
+      door remains authoritative") and does NOT report it as
+      PATCH_BASE_MISMATCH. Drafts that fail against BOTH trees keep the
+      ordinary refusal; drafts clean in the throwaway are unchanged.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: VSG-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/version-skew.test.ts
+        discriminating: true
+  - id: VSG-003
+    statement: >
+      The guard and battery semantics are unchanged elsewhere:
+      unmediated-change refusals, attribution, markers, and the cli and
+      executor batteries keep passing.
+    priority: must
+    acceptance:
+      - id: VSG-003-A
+        type: suite
+        ref: cli-battery
+      - id: VSG-003-B
+        type: command
+        command: pnpm --filter @spc/executor... build > /dev/null && pnpm --filter @spc/executor test
+outOfScope:
+  - >
+    Binary stamping or request-carried version fields - detection is by
+    evidence (recorded work without an attribution store) only.
+  - >
+    Any change to guard strictness: skew naming changes the DIAGNOSTIC
+    and its remedy, never the refusal itself - a skewed submission
+    still does not pass.
