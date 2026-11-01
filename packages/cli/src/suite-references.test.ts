@@ -151,7 +151,7 @@ describe("suite-references: shared execution (SR-002)", () => {
 
   it("standalone single-spec verification executes the suite itself (SR-004)", { timeout: 120_000 }, () => {
     rmSync(path.join(repoA, "counter.txt"), { force: true });
-    const r = sh(repoA, ["verify", "--all", "--force", "specs/sr-a.yaml"]);
+    const r = sh(repoA, ["verify", "--all", "specs/sr-a.yaml"]);
     expect(r.status).toBe(0);
     expect(executions(repoA)).toBe(1);
   });
