@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { validatePlan, type Plan, type SpecIR } from "@spc/core";
+import { validatePlan } from "@spc/core";
+import type { Plan, SpecIR } from "@spc/schema";
 
 // Oracle for specs/plan-write-target-validation.yaml: a write target
 // that cannot match what the task will write is a compile error, not a
