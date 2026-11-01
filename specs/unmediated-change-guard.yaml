@@ -1,0 +1,189 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: unmediated-change-guard
+  title: A task cannot submit unmediated changes under its write targets - the submission boundary refuses what the composition path did not produce
+goal: >
+  Incident (runs run-mvx2fpfx-ce463839 and run-mvx32fwy-53e050a8,
+  2026-11-01): every task in both runs completed with changes: [] while
+  the tree carried the executor's hand edits - the patch composition
+  path, the authoritative mutation mechanism, was bypassed wholesale.
+  The shape sailed through every guard in the lattice: rehearse-guard
+  and chain checks key on composed operations, scope enforcement bites
+  at staging, and an empty changes array with work sitting in the tree
+  triggers nothing. The costs - OUT_OF_SCOPE_WRITE rollbacks,
+  re-dispatches, a failed run, between-runs re-application - were
+  paid by the runs, not by the executor at edit time. The fix belongs
+  at the submission boundary, not in a new execution architecture:
+  widen the predicate from empty-proposal detection to
+  UNMEDIATED-CHANGE detection. A task cannot submit unmediated
+  changes under its write targets, regardless of whether its patch
+  proposal is empty - a nonempty proposal does not launder a direct
+  edit on another path.
+
+
+  Attribution must be exact, never inferred. A prior attempt number, a
+  dirty path under matching write targets, or a signpost note
+  establishes that work MIGHT exist - useful for a signpost,
+  insufficient for an enforcement exemption. The exemption requires a
+  durable record of changes previously applied or declared for THIS
+  task (prior attempts' staged writes, declared-command touchSet
+  writes), carrying per-path content identity captured at attribution
+  time, covering the currently observed delta; attribution plus
+  additional unexplained changes refuses. The baseline check covers
+  committed edits too: an execution tree whose HEAD has moved off the
+  task's dispatch baseline is the same violation whether or not git
+  status is clean.
+
+
+  Verified implementation facts this spec builds on and does not
+  misstate: stageChanges validates a patch op's baseDigest against the
+  file's CURRENT content (packages/executor/src/patch.ts reads the
+  live file), not against dispatch-time excerpts - compose-after-edit
+  therefore validates; create and update ops apply declared content
+  with no digest binding; delete carries none; the FILE_CHANGED event
+  records path and change kind only. The guard therefore refuses
+  unaccounted-for git-visible mutation at submission - it is NOT
+  complete mutation-provenance enforcement, and the record preserves
+  the mediated/git-visible distinction rather than manufacturing
+  provenance. Nothing here retires or alters dry-run, patch verify,
+  PREFLIGHT_ADVISABLE, the redispatch signpost or staging-requeue:
+  the lattice keeps every existing surface and gains this one.
+requirements:
+  - id: UCG-001
+    statement: >
+      The widened predicate, evaluated at answer processing BEFORE any
+      staging or application. The task's execution tree is evaluated
+      against its dispatch baseline: working-tree dirt under the task's
+      write targets AND divergence of HEAD from the baseline revision
+      (a directly-committed edit must not pass on a clean status).
+      Decision table: clean tree + empty proposal = allow; clean tree +
+      valid patch proposal = normal patch processing; dirty tree +
+      EXACT prior-attempt attribution = allow legitimate recovery;
+      dirty tree + no attribution + empty proposal = refuse; dirty
+      tree + no attribution + nonempty proposal = refuse (a nonempty
+      proposal does not disguise direct edits); attribution covering
+      part of the delta + additional unexplained changes = refuse.
+      Attribution is a durable record binding this task's previously
+      applied or declared changes (prior attempts' staged writes,
+      declared-command touchSet writes) to per-path content digests
+      captured when the work was attributed; attempt numbers, matching
+      targets and signpost notes are not attribution. Dirt outside the
+      task's write targets never triggers.
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: UCG-001-A
+        type: command
+        command: pnpm --filter @spc/executor... build > /dev/null && pnpm --filter @spc/executor exec vitest run src/unmediated-guard.test.ts
+        discriminating: true
+  - id: UCG-002
+    statement: >
+      Refusal semantics. The refusal is a named diagnostic
+      (UNMEDIATED_CHANGES) listing the unattributed paths, with
+      actionable recovery instruction: revert the unattributed changes
+      and propose them through the existing patch workflow (patch
+      build chains, patch verify, dry-run, submit). It fires BEFORE
+      staging or application - a refused submission creates no partial
+      mutation - and it does NOT consume the task attempt: it rides
+      the bounded staging-rejection loop shape (a durable
+      TASK_SUBMISSION_REFUSED event per round, bounded rounds per
+      attempt, re-dispatch carrying the refusal as feedback, exactly
+      as staging rejections requeue today). The refusal count appears
+      in the run summary.
+    priority: must
+    scope:
+      include: [packages/executor/src/**, packages/runtime/src/**]
+    acceptance:
+      - id: UCG-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/unmediated-guard.test.ts
+        discriminating: true
+  - id: UCG-003
+    statement: >
+      Two-sided enforcement. `spc agent submit` preflight applies the
+      same predicate wherever it can resolve the execution tree and
+      the task's write targets, refusing locally in seconds with the
+      same named diagnostic; the runtime refuses authoritatively on
+      every submission path - preflight skipped, `agent respond` used
+      directly - so neither side can be bypassed by choosing the other
+      door.
+    priority: must
+    scope:
+      include: [packages/cli/src/**, packages/executor/src/**]
+    acceptance:
+      - id: UCG-003-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/unmediated-guard.test.ts
+        discriminating: true
+  - id: UCG-004
+    statement: >
+      Honest scope, pinned by fixtures. The guard refuses unaccounted
+      for git-visible mutation at submission; it does not and does not
+      claim to prove that every accepted mutation passed the
+      composition controls: patch ops bind to current content at
+      staging (compose-after-edit validates - pinned as a fixture),
+      create/update apply declared content without digest binding,
+      delete carries none. The oracle pins these staging semantics as
+      they are, and the submission record keeps the distinction
+      between mediated changes and git-visible changes detected after
+      the fact.
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: UCG-004-A
+        type: command
+        command: pnpm --filter @spc/executor... build > /dev/null && pnpm --filter @spc/executor exec vitest run src/unmediated-guard.test.ts
+        discriminating: true
+  - id: UCG-005
+    statement: >
+      The contract stated where the executor reads it: one sentence in
+      EXECUTOR_SYSTEM and in the harness instructions - mutations to
+      task targets are proposed as patch operations, never performed
+      directly; direct edits are detected at submission and refused;
+      recover by reverting and proposing through the patch workflow.
+    priority: must
+    scope:
+      include: [packages/executor/src/**, packages/llm-harness/src/**]
+    acceptance:
+      - id: UCG-005-A
+        type: command
+        command: pnpm --filter @spc/executor... build > /dev/null && pnpm --filter @spc/llm-harness... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/unmediated-guard.test.ts
+        discriminating: true
+  - id: UCG-006
+    statement: >
+      Measured, reported never gated: refusals per run, bypass-shape
+      frequency (empty-proposal vs nonempty-disguise), and
+      recovery-after-refusal rate. Reported to the author; never an
+      acceptance gate.
+    priority: may
+  - id: UCG-007
+    statement: >
+      The lattice keeps every existing surface: staging-requeue, the
+      redispatch signpost, dry-run, patch verify and PREFLIGHT_ADVISABLE
+      semantics unchanged; the existing executor and cli batteries keep
+      passing.
+    priority: must
+    acceptance:
+      - id: UCG-007-A
+        type: suite
+        ref: cli-battery
+      - id: UCG-007-B
+        type: command
+        command: pnpm --filter @spc/executor... build > /dev/null && pnpm --filter @spc/executor test
+outOfScope:
+  - >
+    Complete mutation-provenance enforcement: binding patch ops to
+    dispatch-time excerpts, digest-binding create/update, provenance
+    for delete - the remaining honest gap named in UCG-004, a separate
+    future decision on its own evidence.
+  - >
+    Any change to staging-requeue, redispatch signpost, dry-run, patch
+    verify or PREFLIGHT_ADVISABLE semantics; and any new execution
+    architecture (the held workspace-native-execution and
+    interactive-execution-session proposals stay held).
+  - >
+    Scope expansion or amendment machinery; and any gating on the
+    UCG-006 measurements.
