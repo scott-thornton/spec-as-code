@@ -137,7 +137,7 @@ describe("dry-run worldview divergence (VSG-002)", () => {
     const live = "export const a = 1;\n// in-flight marker\n";
     writeFileSync(path.join(root, "lib", "a.ts"), live, "utf8");
     const op = {
-      op: "patch",
+      op: "patch" as const,
       path: "lib/a.ts",
       baseDigest: fileDigest(live),
       anchor: "// in-flight marker",
