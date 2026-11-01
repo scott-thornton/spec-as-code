@@ -27,6 +27,9 @@ export const eventTypeSchema = z.enum([
    *  targets; requeued with the diagnostic, never consuming the
    *  attempt until the bound exhausts. */
   "TASK_SUBMISSION_REFUSED",
+  /** Run ended leaving run-caused dirt uncommitted (specs/
+   *  run-end-dirty-assertion) - observed, never gated. */
+  "RUN_ENDED_DIRTY",
   "TASK_BLOCKED",
   "TASK_NEEDS_REPLAN",
   "REPLAN_REQUESTED",

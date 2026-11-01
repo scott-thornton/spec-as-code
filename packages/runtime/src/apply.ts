@@ -70,6 +70,10 @@ export interface ApplyReport {
   status: RunStatus;
   runId: string;
   runDir: string;
+  /** Paths the run left dirty after its end commit (specs/
+   *  run-end-dirty-assertion) - run-caused, uncommitted, named in the
+   *  RUN_ENDED_DIRTY event; present only when nonempty. */
+  runEndedDirtyPaths?: string[];
   worktree?: string;
   branch?: string;
   /** In-place run-branch mode: the branch the checkout was restored to at
@@ -1891,6 +1895,21 @@ function failedOutcome(task: Task, code: string, message: string): ExecutionOutc
   };
 }
 
+/**
+ * Paths a run leaves dirty at its end (specs/run-end-dirty-assertion):
+ * working-tree entries outside .spc/ and outside execution.allowDirtyPaths.
+ * The incident class (run-mvx2fpfx: FILE_CHANGED pnpm-lock.yaml recorded,
+ * the run-end commit omitted it, the NEXT run aborted DIRTY_REPOSITORY).
+ */
+export function runEndedDirtyPaths(
+  status: { dirty: boolean; entries: Map<string, string> },
+  allowDirtyPaths: readonly string[],
+): string[] {
+  return [...status.entries.keys()].filter(
+    (p) => !p.startsWith(".spc/") && !globMatchAny(allowDirtyPaths, p),
+  );
+}
+
 async function finalize(
   ctx: RunContext,
   status: RunStatus,
@@ -1906,6 +1925,35 @@ async function finalize(
       ...Object.fromEntries(requirementStates.map((s) => [s.propertyId, s])),
     },
   };
+  // Run-end dirty assertion (specs/run-end-dirty-assertion): the
+  // final sweep runs AFTER the result commit, so criterion-command
+  // dirt is run-caused, uncommitted, and nothing else will say so
+  // until the next invocation fails. Observed, never gating.
+  let runEndedDirty: string[] = [];
+  try {
+    const wt = ctx.worktreePath ?? ctx.paths.repoRoot;
+    runEndedDirty = runEndedDirtyPaths(statusPorcelain(wt), ctx.config.execution.allowDirtyPaths ?? []);
+    if (runEndedDirty.length > 0) {
+      ctx.events.append("RUN_ENDED_DIRTY", { paths: runEndedDirty });
+      ctx.log(`run ended leaving run-dirty paths uncommitted: ${runEndedDirty.join(", ")} - resolve before the next run`);
+    }
+  } catch {
+    // non-git tree: nothing to assert
+  }
+  // The status trailer (DTE-002): the run-end commit was made before
+  // the final sweep, so the outcome only exists now - amend THIS run's
+  // own commit (runId-gated; a foreign commit is never touched),
+  // reporting, never gating.
+  try {
+    const wt = ctx.worktreePath ?? ctx.paths.repoRoot;
+    const headMsg = gitOk(wt, ["log", "-1", "--format=%B"]);
+    if (headMsg.includes(`run ${ctx.meta.runId}`) && !headMsg.includes("SPC-Run-Status:")) {
+      gitOk(wt, ["commit", "--amend", "--no-edit", `--trailer=SPC-Run-Status: ${status}`]);
+    }
+  } catch {
+    // the trailer is reporting, never gating
+  }
+
   ctx.events.append("RUN_COMPLETED", {
     status,
     ...(extra.resultRevision ? { resultRevision: extra.resultRevision } : {}),
@@ -1947,6 +1995,7 @@ async function finalize(
     status,
     runId: ctx.meta.runId,
     runDir: ctx.paths.runDir(ctx.meta.runId),
+    ...(runEndedDirty.length > 0 ? { runEndedDirtyPaths: runEndedDirty } : {}),
     ...(ctx.worktreePath ? { worktree: ctx.worktreePath } : {}),
     ...(ctx.worktreeBranch ? { branch: ctx.worktreeBranch } : {}),
     ...(ctx.state.baseRevision ? { baseRevision: ctx.state.baseRevision } : {}),
