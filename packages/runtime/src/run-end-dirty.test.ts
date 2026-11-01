@@ -38,29 +38,58 @@ requirements:
 `;
 const ir = compileSpecSource(specYaml, "specs/spec.yaml").ir!;
 
-function setupRepo(name: string): string {
+// A second spec whose criterion command DIRTIES a tracked file after the
+// run-end commit (the sweep runs post-commit): the deterministic
+// producer of run-caused post-commit dirt - the assertion's real target.
+const dirtySpecYaml = `apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: dted
+  title: fixture
+goal: A file exists.
+requirements:
+  - id: DTE-F
+    statement: File exists.
+    priority: must
+    acceptance:
+      - id: DTE-F-A
+        type: file
+        path: src/a.mjs
+        assert:
+          contains: "feature-a"
+      - id: DTE-F-B
+        type: command
+        command: node dirt.cjs
+`;
+const dirtyIr = compileSpecSource(dirtySpecYaml, "specs/spec.yaml").ir!;
+
+function setupRepo(name: string, spec: string = specYaml, extraFiles: Record<string, string> = {}): string {
   const repo = path.join(root, name);
   mkdirSync(path.join(repo, "specs"), { recursive: true });
   mkdirSync(path.join(repo, ".spc"), { recursive: true });
   gitOk(repo, ["init", "-b", "main"]);
   writeFileSync(path.join(repo, ".gitignore"), ".spc/runs/\n.spc/worktrees/\n.spc/plans/\n");
-  writeFileSync(path.join(repo, "specs", "spec.yaml"), specYaml);
+  writeFileSync(path.join(repo, "specs", "spec.yaml"), spec);
+  for (const [f, c] of Object.entries(extraFiles)) {
+    mkdirSync(path.dirname(path.join(repo, f)), { recursive: true });
+    writeFileSync(path.join(repo, f), c, "utf8");
+  }
   writeFileSync(path.join(repo, ".spc", "config.yaml"), ["version: 1", "provider:", "  name: fake", "  script: .spc/fake-script.yaml"].join("\n"));
   writeFileSync(path.join(repo, ".spc", "fake-script.yaml"), "planner:\n  value: {}\n");
   commitAll(repo, "init");
   return repo;
 }
 
-function writePlan(repo: string): void {
+function writePlan(repo: string, id: string, digest: string): void {
   const paths = spcPaths(repo);
   mkdirSync(paths.plansDir, { recursive: true });
   writeFileSync(
-    paths.planFile("plan-dte"),
+    paths.planFile(id),
     JSON.stringify({
       apiVersion: "spc.dev/v1alpha1",
       kind: "Plan",
       metadata: { id: "plan-dte", createdAt: new Date().toISOString() },
-      spec: { id: "dte", digest: ir.digest },
+      spec: { id: id.includes("dirty") ? "dted" : "dte", digest },
       repository: { revision: "0".repeat(40), snapshotDigest: `sha256:${"0".repeat(64)}` },
       tasks: [
         {
@@ -93,7 +122,7 @@ executor:
 describe("run-end dirty assertion (DTE-001, DTE-002)", () => {
   it("a successful run's end commit carries the SPC-Run-Status trailer; a clean tree emits no RUN_ENDED_DIRTY", { timeout: 120_000 }, async () => {
     const repo = setupRepo("clean");
-    writePlan(repo);
+    writePlan(repo, "plan-dte", ir.digest);
     const report = await applyPlan({ repoRoot: repo }, { providerFactory: async () => new FakeProvider(executorScript), log: () => {} });
     expect(report.status).toBe("succeeded");
 
@@ -104,6 +133,23 @@ describe("run-end dirty assertion (DTE-001, DTE-002)", () => {
     // DTE-001: clean run-end tree stays silent.
     const events = readFileSync(path.join(spcPaths(repo).runsDir, report.runId, "events.jsonl"), "utf8");
     expect(events).not.toContain("RUN_ENDED_DIRTY");
+  });
+
+  it("criterion-command dirt after the run-end commit fires RUN_ENDED_DIRTY naming the path - observed, never gating", { timeout: 120_000 }, async () => {
+    const repo = setupRepo(
+      "dirty",
+      dirtySpecYaml,
+      { "dirt.cjs": "import { appendFileSync } from 'node:fs'; appendFileSync('dirt.txt', 'x\\n');\n", "dirt.txt": "" },
+    );
+    writePlan(repo, "plan-dted", dirtyIr.digest);
+    const report = await applyPlan({ repoRoot: repo }, { providerFactory: async () => new FakeProvider(executorScript), log: () => {} });
+    // Observed, never gated: the run still succeeds on its file criterion.
+    expect(report.status).toBe("succeeded");
+    const events = readFileSync(path.join(spcPaths(repo).runsDir, report.runId, "events.jsonl"), "utf8");
+    expect(events).toContain("RUN_ENDED_DIRTY");
+    expect(events).toContain("dirt.txt");
+    // The report carries the paths.
+    expect((report as { runEndedDirtyPaths?: string[] }).runEndedDirtyPaths).toContain("dirt.txt");
   });
 
   it("the dirty-path predicate: run dirt named, .spc and allowDirtyPaths exempt, clean silent", () => {
