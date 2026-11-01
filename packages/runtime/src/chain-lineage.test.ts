@@ -26,7 +26,15 @@ requirements:
 `;
 
 let roots: string[] = [];
-afterAll(() => { for (const r of roots) rmSync(r, { recursive: true, force: true }); });
+afterAll(() => {
+  // SPC_KEEP_FIXTURE=1 preserves the fixtures for post-failure diagnosis
+  // (a convention, never an assertion change; the paths print loudly).
+  if (process.env.SPC_KEEP_FIXTURE) {
+    for (const r of roots) console.error(`[KEEP_FIXTURE] packages/runtime/src/chain-lineage.test.ts: ${r}`);
+    return;
+  }
+  for (const r of roots) rmSync(r, { recursive: true, force: true });
+});
 
 function setup(): string {
   const repo = mkdtempSync(path.join(tmpdir(), "spc-chain-"));

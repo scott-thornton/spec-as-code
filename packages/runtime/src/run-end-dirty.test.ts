@@ -17,7 +17,15 @@ import { spcPaths } from "./paths.js";
 // commit carries the run status so git log alone says whether HEAD's
 // run was green.
 const root = mkdtempSync(path.join(tmpdir(), "spc-dte-"));
-afterAll(() => rmSync(root, { recursive: true, force: true }));
+afterAll(() => {
+  // SPC_KEEP_FIXTURE=1 preserves the fixture for post-failure diagnosis
+  // (a convention, never an assertion change; the path prints loudly).
+  if (process.env.SPC_KEEP_FIXTURE) {
+    console.error(`[KEEP_FIXTURE] packages/runtime/src/run-end-dirty.test.ts: ${root}`);
+    return;
+  }
+  rmSync(root, { recursive: true, force: true });
+});
 
 const specYaml = `apiVersion: spc.dev/v1alpha1
 kind: Spec

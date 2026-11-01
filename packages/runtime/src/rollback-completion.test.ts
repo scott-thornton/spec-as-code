@@ -17,7 +17,15 @@ import { spcPaths } from "./paths.js";
 // class (work present, NO prior failure) stays unmarked; a completion
 // WITH changes after a failure stays unmarked.
 const root = mkdtempSync(path.join(tmpdir(), "spc-rvc-"));
-afterAll(() => rmSync(root, { recursive: true, force: true }));
+afterAll(() => {
+  // SPC_KEEP_FIXTURE=1 preserves the fixture for post-failure diagnosis
+  // (a convention, never an assertion change; the path prints loudly).
+  if (process.env.SPC_KEEP_FIXTURE) {
+    console.error(`[KEEP_FIXTURE] packages/runtime/src/rollback-completion.test.ts: ${root}`);
+    return;
+  }
+  rmSync(root, { recursive: true, force: true });
+});
 
 const specYaml = `apiVersion: spc.dev/v1alpha1
 kind: Spec
