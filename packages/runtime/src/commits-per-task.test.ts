@@ -164,7 +164,11 @@ describe("commit-per-task", () => {
     const log = gitOk(report.worktree!, ["log", "--format=%s", `${report.baseRevision}..HEAD`]);
     const subjects = log.trim().split("\n").filter((s) => s.trim() !== "");
     expect(subjects.filter((s) => s.startsWith("spc: task T"))).toHaveLength(0);
-    expect(subjects.length).toBe(1); // the single run-result commit
+    // The single run-result commit plus the run-status marker commit
+    // (specs/run-end-dirty-assertion DTE-002: tree-identical,
+    // allow-empty, carries SPC-Run-Status) - never per-task commits.
+    expect(subjects.filter((s) => s.startsWith("spc: apply plan"))).toHaveLength(1);
+    expect(subjects.filter((s) => s.startsWith("spc: run status"))).toHaveLength(1);
 
     const state = JSON.parse(readFileSync(paths.stateFile(report.runId), "utf8")) as {
       tasks: Record<string, { revision?: string }>;
