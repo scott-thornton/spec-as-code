@@ -266,6 +266,35 @@ export function runAgentShow(id: string, cwd: string | undefined, part?: AgentSh
  * guards; no second checker to drift.
  */
 /**
+ * In-flight evidence (specs/version-skew-guard): does the run's own
+ * event log record FILE_CHANGED work for EVERY path this draft patches?
+ * A genuine in-flight repair composes against base + the run's recorded
+ * work; arbitrary local drift (PG-004) touches paths the run never
+ * recorded - the divergence naming must not launder it.
+ */
+function inFlightRecordedWork(repoRoot: string, requestId: string, changes: readonly { path?: string }[]): boolean {
+  if (changes.length === 0) return false;
+  try {
+    const req = JSON.parse(readFileSync(path.join(repoRoot, ".spc", "harness", "pending", `${requestId}.json`), "utf8")) as HarnessRequest;
+    if (!req.runId || !req.key) return false;
+    const taskId = req.key.split("@")[0]!;
+    const recorded = new Set<string>();
+    for (const line of readFileSync(path.join(repoRoot, ".spc", "runs", req.runId, "events.jsonl"), "utf8").split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        const ev = JSON.parse(line) as { type?: string; payload?: { taskId?: string; path?: string } };
+        if (ev.type === "FILE_CHANGED" && ev.payload?.taskId === taskId && ev.payload?.path) recorded.add(ev.payload.path);
+      } catch {
+        // malformed line: contributes nothing
+      }
+    }
+    return changes.every((c) => c.path !== undefined && recorded.has(c.path));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Submission-boundary guard, client door (specs/unmediated-change-
  * guard): wherever the request's run context resolves (pending request
  * -> runId -> run metadata planId/baseRevision -> plan task write
@@ -713,7 +742,7 @@ export async function runAgentDryRun(options: { id: string; file: string; gates?
       } catch {
         liveClean = false;
       }
-      if (liveClean) {
+      if (liveClean && inFlightRecordedWork(repoRoot, options.id, (draft.changes ?? []) as readonly { path?: string }[])) {
         console.log("worldview divergence: the draft composes against the in-flight tree (base + prior applied work); the throwaway at the base revision cannot represent it - not validated here, the runtime door remains authoritative");
         recordPreflight({ staged: 0, refusals: [], criteria: { pass: 0, total: 0 }, gates: null });
         return 0;
