@@ -48,11 +48,17 @@ export interface SubmissionCheckInput {
    *  coverage: proposing a path does not launder a direct edit on it. */
   proposedPaths: readonly string[];
   attribution: AttributionRecord;
+  /** Version-skew evidence (specs/version-skew-guard): the run's
+   *  attribution store exists (default true), and the run's event log
+   *  records prior FILE_CHANGED work (default false). Recorded work
+   *  without a store is a signature no current-binary run can produce. */
+  attributionStoreExists?: boolean;
+  priorRecordedWork?: boolean;
 }
 
 export interface SubmissionCheck {
   decision: "allow" | "refuse";
-  code?: "UNMEDIATED_CHANGES";
+  code?: "UNMEDIATED_CHANGES" | "GUARD_VERSION_SKEW";
   unattributed: string[];
   message?: string;
 }
@@ -105,6 +111,18 @@ export function evaluateSubmission(input: SubmissionCheckInput): SubmissionCheck
   });
 
   if (unattributed.length > 0) {
+    // Version-skew naming (specs/version-skew-guard): recorded prior
+    // work with no attribution store is impossible for a current-binary
+    // run - the refusal names its true cause, because the remedy
+    // differs: restart the run, do not revert and re-propose.
+    if (input.attributionStoreExists === false && input.priorRecordedWork === true) {
+      return {
+        decision: "refuse",
+        code: "GUARD_VERSION_SKEW",
+        unattributed,
+        message: `GUARD_VERSION_SKEW: ${unattributed.join(", ")} is dirty under the task's write targets while the run recorded prior work but has no attribution store - a run binary that predates attribution recording; the dirt is likely its own unrecorded mediated work - restart the run on the current binary.`,
+      };
+    }
     return {
       decision: "refuse",
       code: "UNMEDIATED_CHANGES",

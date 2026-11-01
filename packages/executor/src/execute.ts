@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { globMatchAny, isPhysicallyContained, isSafeRelativePath, SpcError } from "@spc/core";
 import type { AcceptanceCriterion, CommandsConfig, ObservationDraft, RepositorySnapshot, SpecIR, Task } from "@spc/schema";
@@ -34,6 +34,11 @@ export interface ExecuteTaskInput {
    *  was attributed) - the only exemption basis for the submission
    *  boundary guard; attempt numbers alone are never attribution. */
   priorAttribution?: AttributionRecord;
+  /** Version-skew evidence threading (specs/version-skew-guard):
+   *  the run's attribution file path, and whether the run's event log
+   *  records FILE_CHANGED work for this task's prior attempts. */
+  attributionFile?: string;
+  priorRecordedWork?: boolean;
   observations: ObservationDraft[];
   failureContext?: { code: string; message: string };
   commands?: { commandsConfig: CommandsConfig; timeoutMs: number; maxOutputBytes: number };
@@ -285,6 +290,8 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
       writeTargets: writePatterns,
       proposedPaths,
       attribution: { writes: input.priorAttribution?.writes ?? [] },
+      ...(input.attributionFile !== undefined ? { attributionStoreExists: existsSync(input.attributionFile) } : {}),
+      ...(input.priorRecordedWork !== undefined ? { priorRecordedWork: input.priorRecordedWork } : {}),
     });
     if (submission.decision === "refuse") {
       const code = submission.code ?? "UNMEDIATED_CHANGES";

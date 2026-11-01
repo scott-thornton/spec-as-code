@@ -296,12 +296,23 @@ function submissionGuardRefusal(repoRoot: string, id: string): { code: string; m
     } catch {
       // no attribution recorded for this task
     }
+    let attributionStoreExists = true;
+    let priorRecordedWork = false;
+    try {
+      attributionStoreExists = existsSync(path.join(repoRoot, ".spc", "runs", request.runId, "attribution.json"));
+      const eventsLog = readFileSync(path.join(repoRoot, ".spc", "runs", request.runId, "events.jsonl"), "utf8");
+      priorRecordedWork = eventsLog.split("\n").some((l) => l.includes('"FILE_CHANGED"') && l.includes(`"taskId": "${taskId}"`));
+    } catch {
+      // unreadable run record: no skew evidence, ordinary naming
+    }
     const check = evaluateSubmission({
       worktreeRoot: repoRoot,
       baselineRevision: meta.baseRevision,
       writeTargets: write,
       proposedPaths: [],
       attribution: { writes },
+      attributionStoreExists,
+      priorRecordedWork,
     });
     if (check.decision === "refuse") {
       return { code: check.code ?? "UNMEDIATED_CHANGES", message: check.message ?? "unmediated changes under write targets", paths: check.unattributed };

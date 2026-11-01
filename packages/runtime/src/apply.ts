@@ -1367,6 +1367,12 @@ export async function executeTaskInRun(
         // guard: this task's recorded writes, digests included - never
         // an attempt number alone.
         priorAttribution: { writes: readAttribution(ctx.paths.runDir(ctx.meta.runId))[task.id] ?? [] },
+        // Version-skew evidence (specs/version-skew-guard): the store's
+        // path and the event log's own record of this task's prior work.
+        attributionFile: path.join(ctx.paths.runDir(ctx.meta.runId), "attribution.json"),
+        priorRecordedWork: ctx.events
+          .all()
+          .some((ev) => ev.type === "FILE_CHANGED" && ev.payload?.taskId === task.id),
         observations: [...ctx.observations.all()],
         ...(failureContext ? { failureContext } : {}),
         ...(openClarifications ? { openClarifications } : {}),
