@@ -8,6 +8,7 @@ import { listMatchingFiles, readExcerpt, statusPorcelain } from "@spc/repo";
 import { enforceWriteScope, UNSAFE_PATH } from "./enforce.js";
 import { buildExecutorPrompt, EXECUTOR_SYSTEM, type ExecutorTaskContext } from "./prompts.js";
 import { executorResultSchema, type ExecutorResult } from "./result.js";
+import { evaluateSubmission, type AttributionRecord, type AttributionWrite } from "./unmediated-guard.js";
 import { fileDigest, stageChanges } from "./patch.js";
 import { runDeclaredCommands } from "./touchset.js";
 
@@ -27,6 +28,11 @@ export interface ExecuteTaskInput {
    *  from the run's event log by the runtime, live and on resume);
    *  offsets the requeue bound so restarts cannot reset it. */
   priorStageRejections?: number;
+  /** Durable attribution of THIS task's PRIOR attempts' applied and
+   *  declared-command writes (per-path digests captured when the work
+   *  was attributed) - the only exemption basis for the submission
+   *  boundary guard; attempt numbers alone are never attribution. */
+  priorAttribution?: AttributionRecord;
   observations: ObservationDraft[];
   failureContext?: { code: string; message: string };
   commands?: { commandsConfig: CommandsConfig; timeoutMs: number; maxOutputBytes: number };
@@ -40,6 +46,11 @@ export interface ExecutionOutcome {
   result: ExecutorResult;
   appliedChanges: { path: string; change: string }[];
   executedCommands?: { command: string; exitCode: number | null }[];
+  /** Attribution record for THIS attempt's mediated writes: digests of
+   *  the applicator's staged content (applied) and declared-command
+   *  touchSet outputs (declared) - the durable basis a later attempt's
+   *  submission check attributes prior work against. */
+  attributionWrites?: AttributionWrite[];
   failure?: { code: string; message: string };
 }
 
@@ -49,6 +60,10 @@ export interface ExecutorDeps {
   /** Durable recording of a staging rejection - called BEFORE the next
    *  dispatch (event ordering is the restart-safety guarantee). */
   onStageRejection?: (code: string, message: string) => void;
+  /** Durable recording of a submission-boundary refusal (specs/
+   *  unmediated-change-guard) - called BEFORE the next dispatch, the
+   *  same restart-safety ordering as staging rejections. */
+  onSubmissionRefusal?: (code: string, message: string, paths: string[]) => void;
 }
 
 function summarizeCriterion(c: AcceptanceCriterion): string {
@@ -158,6 +173,7 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
   ]);
   const STAGE_ROUND_BOUND = 3;
   let stageRejections = 0;
+  let submissionRefusals = 0;
 
   let result: ExecutorResult;
   let stagedOk: Extract<ReturnType<typeof stageChanges>, { ok: true }> | undefined;
@@ -247,6 +263,36 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
       }
     }
 
+    // Submission-boundary guard (specs/unmediated-change-guard): a task
+    // cannot submit unmediated changes under its write targets - empty
+    // proposal or disguised by a nonempty one. Evaluated BEFORE anything
+    // stages or applies; a refusal requeues the SAME attempt with the
+    // diagnostic as feedback and consumes nothing but a bounded round.
+    const submission = evaluateSubmission({
+      worktreeRoot,
+      baselineRevision: snapshot.revision,
+      writeTargets: writePatterns,
+      proposedPaths,
+      attribution: { writes: input.priorAttribution?.writes ?? [] },
+    });
+    if (submission.decision === "refuse") {
+      const code = submission.code ?? "UNMEDIATED_CHANGES";
+      deps.onSubmissionRefusal?.(code, submission.message ?? "unmediated changes under write targets", submission.unattributed);
+      submissionRefusals += 1;
+      if ((input.priorStageRejections ?? 0) + stageRejections + submissionRefusals > STAGE_ROUND_BOUND) {
+        return {
+          taskId: task.id,
+          status: "failed",
+          summary: `submission refused: ${code} (rounds exhausted)`,
+          result,
+          appliedChanges: [],
+          failure: { code, message: submission.message ?? "unmediated changes under write targets" },
+        };
+      }
+      previousRejection = submission.message ?? "unmediated changes under write targets";
+      continue;
+    }
+
     // Stage the entire change set before touching disk: any refusal (stale
     // base digest, absent or non-unique anchor) fails the whole set with
     // nothing written. No repair, no fallback to full-file rewrite.
@@ -295,6 +341,15 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
     appliedChanges.push({ path: p, change: "deleted" });
   }
 
+  // Attribution for this attempt's mediated writes (specs/unmediated-
+  // change-guard): the applicator's content digests. Deletes carry no
+  // content to attribute; their absence is covered by the baseline check.
+  const attributionWrites: AttributionWrite[] = stagedOk!.writes.map((w) => ({
+    path: w.path,
+    digest: fileDigest(w.content),
+    kind: "applied" as const,
+  }));
+
   let executedCommands: { command: string; exitCode: number | null }[] | undefined;
   let summary = result.summary;
   // Executor results are untrusted input; a schema-bypassing producer may
@@ -323,6 +378,16 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
       };
     }
     executedCommands = commandOutcome.results.map((r) => ({ command: r.command, exitCode: r.exitCode }));
+    const attributed = new Set(attributionWrites.map((w) => w.path));
+    for (const cmd of proposedCommands) {
+      for (const pattern of cmd.touchSet ?? []) {
+        for (const p of listMatchingFiles(worktreeRoot, [pattern], 32)) {
+          if (attributed.has(p)) continue;
+          const d = digestOfWorktreeFile(worktreeRoot, p);
+          if (d !== undefined) attributionWrites.push({ path: p, digest: d, kind: "declared" });
+        }
+      }
+    }
     if (commandOutcome.untouched.length > 0) {
       summary = `${summary} (declared but unchanged: ${commandOutcome.untouched.join(", ")})`;
     }
@@ -335,6 +400,7 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
     result,
     appliedChanges,
     ...(executedCommands ? { executedCommands } : {}),
+    ...(attributionWrites.length > 0 ? { attributionWrites } : {}),
     failure: result.failure
       ? { code: result.failure.code ?? "TASK_FAILED", message: result.failure.message }
       : undefined,

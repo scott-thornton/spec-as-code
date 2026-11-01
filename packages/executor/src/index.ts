@@ -6,3 +6,4 @@ export * from "./execute.js";
 export * from "./scheduler.js";
 export * from "./touchset.js";
 export * from "./patch.js";
+export * from "./unmediated-guard.js";

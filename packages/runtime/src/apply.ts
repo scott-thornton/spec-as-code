@@ -14,7 +14,7 @@ import {
 } from "@spc/core";
 import type { FollowUp, Observation, Plan, RequirementState, RunState, RunStatus, SpecIR, Task, TaskState } from "@spc/schema";
 import type { LLMProvider, UsageRecord } from "@spc/llm";
-import { enforceProtectedPaths, executeTask, enforceWriteScope, revertPaths, runScheduler, stagingRoundsFrom, type ExecutionOutcome } from "@spc/executor";
+import { enforceProtectedPaths, executeTask, enforceWriteScope, revertPaths, runScheduler, stagingRoundsFrom, type ExecutionOutcome, type AttributionWrite } from "@spc/executor";
 import { classifyAmendmentRisk, generateAmendment } from "@spc/planner";
 import { commitAll, compileSpecFile, contentDelta, contentSnapshot, currentBranch, currentRevision, diffStat, git, gitOk, statusDelta, statusPorcelain, type ContentSnapshot, type WorktreeStatus } from "@spc/repo";
 import { checkoutBranch, checkoutRunBranch, createWorktree, removeWorktree } from "@spc/repo";
@@ -1220,6 +1220,21 @@ function taskScopeDelta(before: ContentSnapshot, worktreeRoot: string) {
  * observation/evidence/follow-up persistence, and write-scope enforcement
  * against the actual git delta of `worktreeRoot`.
  */
+/** Durable per-task attribution store (specs/unmediated-change-guard):
+ *  run-dir JSON mapping taskId -> the attribution writes recorded for
+ *  its attempts. Survives restarts; read before each dispatch so a
+ *  re-dispatched attempt can attribute the prior attempt's work. */
+function readAttribution(runDir: string): Record<string, AttributionWrite[]> {
+  try {
+    return JSON.parse(readFileSync(path.join(runDir, "attribution.json"), "utf8")) as Record<string, AttributionWrite[]>;
+  } catch {
+    return {};
+  }
+}
+function writeAttribution(runDir: string, data: Record<string, AttributionWrite[]>): void {
+  writeFileSync(path.join(runDir, "attribution.json"), JSON.stringify(data, null, 1), "utf8");
+}
+
 export async function executeTaskInRun(
   ctx: RunContext,
   usageSink: (record: UsageRecord) => void,
@@ -1337,6 +1352,10 @@ export async function executeTaskInRun(
         // this task attempt, derived from the same event stream -
         // uniformly for live execution and resume.
         priorStageRejections: stagingRoundsFrom(ctx.events.all(), task.id, attempt),
+        // Exact prior-work attribution for the submission-boundary
+        // guard: this task's recorded writes, digests included - never
+        // an attempt number alone.
+        priorAttribution: { writes: readAttribution(ctx.paths.runDir(ctx.meta.runId))[task.id] ?? [] },
         observations: [...ctx.observations.all()],
         ...(failureContext ? { failureContext } : {}),
         ...(openClarifications ? { openClarifications } : {}),
@@ -1353,6 +1372,9 @@ export async function executeTaskInRun(
         // the restart-safety source for the staging-round bound.
         onStageRejection: (code: string, message: string) => {
           ctx.events.append("TASK_STAGE_REJECTED", { taskId: task.id, attempt, code, message });
+        },
+        onSubmissionRefusal: (code: string, message: string, paths: string[]) => {
+          ctx.events.append("TASK_SUBMISSION_REFUSED", { taskId: task.id, attempt, code, message, paths });
         },
       },
     );
@@ -1434,6 +1456,21 @@ export async function executeTaskInRun(
   const delta = taskScopeDelta(before, worktreeRoot);
   for (const [p, change] of delta) {
     ctx.events.append("FILE_CHANGED", { taskId: task.id, path: p, change });
+  }
+  // Durable attribution of this attempt's mediated writes (specs/
+  // unmediated-change-guard): exact per-path digests, so a re-dispatched
+  // attempt's submission check can distinguish prior applied work from
+  // fresh unmediated edits.
+  if (outcome.attributionWrites && outcome.attributionWrites.length > 0) {
+    const runDir = ctx.paths.runDir(ctx.meta.runId);
+    const store = readAttribution(runDir);
+    const prior = store[task.id] ?? [];
+    const seen = new Set(prior.map((w) => `${w.path}\u0000${w.digest}`));
+    for (const w of outcome.attributionWrites) {
+      if (!seen.has(`${w.path}\u0000${w.digest}`)) prior.push(w);
+    }
+    store[task.id] = prior;
+    writeAttribution(runDir, store);
   }
   const violations = [
     ...enforceProtectedPaths(ctx.config.verification.protectedPaths, [...delta.keys()]),
@@ -1889,7 +1926,14 @@ async function finalize(
     ...(extra.diffStat ? { diffStat: extra.diffStat } : {}),
     ...(extra.changedFileCount !== undefined ? { changedFileCount: extra.changedFileCount } : {}),
   });
-  writeFileSync(ctx.paths.summaryFile(ctx.meta.runId), summary, "utf8");
+  {
+    // Submission-refusal count in the run summary (specs/unmediated-
+    // change-guard): visible accounting, never gating.
+    const refusals = ctx.events.all().filter((e) => e.type === "TASK_SUBMISSION_REFUSED").length;
+    writeFileSync(ctx.paths.summaryFile(ctx.meta.runId), refusals > 0
+      ? `${summary}\n\nSubmission refusals: ${refusals} (UNMEDIATED_CHANGES - unmediated changes refused at the submission boundary, requeued)\n`
+      : summary, "utf8");
+  }
 
   // Prefix attestation: the last act of the run, committing to events
   // 1..N (RUN_COMPLETED included) after the summary/state are final.

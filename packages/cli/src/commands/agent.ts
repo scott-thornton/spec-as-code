@@ -5,7 +5,7 @@ import { SpcError } from "@spc/core";
 import { HarnessStore, checkJsonSchema, claimCandidate, requestState, saveCandidate } from "@spc/llm-harness";
 import type { HarnessAnswer, HarnessRequest } from "@spc/llm-harness";
 import { gitOk, observeRepository } from "@spc/repo";
-import { enforceProtectedPaths, enforceWriteScope, executorResultSchema, runCommand, stageChanges } from "@spc/executor";
+import { enforceProtectedPaths, enforceWriteScope, executorResultSchema, runCommand, stageChanges, evaluateSubmission, type AttributionWrite } from "@spc/executor";
 import { plannerOutputSchema } from "@spc/planner";
 import { verifyCriterion } from "@spc/verifier";
 import { prepareDisposableWorktree } from "@spc/runtime";
@@ -265,6 +265,53 @@ export function runAgentShow(id: string, cwd: string | undefined, part?: AgentSh
  * the first refusal with the named cause. Composes the existing
  * guards; no second checker to drift.
  */
+/**
+ * Submission-boundary guard, client door (specs/unmediated-change-
+ * guard): wherever the request's run context resolves (pending request
+ * -> runId -> run metadata planId/baseRevision -> plan task write
+ * targets -> run attribution store), apply the same predicate the
+ * runtime enforces and refuse locally in seconds. Unresolvable context
+ * means no local check - the runtime door refuses authoritatively
+ * regardless.
+ */
+function submissionGuardRefusal(repoRoot: string, id: string): { code: string; message: string; paths: string[] } | null {
+  let request: HarnessRequest | null = null;
+  try {
+    request = JSON.parse(readFileSync(path.join(repoRoot, ".spc", "harness", "pending", `${id}.json`), "utf8")) as HarnessRequest;
+  } catch {
+    return null;
+  }
+  if (!request.runId || !request.key) return null;
+  const taskId = request.key.split("@")[0]!;
+  try {
+    const meta = JSON.parse(readFileSync(path.join(repoRoot, ".spc", "runs", request.runId, "metadata.json"), "utf8")) as { planId?: string; baseRevision?: string };
+    if (!meta.planId || !meta.baseRevision) return null;
+    const plan = JSON.parse(readFileSync(path.join(repoRoot, ".spc", "plans", `${meta.planId}.json`), "utf8")) as { tasks?: { id: string; targets?: { write?: string[] } }[] };
+    const write = plan.tasks?.find((t) => t.id === taskId)?.targets?.write;
+    if (!write) return null;
+    let writes: AttributionWrite[] = [];
+    try {
+      const store = JSON.parse(readFileSync(path.join(repoRoot, ".spc", "runs", request.runId, "attribution.json"), "utf8")) as Record<string, AttributionWrite[]>;
+      writes = store[taskId] ?? [];
+    } catch {
+      // no attribution recorded for this task
+    }
+    const check = evaluateSubmission({
+      worktreeRoot: repoRoot,
+      baselineRevision: meta.baseRevision,
+      writeTargets: write,
+      proposedPaths: [],
+      attribution: { writes },
+    });
+    if (check.decision === "refuse") {
+      return { code: check.code ?? "UNMEDIATED_CHANGES", message: check.message ?? "unmediated changes under write targets", paths: check.unattributed };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function runAgentSubmit(options: { id: string; file?: string; stdin?: boolean; by?: string; cwd?: string; noPreflight?: boolean; rehearsedWith?: string }): Promise<number> {
   const { repoRoot, store } = storeFor(options.cwd);
 
@@ -298,6 +345,16 @@ export async function runAgentSubmit(options: { id: string; file?: string; stdin
       console.log(`Assemble op arrays in explicit chain order (spc patch build --after), then check with: spc patch verify <ops.json>`);
       return 1;
     }
+  }
+
+  // Submission-boundary guard, submit door (specs/unmediated-change-
+  // guard): refuse locally in seconds where the run context resolves;
+  // nothing is answered, the request stays pending.
+  const localRefusal = submissionGuardRefusal(repoRoot, options.id);
+  if (localRefusal) {
+    console.log(`${localRefusal.code}: ${localRefusal.message}`);
+    console.log(`submit refused without answering - revert the unattributed changes and propose them as patch operations`);
+    return 1;
   }
 
   // Step 2: the dry-run preflight (records the draft digest) unless
@@ -363,6 +420,16 @@ export function runAgentRespond(options: { id: string; file?: string; stdin?: bo
     console.log(`Claimed ${options.fromCandidate} into ${claim.answer.id} (lineage: composed off the clock, admitted now).`);
     console.log(`Answered ${claim.answer.id}. The waiting spc process will pick it up within a second or two.`);
     return 0;
+  }
+  // Submission-boundary guard, the authoritative door (specs/
+  // unmediated-change-guard): respond refuses even when preflight is
+  // skipped or submit bypassed - the runtime and this door share the
+  // predicate.
+  const refusal = submissionGuardRefusal(repoRoot, options.id);
+  if (refusal) {
+    console.log(`${refusal.code}: ${refusal.message}`);
+    console.log(`answer refused - revert the unattributed changes and propose them as patch operations`);
+    return 1;
   }
   let raw: string;
   if (options.file) {

@@ -22,6 +22,11 @@ export const eventTypeSchema = z.enum([
   "TASK_COMMITTED",
   "TASK_FAILED",
   "TASK_STAGE_REJECTED",
+  /** Submission-boundary refusal (specs/unmediated-change-guard): a
+   *  task attempted to submit unmediated changes under its write
+   *  targets; requeued with the diagnostic, never consuming the
+   *  attempt until the bound exhausts. */
+  "TASK_SUBMISSION_REFUSED",
   "TASK_BLOCKED",
   "TASK_NEEDS_REPLAN",
   "REPLAN_REQUESTED",
