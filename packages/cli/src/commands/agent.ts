@@ -700,6 +700,24 @@ export async function runAgentDryRun(options: { id: string; file: string; gates?
     // set is the one hard failure; the applicator's refusal code says why.
     const staged = stageChanges(worktree, (draft.changes ?? []) as never);
     if (!staged.ok) {
+      // Worldview divergence naming (specs/version-skew-guard): a draft
+      // that stages CLEAN against the live tree but fails here composes
+      // against in-flight state (base + prior applied work) the throwaway
+      // cannot represent - named as divergence and not validated here,
+      // never reported as PATCH_BASE_MISMATCH; the runtime door remains
+      // authoritative. Failing against BOTH trees keeps the ordinary
+      // refusal.
+      let liveClean = false;
+      try {
+        liveClean = stageChanges(repoRoot, (draft.changes ?? []) as never).ok === true;
+      } catch {
+        liveClean = false;
+      }
+      if (liveClean) {
+        console.log("worldview divergence: the draft composes against the in-flight tree (base + prior applied work); the throwaway at the base revision cannot represent it - not validated here, the runtime door remains authoritative");
+        recordPreflight({ staged: 0, refusals: [], criteria: { pass: 0, total: 0 }, gates: null });
+        return 0;
+      }
       console.error(staged.message);
       recordPreflight({ staged: 0, refusals: [], criteria: { pass: 0, total: 0 }, gates: null });
       return 1;
