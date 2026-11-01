@@ -51,3 +51,15 @@ refusal is not a block: rehearse, or push through with
 
 > Rehearse in the scratch, commit through the queue - the irreversible
 > thing goes last.
+
+## Shadow-builds are telemetry
+
+Catching yourself building a local check - re-implementing a guard's
+assertions in python, hand-running a suite the run will run anyway,
+scripting a harness around an spc tool to use it at scale - is not a
+personal shortcut to keep quiet about. Record it: an observation of
+type unexpected, "shadow-built X because Y". Every shadow-build is a
+bug report against the tooling (missing, late, or unknown at the moment
+of need), and the run record is where that report lives so the tooling
+roadmap sees it. The discipline is to surface the duplicate, not to
+hide it or to stop thinking locally.
