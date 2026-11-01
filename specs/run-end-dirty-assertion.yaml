@@ -1,0 +1,77 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: run-end-dirty-assertion
+  title: A run that ends leaving its own declared writes uncommitted says so - at run end, in the record, not at the next run's first breath
+goal: >
+  Incident (run-mvx2fpfx-ce463839, 2026-11-01): the run's event log
+  records FILE_CHANGED pnpm-lock.yaml under T001 (the answer declared
+  the touchSet), yet the run-end commit a866e5f omitted the file. The
+  run finished silently with the tree dirty; the next run hard-aborted
+  DIRTY_REPOSITORY; unblocking required a manual chore commit
+  (6a391d3). The run's own record contradicted its commit and nothing
+  said so until a different invocation failed. Two record-honesty gaps
+  in one finalize path: (1) nothing re-checks the tree after the
+  run-end commit, so run-caused dirt survives invisibly; (2) the
+  run-end commit message carries no run status - a866e5f's log line
+  gave no hint the run ended unsatisfied and HEAD could not compile
+  @spc/executor; learning that required opening .spc/runs state by
+  hand. The fix is assertion-and-visibility, never gating: after the
+  final commit, dirty paths outside allowDirtyPaths and .spc/** are
+  evented, printed, and reported; the commit trailer carries the run
+  status so git log answers "was HEAD's run green" on its own.
+requirements:
+  - id: DTE-001
+    statement: >
+      The apply finalize path, immediately after the run-end commitAll,
+      re-checks statusPorcelain: every dirty path NOT under .spc/** and
+      NOT matching execution.allowDirtyPaths emits a RUN_ENDED_DIRTY
+      event whose payload names each path, prints one loud run-end line
+      ("run ended leaving run-dirty paths uncommitted: <paths> -
+      resolve before the next run"), and is carried on the run report.
+      Never fatal - the run's status is already recorded; the point is
+      visibility at the moment it happens and durability in the record.
+      A clean tree emits and prints nothing.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: DTE-001-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/run-end-dirty.test.ts
+        discriminating: true
+  - id: DTE-002
+    statement: >
+      The run-end commit message carries the run's outcome as a trailer
+      (SPC-Run-Status: succeeded | partially_satisfied | failed |
+      blocked | timed_out, matching the recorded run status) beside the
+      existing SPC-Run-Id / SPC-Plan-Id / SPC-Spec-Digest trailers, so
+      git log alone shows whether a run's commit landed green. The
+      status is the one the finalize path already computed for the run
+      record - no new status computation, no change to when or what is
+      committed.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: DTE-002-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/run-end-dirty.test.ts
+        discriminating: true
+  - id: DTE-003
+    statement: >
+      The existing runtime batteries keep passing - finalize ordering,
+      commit contents, and worktree/in-place semantics are unchanged;
+      the assertion observes, it never gates.
+    priority: must
+    acceptance:
+      - id: DTE-003-A
+        type: suite
+        ref: runtime-battery
+outOfScope:
+  - >
+    Failing the run on residual dirt, auto-committing leftovers, or any
+    change to DIRTY_REPOSITORY start-of-run semantics.
+  - >
+    Attributing residual dirt to tasks (blame mapping) - naming the
+    paths is the fix; attribution is investigation.
