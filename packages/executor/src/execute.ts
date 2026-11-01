@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { globMatchAny, isPhysicallyContained, isSafeRelativePath, SpcError } from "@spc/core";
@@ -174,6 +175,16 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
   const STAGE_ROUND_BOUND = 3;
   let stageRejections = 0;
   let submissionRefusals = 0;
+  // The task's dispatch baseline: HEAD as THIS execution began.
+  // Committed bypass is HEAD moving DURING the task - a dependency-
+  // adjusted worktree legitimately starts at a later revision than the
+  // run snapshot (worktree mode merges accepted ancestors between
+  // tasks), so the run snapshot is not the baseline.
+  let dispatchBaseline = snapshot.revision;
+  {
+    const h = spawnSync("git", ["rev-parse", "HEAD"], { cwd: worktreeRoot, encoding: "utf8" });
+    if (h.status === 0 && h.stdout.trim()) dispatchBaseline = h.stdout.trim();
+  }
 
   let result: ExecutorResult;
   let stagedOk: Extract<ReturnType<typeof stageChanges>, { ok: true }> | undefined;
@@ -270,7 +281,7 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
     // diagnostic as feedback and consumes nothing but a bounded round.
     const submission = evaluateSubmission({
       worktreeRoot,
-      baselineRevision: snapshot.revision,
+      baselineRevision: dispatchBaseline,
       writeTargets: writePatterns,
       proposedPaths,
       attribution: { writes: input.priorAttribution?.writes ?? [] },
