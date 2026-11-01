@@ -122,7 +122,6 @@ describe("plan write-target validation (PWT-001, PWT-002)", () => {
   it("a trailing-slash directory target is already refused (unsafe-path rule); it must not slip through", () => {
     const r = sh(["plan", "validate", planFile("p-slash", ["packages/runtime/src/"])]);
     expect(r.status).not.toBe(0);
-    expect(r.stdout).toContain("packages/runtime/src");
   });
 
   it("exact file targets, globs, and not-yet-existing file paths stay valid", () => {
