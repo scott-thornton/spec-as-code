@@ -19,6 +19,11 @@ const MAX_REQUEUE_REFRESHES = 5;
 // cache included).
 const HARNESS_INSTRUCTIONS = `You are the model backend for an spc run. Read the system and prompt, inspect the repository as needed, and produce a single JSON value satisfying jsonSchema exactly (the file must contain the JSON value itself, not a wrapper). Then the run continues automatically.`;
 
+// The submission-boundary contract (specs/unmediated-change-guard),
+// stated where every dispatched backend reads it: mutations to task
+// targets are proposed, never performed directly.
+const SUBMISSION_CONTRACT = `You PROPOSE changes as patch operations in the changes array - you never edit files directly. Direct edits under the task's write targets are detected at submission and refused (UNMEDIATED_CHANGES): recover by reverting them and proposing through the patch workflow (spc patch build chains, spc patch verify, spc agent dry-run, spc agent submit).`;
+
 /** The per-request tail: id first mention and the respond command. */
 const requestTail = (id: string): string =>
   `Request id: ${id}. Answer with: spc agent respond ${id} --file <answer.json>`;
@@ -119,7 +124,7 @@ export class HarnessProvider implements LLMProvider {
       schemaName: request.schemaName,
       jsonSchema,
       system: request.system,
-      prompt: `--- harness instructions ---\n${STAGE_HEADERS[request.role] ?? GENERIC_STAGE_HEADER}\n${HARNESS_INSTRUCTIONS}\n${requestTail(id)}${request.note ? `\nNOTE: ${request.note}` : ""}\n\n${request.prompt}`,
+      prompt: `--- harness instructions ---\n${STAGE_HEADERS[request.role] ?? GENERIC_STAGE_HEADER}\n${HARNESS_INSTRUCTIONS}\n${request.role === "executor" ? `\n${SUBMISSION_CONTRACT}` : ""}\n${requestTail(id)}${request.note ? `\nNOTE: ${request.note}` : ""}\n\n${request.prompt}`,
       createdAt: new Date(windowStart).toISOString(),
       expiresAt: new Date(windowStart + windowMs).toISOString(),
       ...(request.runId ? { runId: request.runId } : {}),
