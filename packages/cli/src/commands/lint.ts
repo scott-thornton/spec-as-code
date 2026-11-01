@@ -118,14 +118,28 @@ const DECORATION_COMMANDS = new Set(["true", ":", "pwd", "exit 0", "exit(0)"]);
  * skill's prose, mechanized. Pure: reads the IR and config, executes
  * nothing, writes nothing. Warnings never gate.
  */
-export function lintSpec(ir: SpecIR, config: Config, source?: string, opts?: { pnpmWorkspace?: boolean }): LintWarning[] {
+export function lintSpec(
+  ir: SpecIR,
+  config: Config,
+  source?: string,
+  opts?: { pnpmWorkspace?: boolean; suites?: ReadonlyMap<string, { id: string; command: string }> },
+): LintWarning[] {
   const warnings: LintWarning[] = [];
   const commandUses = new Map<string, { criterion: string; expect?: number }[]>();
 
   for (const property of ir.properties) {
     for (const criterion of property.acceptance) {
-      if (criterion.type === "command" && criterion.command !== undefined) {
-        const command = criterion.command;
+      // Suite criteria lint as their RESOLVED command (specs/suite-
+      // references): duplicate-command and unprotected-oracle checks
+      // see what verification would execute.
+      const resolved =
+        criterion.type === "command"
+          ? criterion.command
+          : criterion.type === "suite"
+            ? opts?.suites?.get(criterion.ref)?.command
+            : undefined;
+      if (resolved !== undefined) {
+        const command = resolved;
         const first = command.trim().split(/\s+/)[0] ?? "";
         if (DECORATION_COMMANDS.has(command.trim()) || DECORATION_COMMANDS.has(first)) {
           warnings.push({
@@ -135,7 +149,7 @@ export function lintSpec(ir: SpecIR, config: Config, source?: string, opts?: { p
           });
         }
         const uses = commandUses.get(command) ?? [];
-        uses.push({ criterion: criterion.id, expect: criterion.expect?.exitCode });
+        uses.push({ criterion: criterion.id, expect: criterion.type === "command" ? criterion.expect?.exitCode : criterion.type === "suite" ? 0 : undefined });
         commandUses.set(command, uses);
 
         // Unprotected oracle: a test RUNNER executing a suite the graded

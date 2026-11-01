@@ -5,6 +5,36 @@ import { renderGithubAnnotations, renderGithubSummary } from "@spc/renderer";
 import { createVerifyRun, freshnessCheck, inPlaceHandoffWarning, prepareDisposableWorktree, verifyBundle } from "@spc/runtime";
 import { CommandCache, type SharedCommandRun } from "@spc/verifier";
 import { createProvider, loadRepoConfig, resolveAllSpecs, resolveRepoRoot } from "../context.js";
+import { loadSuiteRegistry, type SuiteDefinition } from "@spc/repo";
+import type { DesiredProperty } from "@spc/schema";
+
+/**
+ * Resolve every suite reference in the selected specs against the
+ * registry BEFORE any criterion executes (specs/suite-references,
+ * SR-003): a typo'd ref is a compile error, never a skipped criterion
+ * or a half-executed sweep. Returns the frozen registry on success.
+ */
+function resolveSuitesOrFail(specs: { ir: { spec: { metadata: { id: string } }; properties: DesiredProperty[] } }[], registryRoot: string): Map<string, SuiteDefinition> | null {
+  let registry: Map<string, SuiteDefinition>;
+  try {
+    registry = loadSuiteRegistry(registryRoot);
+  } catch (e) {
+    const err = e as Error & { code?: string };
+    console.error(`error ${err.code ?? "SPC_SUITE_INVALID"}: ${err.message}`);
+    return null;
+  }
+  for (const { ir } of specs) {
+    for (const property of ir.properties) {
+      for (const criterion of property.acceptance) {
+        if (criterion.type === "suite" && !registry.has(criterion.ref)) {
+          console.error(`error SPC_SUITE_UNKNOWN: criterion ${criterion.id} (spec ${ir.spec.metadata.id}) references suite "${criterion.ref}" which is not defined under suites/`);
+          return null;
+        }
+      }
+    }
+  }
+  return registry;
+}
 
 /**
  * `spc verify [specFile]`: verify desired state against the current
@@ -106,6 +136,8 @@ export async function runVerify(
               ? "Preparing: linked repository node_modules"
               : "Preparing: nothing to install or link";
       console.log(prepLine);
+      const suites = resolveSuitesOrFail([spec], worktree);
+      if (suites === null) return 2;
       const report = await createVerifyRun({
         repoRoot,
         commandCache: new CommandCache(repoRoot, path.join(repoRoot, ".spc", "cache", "verify-commands.json")),
@@ -114,6 +146,7 @@ export async function runVerify(
         provider,
         executionRoot: worktree,
         prepareOutcome: prepared,
+        suites,
       });
       if (format === "json") {
         console.log(JSON.stringify({
@@ -136,6 +169,10 @@ export async function runVerify(
   const provider = await createProvider(config, repoRoot);
   const specs = resolveAllSpecs(path.join(repoRoot, "specs"), specFile ?? undefined);
   const multi = specs.length > 1;
+  // Frozen suite registry: loaded, validated and every reference
+  // resolved ONCE per invocation, before the first criterion executes.
+  const suites = resolveSuitesOrFail(specs, repoRoot);
+  if (suites === null) return 2;
   if (format === "text" && statusPorcelain(repoRoot).dirty) {
     console.log("note: working tree is dirty; verification runs against the current state as-is");
   }
@@ -171,7 +208,7 @@ export async function runVerify(
         continue;
       }
     }
-    const report = await createVerifyRun({ repoRoot, specIr: ir, config, provider, commandRuns: invocationCommandRuns, commandCache });
+    const report = await createVerifyRun({ repoRoot, specIr: ir, config, provider, commandRuns: invocationCommandRuns, commandCache, suites });
     const ok = report.states.every((s) => s.status === "satisfied" || s.status === "waived");
     if (!ok) worst = 1;
 

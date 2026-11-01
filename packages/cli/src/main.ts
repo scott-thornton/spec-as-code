@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { isSpcError } from "@spc/core";
 import { runInit } from "./commands/init.js";
 import { runSpecShow, runSpecValidate } from "./commands/spec.js";
+import { runSuiteList, runSuiteValidate } from "./commands/suite.js";
 import { runPlan, runPlanApprove, runPlanShow, runPlanValidate } from "./commands/plan.js";
 import { runApply } from "./commands/apply.js";
 import { runVerify } from "./commands/verify.js";
@@ -76,6 +77,20 @@ spec
   .action((file: string, opts: { format: string }) => {
     const format = opts.format === "text" ? ("text" as const) : ("markdown" as const);
     process.exitCode = runSpecShow(file, format);
+  });
+
+const suite = program.command("suite").description("suite registry: named command batteries referenced by specs");
+suite
+  .command("validate")
+  .description("validate every suite definition under suites/ (malformed file or duplicate id fails naming the offender)")
+  .action(() => {
+    process.exitCode = runSuiteValidate();
+  });
+suite
+  .command("list")
+  .description("list suite definitions with reference counts across specs/")
+  .action(() => {
+    process.exitCode = runSuiteList();
   });
 
 const plan = program

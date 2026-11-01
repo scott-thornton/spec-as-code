@@ -60,6 +60,8 @@ function summarizeCriterion(c: AcceptanceCriterion): string {
     case "agent":
     case "human":
       return c.instruction ?? "";
+    case "suite":
+      return `suite ${c.ref ?? ""}`;
   }
 }
 
