@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -224,9 +225,16 @@ requirements:
         command: "true"
 `;
 
-function fixtureSnapshot(): RepositorySnapshot {
+function fixtureSnapshot(wt?: string): RepositorySnapshot {
   return {
-    revision: "r",
+    // The dispatch baseline must be the worktree's REAL HEAD: the
+    // submission-boundary guard (specs/unmediated-change-guard) treats
+    // a mismatch as committed bypass, and a fake "r" against a real
+    // git fixture would refuse every submission.
+    revision:
+      wt !== undefined
+        ? spawnSync("git", ["rev-parse", "HEAD"], { cwd: wt, encoding: "utf8" }).stdout.trim()
+        : "r",
     dirty: false,
     languages: [],
     manifests: [],
@@ -258,7 +266,7 @@ async function runExecutorTask(wt: string, value: Record<string, unknown>) {
         targets: { read: ["src/**", "*.ts"], write: ["src/**", "*.ts"] },
       },
       specIr,
-      snapshot: fixtureSnapshot(),
+      snapshot: fixtureSnapshot(wt),
       worktreeRoot: wt,
       attempt: 1,
       priorResults: [],

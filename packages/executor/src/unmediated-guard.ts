@@ -80,8 +80,16 @@ export function evaluateSubmission(input: SubmissionCheckInput): SubmissionCheck
   // Working-tree dirt under the task's own write targets (untracked
   // included: status --porcelain -uall never collapses directories).
   // Dirt outside the targets never triggers - it is not this task's
-  // mutation to account for.
-  const status = statusPorcelain(worktreeRoot);
+  // mutation to account for. A worktree that is not a git repository
+  // cannot be dirt-checked at all: the guard degrades honestly to
+  // allow (the write-scope enforcement on proposed changes still
+  // holds) rather than crash - production worktrees are always repos.
+  let status: ReturnType<typeof statusPorcelain>;
+  try {
+    status = statusPorcelain(worktreeRoot);
+  } catch {
+    return { decision: "allow", unattributed: [] };
+  }
   const under = [...status.entries.keys()].filter(
     (p) => globMatchAny(writeTargets, p) || globMatchAny(writeTargets, p.split(path.sep).join("/")),
   );

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { LLMProvider, StructuredRequest } from "@spc/llm";
 import { compileSpecFile, observeRepository } from "@spc/repo";
 import { executeTask } from "./execute.js";
@@ -131,6 +131,19 @@ async function runTask(deps: unknown, options: { priorStageRejections?: number }
     deps as never,
   );
 }
+
+// Each test dispatches against a CLEAN committed baseline, as a real
+// task attempt does (specs/unmediated-change-guard): earlier tests'
+// applied ops must not surface as unattributed dirt in later tests.
+beforeEach(() => {
+  // The fixture commits its base once at module scope; a real task
+  // attempt dispatches against a clean baseline, so reset accumulated
+  // applied work from earlier tests (specs/unmediated-change-guard).
+  for (const args of [["reset", "-q", "--hard"], ["clean", "-qfd"]]) {
+    const r = spawnSync("git", args, { cwd: root, encoding: "utf8" });
+    if (r.status !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr}`);
+  }
+});
 
 describe("staging requeue (SR-001)", () => {
   it("PATCH_BASE_MISMATCH requeues with the applicator's refusal; the corrected answer completes the same attempt", async () => {
