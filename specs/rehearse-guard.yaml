@@ -157,8 +157,8 @@ requirements:
       include: [packages/**]
     acceptance:
       - id: RG-004-A
-        type: command
-        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli... test
+        type: suite
+        ref: cli-battery
 outOfScope:
   - a hard preflight gate (the friction is escapable by design; a rushed agent with a correct answer must not be trapped)
   - gating candidate claims (fingerprint validation is their gate)

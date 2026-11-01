@@ -117,8 +117,8 @@ requirements:
       include: [packages/**]
     acceptance:
       - id: SG-005-A
-        type: command
-        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/llm-harness... test && pnpm --filter @spc/cli... test
+        type: suite
+        ref: llm-harness-battery
 outOfScope:
   - any new enforced pipeline state or gate (signposts are ambient by design; the gates stay where they are - spec validate, requireRedPhase, write scope, respond friction, verify --all in CI)
   - a second authored copy of the pipeline text (docs renders the bundled skill)

@@ -59,8 +59,8 @@ requirements:
       include: [packages/**]
     acceptance:
       - id: AS-003-A
-        type: command
-        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli... test
+        type: suite
+        ref: cli-battery
 outOfScope:
   - wrapping op BUILDING (anchors are semantic choices; patch build stays manual)
   - new validation semantics (submit composes existing guards; no second checker)

@@ -1,0 +1,6 @@
+apiVersion: spc.dev/v1alpha1
+kind: Suite
+metadata:
+  id: typecheck
+  title: Workspace typecheck (every package)
+command: pnpm -r typecheck

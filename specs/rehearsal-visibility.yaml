@@ -41,8 +41,8 @@ requirements:
       include: [packages/**]
     acceptance:
       - id: RV2-002-A
-        type: command
-        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli... test
+        type: suite
+        ref: cli-battery
 outOfScope:
   - guard policy changes (the flag records; nothing refuses on it yet)
   - cost surfacing beyond the preflight count (per-suite timing is the batteries' conversation)

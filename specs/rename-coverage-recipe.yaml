@@ -55,8 +55,8 @@ requirements:
       include: [packages/**]
     acceptance:
       - id: RN-002-A
-        type: command
-        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli... test
+        type: suite
+        ref: cli-battery
 outOfScope:
   - a machine-side rename lint (a heuristic cannot know whether an old name is a legitimate migration alias; the exception is the author's declaration)
   - touching the eval task corpus (the benchmark's ground truth belongs to the campaign repo)

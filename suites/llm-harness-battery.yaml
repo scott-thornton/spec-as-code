@@ -1,0 +1,6 @@
+apiVersion: spc.dev/v1alpha1
+kind: Suite
+metadata:
+  id: llm-harness-battery
+  title: Harness battery (workspace typecheck, llm-harness and cli packages' tests with workspace deps)
+command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/llm-harness... test && pnpm --filter @spc/cli... test

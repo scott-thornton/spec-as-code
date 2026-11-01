@@ -100,8 +100,8 @@ requirements:
       include: [packages/runtime/src/**, packages/cli/src/**]
     acceptance:
       - id: VC-003-A
-        type: command
-        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/runtime... test && pnpm --filter @spc/cli... test
+        type: suite
+        ref: runtime-battery
   - id: VC-004
     statement: >
       Regression guard: workspace typechecks; verifier, runtime, and

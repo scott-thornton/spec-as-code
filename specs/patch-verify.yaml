@@ -95,8 +95,8 @@ requirements:
       include: [packages/**]
     acceptance:
       - id: PV-004-A
-        type: command
-        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli... test
+        type: suite
+        ref: cli-battery
 outOfScope:
   - new validation semantics beyond what the applicator already enforces (the command reuses stageChanges verbatim; no second checker to drift)
   - blocking answers whose changes reference paths absent from the live tree when the run would stage in a separate worktree (the refusal message names the cause; the composer rebuilds)

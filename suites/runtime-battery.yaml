@@ -1,0 +1,6 @@
+apiVersion: spc.dev/v1alpha1
+kind: Suite
+metadata:
+  id: runtime-battery
+  title: Runtime battery (workspace typecheck, runtime and cli packages' tests with workspace deps)
+command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/runtime... test && pnpm --filter @spc/cli... test

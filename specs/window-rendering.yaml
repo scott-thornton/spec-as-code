@@ -44,8 +44,8 @@ requirements:
       include: [packages/**]
     acceptance:
       - id: WR-002-A
-        type: command
-        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli... test
+        type: suite
+        ref: cli-battery
 outOfScope:
   - timezone conversion of rendered instants (times are labeled UTC)
   - the brief json view's pendingHarness count (kept for shape compatibility)

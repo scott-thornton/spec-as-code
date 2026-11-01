@@ -1,0 +1,6 @@
+apiVersion: spc.dev/v1alpha1
+kind: Suite
+metadata:
+  id: cli-battery
+  title: CLI battery (workspace typecheck, then the cli package's tests with workspace deps)
+command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/cli... test

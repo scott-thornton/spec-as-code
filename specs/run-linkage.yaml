@@ -50,8 +50,8 @@ requirements:
       include: [packages/**]
     acceptance:
       - id: RL-002-A
-        type: command
-        command: pnpm -r typecheck > /dev/null && pnpm --filter @spc/runtime... test && pnpm --filter @spc/cli... test
+        type: suite
+        ref: runtime-battery
 outOfScope:
   - verifier stamping (already wired at dispatch in criteria.ts)
   - pre-run planner attribution (no run exists yet; window classification terminalizes those requests - queue-legibility's ruling)
