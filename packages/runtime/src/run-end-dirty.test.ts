@@ -59,7 +59,7 @@ requirements:
           contains: "feature-a"
       - id: DTE-F-B
         type: command
-        command: node dirt.cjs
+        command: node dirt.mjs
 `;
 const dirtyIr = compileSpecSource(dirtySpecYaml, "specs/spec.yaml").ir!;
 
@@ -89,7 +89,7 @@ function writePlan(repo: string, id: string, digest: string): void {
       apiVersion: "spc.dev/v1alpha1",
       kind: "Plan",
       metadata: { id: "plan-dte", createdAt: new Date().toISOString() },
-      spec: { id: id.includes("dirty") ? "dted" : "dte", digest },
+      spec: { id: id === "plan-dted" ? "dted" : "dte", digest },
       repository: { revision: "0".repeat(40), snapshotDigest: `sha256:${"0".repeat(64)}` },
       tasks: [
         {
@@ -127,7 +127,7 @@ describe("run-end dirty assertion (DTE-001, DTE-002)", () => {
     expect(report.status).toBe("succeeded");
 
     // DTE-002: git log alone answers whether HEAD's run was green.
-    const msg = gitOk(report.worktree!, ["log", "-1", "--format=%B"]).stdout;
+    const msg = gitOk(report.worktree!, ["log", "-1", "--format=%B"]);
     expect(msg).toContain("SPC-Run-Status: succeeded");
 
     // DTE-001: clean run-end tree stays silent.
@@ -139,7 +139,7 @@ describe("run-end dirty assertion (DTE-001, DTE-002)", () => {
     const repo = setupRepo(
       "dirty",
       dirtySpecYaml,
-      { "dirt.cjs": "import { appendFileSync } from 'node:fs'; appendFileSync('dirt.txt', 'x\\n');\n", "dirt.txt": "" },
+      { "dirt.mjs": "import { appendFileSync } from 'node:fs'; appendFileSync('dirt.txt', 'x\\n');\n", "dirt.txt": "" },
     );
     writePlan(repo, "plan-dted", dirtyIr.digest);
     const report = await applyPlan({ repoRoot: repo }, { providerFactory: async () => new FakeProvider(executorScript), log: () => {} });
@@ -172,6 +172,7 @@ describe("run-end dirty assertion (DTE-001, DTE-002)", () => {
     writeFileSync(path.join(repo, "src", "a.ts"), "changed\n", "utf8");
     writeFileSync(path.join(repo, "src", "b.ts"), "changed\n", "utf8");
     writeFileSync(path.join(repo, "src", "new.ts"), "new\n", "utf8");
+    writeFileSync(path.join(repo, ".spc", "runs", "r1", "x.log"), "x\n", "utf8");
     gitOk(repo, ["add", ".spc/runs/r1/x.log"]); // .spc dirt, staged to appear in status
     const named = runEndedDirtyPaths(statusPorcelain(repo), ["src/b.ts"]);
     expect(named).toContain("src/a.ts");
