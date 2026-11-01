@@ -784,6 +784,7 @@ async function driveRun(ctx: RunContext): Promise<ApplyReport> {
           ];
     const result = await generateAmendment({
       specIr: ctx.specIr,
+      repoRoot: ctx.paths.repoRoot,
       plan: currentPlan,
       taskStates: statesMap,
       executedTaskIds: executed,
@@ -1622,6 +1623,7 @@ async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
       .map(([id]) => id);
     const result = await generateAmendment({
       specIr: ctx.specIr,
+      repoRoot: ctx.paths.repoRoot,
       plan: currentPlan,
       taskStates: new Map(Object.entries(ctx.state.tasks)),
       executedTaskIds: executed,

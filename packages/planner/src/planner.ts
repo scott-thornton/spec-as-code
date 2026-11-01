@@ -11,6 +11,9 @@ export const MAX_PLAN_REPAIR_ATTEMPTS = 2;
 export interface GeneratePlanInput {
   specIr: SpecIR;
   snapshot: RepositorySnapshot;
+  /** Repository root for tree-aware plan validation
+   *  (specs/plan-write-target-validation); absent = pure validation. */
+  repoRoot?: string;
   excerpts: { path: string; content: string }[];
   provider: LLMProvider;
   planId: string;
@@ -71,7 +74,7 @@ export async function generatePlan(input: GeneratePlanInput): Promise<GeneratePl
       followups: response.value.followups,
     };
     const normalized = normalizePlan(candidate);
-    const diagnostics = validatePlan(normalized, input.specIr);
+    const diagnostics = validatePlan(normalized, input.specIr, input.repoRoot);
     if (!hasErrors(diagnostics)) {
       return { plan: normalized, diagnostics, attempts: attempt };
     }

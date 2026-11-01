@@ -50,6 +50,7 @@ export const DiagnosticCode = {
   AMENDMENT_TARGET_EXECUTED: "SPC2013",
   AMENDMENT_DUPLICATE_TASK: "SPC2014",
   AMENDMENT_CYCLE: "SPC2015",
+  PLAN_BARE_DIRECTORY_WRITE_TARGET: "SPC2016",
 } as const;
 
 export function error(code: string, message: string, loc?: SourceLocation, related?: string[]): Diagnostic {

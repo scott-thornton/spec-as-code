@@ -9,6 +9,9 @@ export const MAX_AMENDMENT_REPAIR_ATTEMPTS = 2;
 
 export interface GenerateAmendmentInput {
   specIr: SpecIR;
+  /** Repository root for tree-aware plan validation
+   *  (specs/plan-write-target-validation); absent = pure validation. */
+  repoRoot?: string;
   plan: Plan;
   taskStates: Map<string, TaskState>;
   executedTaskIds: readonly string[];
@@ -82,7 +85,7 @@ export async function generateAmendment(input: GenerateAmendmentInput): Promise<
       }
       continue;
     }
-    const diagnostics = validatePlan(applied.plan, input.specIr);
+    const diagnostics = validatePlan(applied.plan, input.specIr, input.repoRoot);
     if (hasErrors(diagnostics)) {
       repair = formatDiagnostics(diagnostics);
       if (attempt === totalAttempts) {

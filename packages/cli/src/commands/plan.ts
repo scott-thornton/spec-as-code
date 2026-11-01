@@ -72,6 +72,7 @@ export async function runPlan(specFile: string): Promise<number> {
 
   const result = await generatePlan({
     specIr: ir,
+    repoRoot,
     snapshot,
     excerpts,
     provider,
@@ -195,7 +196,7 @@ export function runPlanValidate(planFileArg: string | undefined): number {
   if (!spec) {
     throw new SpcError("SPEC_NOT_FOUND", `cannot find spec ${plan.spec.id} under ${path.join(repoRoot, "specs")}`);
   }
-  const diagnostics = validatePlan(plan, spec.ir);
+  const diagnostics = validatePlan(plan, spec.ir, repoRoot);
   if (hasErrors(diagnostics)) {
     console.log(formatDiagnostics(diagnostics));
     console.log("\nPlan invalid.");

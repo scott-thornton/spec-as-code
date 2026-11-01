@@ -1,3 +1,5 @@
+import { existsSync, statSync } from "node:fs";
+import path from "node:path";
 import { isDeterministicCriterion, type Plan, type SpecIR, type Task } from "@spc/schema";
 import { error, type Diagnostic } from "../diagnostics.js";
 import { findCycle, reachableFrom } from "../graph.js";
@@ -7,9 +9,33 @@ import { globToRegExp, isSafeRelativePath, normalizeRelPath, patternsOverlap } f
  * Deterministic semantic plan validation. A plan is only usable when this
  * passes with zero errors.
  */
-export function validatePlan(plan: Plan, ir: SpecIR): Diagnostic[] {
+export function validatePlan(plan: Plan, ir: SpecIR, repoRoot?: string): Diagnostic[] {
   const diags: Diagnostic[] = [];
   const tasks = plan.tasks;
+
+  // SPC2016 - a write target that cannot match what the task will write
+  // (specs/plan-write-target-validation). Runtime write-scope enforcement
+  // GLOBS; a bare directory name matches only the literal path, never its
+  // children (run-mvx32fwy T003: plan validated clean, every staging hit
+  // OUT_OF_SCOPE_WRITE, the rollback reverted valid work). Non-glob FILE
+  // targets stay valid - a future file path is precise authorship. The
+  // check needs the tree (does the path name a directory?); absent
+  // repoRoot, the validator stays pure and skips it.
+  if (repoRoot !== undefined) {
+    for (const t of tasks) {
+      for (const raw of t.targets?.write ?? []) {
+        if (/[*?[]/.test(raw)) continue; // globbed targets match children
+        const full = path.join(repoRoot, raw);
+        if (!existsSync(full) || !statSync(full).isDirectory()) continue; // files (present or future) are fine
+        diags.push(
+          error(
+            "SPC2016",
+            `task ${t.id} write target "${raw}" is a bare directory: it matches only the literal path under runtime glob enforcement, never its children - use the directory glob "${raw.replace(/\/+$/, "")}/**" instead.`,
+          ),
+        );
+      }
+    }
+  }
   const byId = new Map<string, Task>();
   const propertyIds = new Set(ir.properties.map((p) => p.id));
 
