@@ -1970,7 +1970,10 @@ async function finalize(
     const wt = ctx.worktreePath ?? ctx.paths.repoRoot;
     const headMsg = gitOk(wt, ["log", "-1", "--format=%B"]);
     if (headMsg.includes(`run ${ctx.meta.runId}`) && !headMsg.includes("SPC-Run-Status:")) {
-      gitOk(wt, ["commit", "--allow-empty", "-m", `spc: run status ${status} (run ${ctx.meta.runId})`, `--trailer=SPC-Run-Status: ${status}`]);
+      // identity: true - a commit without a configured committer fails
+      // in identity-less environments (CI), and the catch would swallow
+      // it into a silently missing trailer (the CI red on b213401).
+      git(wt, ["commit", "--allow-empty", "-m", `spc: run status ${status} (run ${ctx.meta.runId})`, `--trailer=SPC-Run-Status: ${status}`], { identity: true });
     }
   } catch {
     // the trailer is reporting, never gating
