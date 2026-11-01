@@ -1,0 +1,81 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: patch-build-batch
+  title: The composer's batch form - one invocation composes the whole chain, because an agent that wraps the tool is telling the tool it is missing
+goal: >
+  Receipt (2026-11-01, the four-spec night): composing a 15-hunk change
+  across two files through `spc patch build --after` - one CLI call per
+  hunk, carrying the growing chain file - drove the answering agent to
+  shadow-build a python driver around the tool to loop it. That driver
+  is the demand signal this spec absorbs: when an agent builds a
+  wrapper to use a tool at scale, the tool is missing its batch form.
+  Batch mode composes an arbitrary number of ops in ONE invocation,
+  chaining internally through the exact same applicator semantics each
+  single build uses (base digest from the live tree or the overlay of
+  the batch's prior ops; anchor uniqueness at every chain position),
+  in EXPLICIT ARRAY ORDER - the composition-defect rule carried over
+  verbatim. Any refusal aborts the whole batch with the existing
+  PATCH_* code and message and produces no partial output; a refused
+  batch composes nothing, the same all-or-nothing contract the
+  applicator enforces. No new staging semantics anywhere - one new
+  input surface riding the machinery that already exists.
+requirements:
+  - id: PBB-001
+    statement: >
+      `spc patch build --batch <spec.json>` accepts a JSON array of op
+      entries in explicit chain order: patch entries {op?:"patch", path,
+      anchor, replacement} (each field also accepted as anchorFile/
+      replacementFile, exactly-one semantics as the single form),
+      create/update entries {op:"create"|"update", path, content}, and
+      delete entries {op:"delete", path} which pass through to the
+      chain verbatim. For patch entries the tool computes base digests
+      and verifies anchor uniqueness at each chain position exactly as
+      the single-op form with --after does. On success the tool prints
+      the composed ops array as JSON to stdout (or writes it to --out
+      <file> when given) - the same op shapes the single form emits,
+      composable with `spc patch verify` and submittable in an answer's
+      changes array unchanged.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: PBB-001-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/patch-batch.test.ts
+        discriminating: true
+  - id: PBB-002
+    statement: >
+      All-or-nothing refusal: a batch whose any entry fails composition
+      (PATCH_BASE_MISSING, PATCH_BASE_MISMATCH, PATCH_ANCHOR_ABSENT,
+      PATCH_ANCHOR_NOT_UNIQUE - or a malformed entry: unknown op, wrong
+      field shape, unsafe path) aborts with that named code and message,
+      writes nothing (no --out file created, no partial array printed),
+      and exits nonzero. Array order is chain order: an entry whose
+      anchor exists only after a prior entry's replacement composes
+      validly, exactly as sequential single builds with --after.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: PBB-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/patch-batch.test.ts
+        discriminating: true
+  - id: PBB-003
+    statement: >
+      The single-op form, patch verify, and the batteries are unchanged
+      - batch is additive surface only.
+    priority: must
+    acceptance:
+      - id: PBB-003-A
+        type: suite
+        ref: cli-battery
+outOfScope:
+  - >
+    Any change to staging semantics, the single-op form's behavior, or
+    the ProposedChange schema - batch composes the same ops the single
+    form composes.
+  - >
+    Interactivity (reading triples from stdin) or templating; the input
+    is one JSON file the agent writes.
