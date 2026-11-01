@@ -69,7 +69,18 @@ export function runPatchVerify(opsFile: string, options: { root?: string } = {})
   return 0;
 }
 export function runPatchBuild(fileArg: string, options: PatchBuildOptions): number {
-  if (options.batch !== undefined) return runPatchBuildBatch(options);
+  if (options.batch !== undefined) {
+    // Refusals print and exit 1 (the patch-verify pattern), never the
+    // top-level SpcError path's exit 2 - a refused batch is a named
+    // composition outcome, not a crash.
+    try {
+      return runPatchBuildBatch(options);
+    } catch (e) {
+      const err = e as Error & { code?: string };
+      console.log(err.message);
+      return 1;
+    }
+  }
 
 /**
  * The composer's batch form (specs/patch-build-batch): one invocation
