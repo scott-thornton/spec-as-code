@@ -1,7 +1,7 @@
 import type { Config, DesiredProperty, Evidence, FollowUp, RequirementState, SpecIR } from "@spc/schema";
 import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { CommandCache, type SharedCommandRun } from "@spc/verifier";
-import { evaluateProperty, verifyCriterion } from "@spc/verifier";
+import { evaluateProperty, verifyCriterion, normalizeSuiteCriteria, type SuiteRegistry } from "@spc/verifier";
 import type { EventStore } from "./events.js";
 import type { EvidenceStore, FollowupStore } from "./stores.js";
 
@@ -39,6 +39,14 @@ export interface VerifySweepInput {
    *  repeated commands share ONE physical execution across sweeps and
    *  specs. Absent = fresh map per sweep (historical behavior). */
   commandRuns?: Map<string, SharedCommandRun>;
+  /**
+   * Frozen suite registry (specs/suite-references): loaded once per
+   * invocation by the caller; the sweep normalizes suite criteria to
+   * command form against it BEFORE any evaluation. A suite criterion
+   * with no registry provided fails loud (SPC_SUITE_UNRESOLVED) - it
+   * can never silently skip.
+   */
+  suites?: SuiteRegistry;
   /** Persisted command cache (specs/verify-cache): standalone
    *  verification only - threaded to verifyProperties -> criteria;
    *  apply sweeps never receive one. */
@@ -62,6 +70,23 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
   const now = input.now ?? (() => new Date().toISOString());
   const createdFollowups: FollowUp[] = [];
 
+  // Suite resolution (specs/suite-references) happens BEFORE the memo
+  // and cache ever see anything: two specs referencing one suite
+  // normalize to the same command string and the existing
+  // execution-identity machinery does the rest. No registry + suite
+  // criteria = fail loud, never a silent skip.
+  let properties = input.properties;
+  let suiteProvenance: ReadonlyMap<string, { suite: string; suiteDigest: string }> | undefined;
+  if (input.suites) {
+    const normalized = normalizeSuiteCriteria(input.properties, input.suites);
+    properties = normalized.properties;
+    suiteProvenance = normalized.provenance.size > 0 ? normalized.provenance : undefined;
+  } else if (input.properties.some((p) => p.acceptance.some((c) => c.type === "suite"))) {
+    const e = new Error("suite-reference criteria present but no suite registry was provided to the sweep");
+    (e as Error & { code?: string }).code = "SPC_SUITE_UNRESOLVED";
+    throw e;
+  }
+
   // §52: commands human-approved via resolved approval follow-ups may run.
   const approvedCommands = new Set<string>();
   for (const f of input.followups.all()) {
@@ -77,7 +102,7 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
   // exactly the historical per-sweep behavior.
   const commandRuns = input.commandRuns ?? new Map<string, SharedCommandRun>();
 
-  for (const property of input.properties) {
+  for (const property of properties) {
     for (const criterion of property.acceptance) {
       // Human follow-ups are created once per criterion, not on every sweep.
       if (criterion.type === "human" && input.followups.findOpenForCriterion(criterion.id)) {
@@ -98,6 +123,7 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
         ...(input.environmentReady === false ? { environmentReady: false } : {}),
         ...(input.agentVerdicts ? { agentVerdicts: input.agentVerdicts } : {}),
         ...(input.inheritedFlips ? { inheritedFlips: input.inheritedFlips } : {}),
+        ...(suiteProvenance ? { suiteProvenance } : {}),
         now,
       });
       const evidence = input.evidence.add({
@@ -157,7 +183,7 @@ export async function verifyProperties(input: VerifySweepInput): Promise<VerifyS
     }
   }
 
-  const states = input.properties.map((p) => {
+  const states = properties.map((p) => {
     const state = evaluateProperty(p, input.evidence.all(), {
       allowAgentOnly: input.config.verification.allowAgentOnlyMustRequirements,
       ...(input.enforceRedPhase && input.config.verification.requireRedPhase ? { requireRedPhase: true } : {}),
@@ -205,6 +231,9 @@ export interface StandaloneVerifyInput {
   /** Persisted command cache (specs/verify-cache): standalone verify
    *  paths thread one; apply sweeps pass none. */
   commandCache?: CommandCache;
+  /** Frozen suite registry (specs/suite-references): threaded to
+   *  verifyProperties for criterion normalization. */
+  suites?: SuiteRegistry;
 }
 
 export async function verifyStandalone(input: StandaloneVerifyInput): Promise<VerifySweepResult> {
@@ -240,5 +269,6 @@ export async function verifyStandalone(input: StandaloneVerifyInput): Promise<Ve
     ...(input.onUsage ? { onUsage: input.onUsage } : {}),
     ...(input.commandRuns ? { commandRuns: input.commandRuns } : {}),
     ...(input.commandCache ? { commandCache: input.commandCache } : {}),
+    ...(input.suites ? { suites: input.suites } : {}),
   });
 }

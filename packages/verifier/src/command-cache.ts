@@ -38,46 +38,57 @@ interface CacheEntry {
   recordedAt: string;
 }
 
-/** Parse the filter scope of a pnpm command; null = unscoped, never cached. */
+/**
+ * Parse the effective filter scope of a command; null = unscoped, never
+ * cached. Compound commands AGGREGATE across all segments
+ * (specs/suite-references, SR-006): any recursive pnpm invocation (-r
+ * or --recursive) anywhere in the compound reads the whole workspace
+ * and dominates; --filter specs union across segments (sorted, so the
+ * scopeKey is deterministic); a ... deps form anywhere widens withDeps
+ * for the aggregate; segments that are not pnpm invocations (grep -r,
+ * node scripts) contribute nothing. The previous last-filter-wins scan
+ * under-scoped compounds whose pnpm -r prefix reads the whole
+ * workspace to the final --filter package - a possible false cache
+ * hit; when in doubt this parser falls BROADER, never narrower.
+ */
 export function parseFilterScope(command: string): CacheScope | null {
-  const tokens = command.trim().split(/\s+/);
-  if (tokens[0] !== "pnpm") return null;
+  const segments = command.trim().split(/\s*(?:&&|\|\||;)\s*/).filter(Boolean);
   let packages: string[] | null = null;
   let withDeps = false;
   let sawScope = false;
-  for (let i = 1; i < tokens.length; i++) {
-    const t = tokens[i]!;
-    if (t === "-r" || t === "--recursive") {
-      packages = null;
-      withDeps = true;
-      sawScope = true;
-      continue;
-    }
-    if (t.startsWith("--filter=")) {
-      const spec = t.slice("--filter=".length);
-      if (spec.endsWith("...")) {
-        packages = [spec.slice(0, -3)];
-        withDeps = true;
-      } else {
-        packages = [spec];
+  let sawRecursive = false;
+  const filters: string[] = [];
+  for (const segment of segments) {
+    const tokens = segment.split(/\s+/);
+    if (tokens[0] !== "pnpm") continue; // non-pnpm segments contribute nothing
+    for (let i = 1; i < tokens.length; i++) {
+      const t = tokens[i]!;
+      if (t === "-r" || t === "--recursive") {
+        sawRecursive = true;
+        sawScope = true;
+        continue;
       }
-      sawScope = true;
-      continue;
-    }
-    if (t === "--filter" && i + 1 < tokens.length) {
-      const spec = tokens[i + 1]!;
-      if (spec.endsWith("...")) {
-        packages = [spec.slice(0, -3)];
-        withDeps = true;
-      } else {
-        packages = [spec];
+      let spec: string | undefined;
+      if (t.startsWith("--filter=")) {
+        spec = t.slice("--filter=".length);
+      } else if (t === "--filter" && i + 1 < tokens.length) {
+        spec = tokens[i + 1]!;
+        i += 1;
       }
-      sawScope = true;
-      i += 1;
-      continue;
+      if (spec !== undefined) {
+        if (spec.endsWith("...")) {
+          filters.push(spec.slice(0, -3));
+          withDeps = true;
+        } else {
+          filters.push(spec);
+        }
+        sawScope = true;
+      }
     }
   }
   if (!sawScope) return null;
+  if (sawRecursive) return { packages: null, withDeps: true };
+  packages = [...new Set(filters)].sort();
   return { packages, withDeps };
 }
 

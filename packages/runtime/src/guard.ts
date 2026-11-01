@@ -4,6 +4,7 @@ import type { Config, DesiredProperty, RequirementState } from "@spc/schema";
 import { gitOk, currentRevision } from "@spc/repo";
 import { prepareDisposableWorktree } from "./prepare.js";
 import { verifyProperties } from "./verify.js";
+import type { SuiteRegistry } from "@spc/verifier";
 import type { EventStore } from "./events.js";
 import type { EvidenceStore } from "./stores.js";
 import type { FollowupStore } from "./stores.js";
@@ -28,6 +29,8 @@ export interface ContaminationGuardInput {
   followups: FollowupStore;
   events: EventStore;
   log: (line: string) => void;
+  /** Frozen suite registry (specs/suite-references), threaded from the run. */
+  suites?: SuiteRegistry;
   now?: () => string;
 }
 
@@ -65,6 +68,7 @@ export async function runContaminationGuard(input: ContaminationGuardInput): Pro
       evidence: input.evidence,
       followups: input.followups,
       events: input.events,
+      ...(input.suites ? { suites: input.suites } : {}),
       environmentReady: true,
       ...(input.now ? { now: input.now } : {}),
     });

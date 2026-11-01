@@ -39,7 +39,7 @@ function latestByCriterion(evidence: readonly Evidence[]): Map<string, Evidence>
 }
 
 function isDiscriminating(c: DesiredProperty["acceptance"][number]): boolean {
-  return (c.type === "command" || c.type === "file") && c.discriminating === true;
+  return (c.type === "command" || c.type === "file" || c.type === "suite") && c.discriminating === true;
 }
 
 export function evaluateProperty(

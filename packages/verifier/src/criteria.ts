@@ -17,6 +17,7 @@ import { z } from "zod";
 import { classifyCommand, evaluateCommandPolicy, runCommand, type CommandRunResult } from "@spc/executor";
 import { classifyOracleValidity } from "./oracle-validity.js";
 import { isSafeRelativePath } from "@spc/core";
+import type { SuiteProvenance } from "./suites.js";
 
 /**
  * Deterministic criterion execution + agent/human paths. The verifier is
@@ -66,6 +67,13 @@ export interface CriterionContext {
   agentVerdicts?: Map<string, { outcome: "supports" | "contradicts" | "inconclusive"; justification: string }>;
   /** "red" marks the base-revision sweep of discriminating criteria. */
   phase?: "red";
+  /**
+   * Suite provenance (specs/suite-references), keyed by criterion id:
+   * criteria normalized from a suite reference carry the suite id and
+   * digest into their evidence payload - suite identity distinct from
+   * execution identity, provenance never a pin.
+   */
+  suiteProvenance?: ReadonlyMap<string, SuiteProvenance>;
   /**
    * Chain inheritance (criterion-level): criterionId -> prior runId whose
    * evidence records the red -> green flip, when the criterion merely
@@ -303,6 +311,10 @@ async function verifyCommand(
         ...(run.deniedReason ? { deniedReason: run.deniedReason } : {}),
         ...(execution?.executionId ? { executionId: execution.executionId } : {}),
         ...(execution?.reused ? { reusedFrom: execution.originRunId } : {}),
+        ...(() => {
+          const p = ctx.suiteProvenance?.get(criterion.id);
+          return p ? { suite: p.suite, suiteDigest: p.suiteDigest } : {};
+        })(),
       },
     },
     ctx.now,
@@ -572,5 +584,14 @@ export async function verifyCriterion(
       return verifyAgent(criterion, property, ctx);
     case "human":
       return verifyHuman(criterion, property, ctx);
+    case "suite":
+      // Unreachable: sweeps normalize suite criteria to command form
+      // before evaluation (normalizeSuiteCriteria). Fail loud rather
+      // than silently skip - there is no second execution pathway.
+    {
+      const e = new Error(`criterion ${criterion.id} is an unresolved suite reference (${criterion.ref}); the sweep must normalize it first`);
+      (e as Error & { code?: string }).code = "SPC_SUITE_UNRESOLVED";
+      throw e;
+    }
   }
 }

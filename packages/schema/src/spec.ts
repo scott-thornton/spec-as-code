@@ -46,6 +46,20 @@ export const acceptanceCriterionSchema = z.discriminatedUnion("type", [
     /** See the command variant; identical semantics for file assertions. */
     discriminating: z.boolean().optional(),
   }),
+  /**
+   * A named repository battery, referenced by id (specs/suite-references):
+   * resolution normalizes this into the command representation with
+   * expected exit 0 and the invocation-default timeout BEFORE the
+   * evaluator sees it - the suite id and digest travel as provenance
+   * metadata, never as a second execution pathway.
+   */
+  z.strictObject({
+    id: propertyIdSchema,
+    type: z.literal("suite"),
+    ref: z.string().min(1),
+    /** See the command variant; a suite can gate the red -> green flip. */
+    discriminating: z.boolean().optional(),
+  }),
   z.strictObject({
     id: propertyIdSchema,
     type: z.literal("agent"),
@@ -130,6 +144,24 @@ export const specSchema = z.strictObject({
   outOfScope: z.array(z.string()).optional(),
 });
 
+/**
+ * A suite definition file (suites/*.yaml): a named command battery as a
+ * repository fact - one definition, referenced by name, executed once
+ * however many criteria demand it. NOT spec-owned; resolves to the
+ * current definition at verify time.
+ */
+export const suiteFileSchema = z.strictObject({
+  apiVersion: z.literal("spc.dev/v1alpha1"),
+  kind: z.literal("Suite"),
+  metadata: z.strictObject({
+    id: z.string().min(1),
+    title: z.string().min(1),
+  }),
+  command: z.string().min(1),
+});
+
+export type SuiteFile = z.infer<typeof suiteFileSchema>;
+
 export type AcceptanceCriterion = z.infer<typeof acceptanceCriterionSchema>;
 export type CommandExpect = z.infer<typeof commandExpectSchema>;
 export type FileAssert = z.infer<typeof fileAssertSchema>;
@@ -178,5 +210,5 @@ export interface SpecIR {
 }
 
 export function isDeterministicCriterion(c: AcceptanceCriterion): boolean {
-  return c.type === "command" || c.type === "file";
+  return c.type === "command" || c.type === "file" || c.type === "suite";
 }

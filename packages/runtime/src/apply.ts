@@ -40,6 +40,8 @@ import { acquireExecutionLock, releaseExecutionLock, RUN_LOCK_HELD } from "./loc
 import { verifyProperties } from "./verify.js";
 import { isEligibleRed } from "@spc/verifier";
 import { runContaminationGuard } from "./guard.js";
+import { loadSuiteRegistry } from "@spc/repo";
+import type { SuiteRegistry } from "@spc/verifier";
 import { attestRun } from "./attestation.js";
 import { writeSpecSnapshot, findSpecSource } from "./snapshot.js";
 import { computePlanDrift } from "./drift.js";
@@ -103,6 +105,14 @@ export interface RunContext {
   worktreeBranch: string | null;
   modelCalls: number;
   agentVerdicts: Map<string, { outcome: "supports" | "contradicts" | "inconclusive"; justification: string }>;
+  /**
+   * Frozen suite registry (specs/suite-references): loaded ONCE per run
+   * on first sweep from the tree criteria execute in (worktree once it
+   * exists, else the repo), then reused by every sweep - red, verify
+   * tasks, final - so all sweeps resolve suite references against the
+   * same definitions.
+   */
+  resolveSuites: () => SuiteRegistry;
   stay?: boolean;
   now(): string;
   log(line: string): void;
@@ -349,6 +359,13 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
     worktreeBranch: null,
     modelCalls: 0,
     agentVerdicts: new Map(),
+    resolveSuites: (() => {
+      let loaded: SuiteRegistry | undefined;
+      return () => {
+        if (!loaded) loaded = loadSuiteRegistry(ctx.worktreePath ?? paths.repoRoot);
+        return loaded;
+      };
+    })(),
     stay: options.stay,
     now,
     log: deps.log ?? (() => {}),
@@ -456,7 +473,7 @@ async function runRedPhaseSweep(ctx: RunContext): Promise<void> {
     .map((p) => ({
       property: p,
       criteria: p.acceptance.filter(
-        (c) => (c.type === "command" || c.type === "file") && c.discriminating === true,
+        (c) => (c.type === "command" || c.type === "file" || c.type === "suite") && c.discriminating === true,
       ),
     }))
     .filter((x) => x.criteria.length > 0);
@@ -478,6 +495,7 @@ async function runRedPhaseSweep(ctx: RunContext): Promise<void> {
     revision: currentRevision(worktree),
     config: ctx.config,
     provider: ctx.provider,
+    suites: ctx.resolveSuites(),
     evidence: ctx.evidence,
     followups: ctx.followups,
     events: ctx.events,
@@ -631,6 +649,13 @@ export async function resumeRun(options: ApplyOptions & { resumeRunId: string },
     worktreeBranch: meta.branch ?? null,
     modelCalls: state.modelCalls,
     agentVerdicts: new Map(),
+    resolveSuites: (() => {
+      let loaded: SuiteRegistry | undefined;
+      return () => {
+        if (!loaded) loaded = loadSuiteRegistry(ctx.worktreePath ?? paths.repoRoot);
+        return loaded;
+      };
+    })(),
     now,
     log: deps.log ?? (() => {}),
   };
@@ -957,6 +982,7 @@ async function finishRun(
     revision: currentRevision(worktree),
     config: ctx.config,
     provider: ctx.provider,
+    suites: ctx.resolveSuites(),
     evidence: ctx.evidence,
     followups: ctx.followups,
     events: ctx.events,
@@ -1004,6 +1030,7 @@ async function finishRun(
         specProperties: ctx.specIr.properties.filter((p) => contaminated.some((c) => c.propertyId === p.id)),
         config: ctx.config,
         provider: ctx.provider,
+        suites: ctx.resolveSuites(),
         evidence: ctx.evidence,
         followups: ctx.followups,
         events: ctx.events,
@@ -1230,6 +1257,7 @@ export async function executeTaskInRun(
       revision: currentRevision(worktreeRoot),
       config: ctx.config,
       provider: ctx.provider,
+      suites: ctx.resolveSuites(),
       evidence: ctx.evidence,
       followups: ctx.followups,
       events: ctx.events,

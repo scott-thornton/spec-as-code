@@ -18,7 +18,8 @@
   },
   "dependencies": {
     "@spc/core": "workspace:*",
-    "@spc/schema": "workspace:*"
+    "@spc/schema": "workspace:*",
+    "yaml": "^2.8.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.10",

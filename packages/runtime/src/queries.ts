@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { SpcError } from "@spc/core";
 import { configSchema, type Config, type Event, type Evidence, type FollowUp, type RequirementState, type RunState, type SpecIR } from "@spc/schema";
 import type { LLMProvider } from "@spc/llm";
-import { CommandCache, type SharedCommandRun } from "@spc/verifier";
+import { CommandCache, type SharedCommandRun, type SuiteRegistry } from "@spc/verifier";
 import { currentBranch, currentRevision, git, statusPorcelain } from "@spc/repo";
 import { renderRunSummary } from "@spc/renderer";
 import { evaluateProperty } from "@spc/verifier";
@@ -251,6 +251,10 @@ export interface StandaloneVerifyOptions {
   /** Persisted command cache (specs/verify-cache): standalone verify
    *  loads one, threads it, persists after; apply passes none. */
   commandCache?: CommandCache;
+  /** Frozen suite registry (specs/suite-references): the invocation
+   *  loads it once and threads it; sweeps normalize suite criteria
+   *  against it before evaluation. */
+  suites?: SuiteRegistry;
 }
 
 export interface StandaloneVerifyReport {
@@ -357,6 +361,7 @@ export async function createVerifyRun(options: StandaloneVerifyOptions): Promise
     now,
     ...(options.commandRuns ? { commandRuns: options.commandRuns } : {}),
     ...(options.commandCache ? { commandCache: options.commandCache } : {}),
+    ...(options.suites ? { suites: options.suites } : {}),
   });
   } catch (e) {
     // A sweep killed by the harness response timeout must not leave a
