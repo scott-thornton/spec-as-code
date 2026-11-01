@@ -1941,14 +1941,18 @@ async function finalize(
     // non-git tree: nothing to assert
   }
   // The status trailer (DTE-002): the run-end commit was made before
-  // the final sweep, so the outcome only exists now - amend THIS run's
-  // own commit (runId-gated; a foreign commit is never touched),
+  // the final sweep, so the outcome only exists now. It is carried by a
+  // tree-identical allow-empty marker commit - amending would REPLACE
+  // the run-end commit and orphan the recorded resultRevision (amend
+  // reparents to HEAD's parent; the recorded hash goes dangling and
+  // chain lineage breaks - caught by the lineage batteries), while the
+  // marker keeps HEAD's ancestry intact. Gated on the run's own commit;
   // reporting, never gating.
   try {
     const wt = ctx.worktreePath ?? ctx.paths.repoRoot;
     const headMsg = gitOk(wt, ["log", "-1", "--format=%B"]);
     if (headMsg.includes(`run ${ctx.meta.runId}`) && !headMsg.includes("SPC-Run-Status:")) {
-      gitOk(wt, ["commit", "--amend", "--no-edit", `--trailer=SPC-Run-Status: ${status}`]);
+      gitOk(wt, ["commit", "--allow-empty", "-m", `spc: run status ${status} (run ${ctx.meta.runId})`, `--trailer=SPC-Run-Status: ${status}`]);
     }
   } catch {
     // the trailer is reporting, never gating
