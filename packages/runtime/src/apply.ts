@@ -721,8 +721,14 @@ async function driveRun(ctx: RunContext): Promise<ApplyReport> {
   let schedulerFailedTasks: string[] = [];
   let schedulerOutcome: "done" | "deadlocked" | "replan_failed" | "runnable_work_remains" = "done";
 
-  const transition = (taskId: string, next: TaskState, summary?: string): void => {
+  const transition = (taskId: string, nextIn: TaskState, summary?: string): void => {
     const previous = ctx.state.tasks[taskId];
+    // A recorded failure is history, not current status: it survives the
+    // task's subsequent transitions, so the rollback-completion marker
+    // (specs/rollback-completion-visibility) can read it at completion
+    // after the retry's ready/running transitions replaced the state.
+    const next: TaskState =
+      previous?.failure !== undefined && nextIn.failure === undefined ? { ...nextIn, failure: previous.failure } : nextIn;
     ctx.state = { ...ctx.state, tasks: { ...ctx.state.tasks, [taskId]: next } };
     const p: Record<string, unknown> = { taskId, attempt: next.attempt };
     switch (next.status) {
@@ -741,7 +747,7 @@ async function driveRun(ctx: RunContext): Promise<ApplyReport> {
             [taskId]: { ...next, ...(previous?.revision ? { revision: previous.revision } : {}) },
           },
         };
-        ctx.events.append("TASK_COMPLETED", { ...p, summary: summary ?? "task completed" });
+        ctx.events.append("TASK_COMPLETED", { ...p, summary: summary ?? "task completed", ...(next.emptyDeltaAfterPriorFailure ? { emptyDeltaAfterPriorFailure: true } : {}) });
         break;
       }
       case "failed":
@@ -1580,8 +1586,12 @@ async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
     appendUsageRecord(ctx.paths.usageFile(ctx.meta.runId), record);
     ctx.events.append("USAGE_RECORDED", { role: record.role, requestId: record.requestId, model: record.model });
   };
-  const transition = (taskId: string, next: TaskState, summary?: string): void => {
+  const transition = (taskId: string, nextIn: TaskState, summary?: string): void => {
     const previous = ctx.state.tasks[taskId];
+    // Failure is history, not current status: it survives subsequent
+    // transitions of the same task (specs/rollback-completion-visibility).
+    const next: TaskState =
+      previous?.failure !== undefined && nextIn.failure === undefined ? { ...nextIn, failure: previous.failure } : nextIn;
     ctx.state = { ...ctx.state, tasks: { ...ctx.state.tasks, [taskId]: next } };
     const p: Record<string, unknown> = { taskId, attempt: next.attempt };
     if (next.status === "running") {
@@ -1595,7 +1605,7 @@ async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
           [taskId]: { ...next, ...(previous?.revision ? { revision: previous.revision } : {}) },
         },
       };
-      ctx.events.append("TASK_COMPLETED", { ...p, summary: summary ?? "task completed" });
+      ctx.events.append("TASK_COMPLETED", { ...p, summary: summary ?? "task completed", ...(next.emptyDeltaAfterPriorFailure ? { emptyDeltaAfterPriorFailure: true } : {}) });
     } else if (next.status === "failed") {
       ctx.events.append("TASK_FAILED", { ...p, error: next.failure ?? { code: "TASK_FAILED", message: "failed" } });
     } else if (next.status === "blocked") {
@@ -1773,6 +1783,13 @@ async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
 
       switch (outcome.status) {
         case "completed":
+          // Rollback aftermath marker (specs/rollback-completion-
+          // visibility): empty delta + a prior attempt's failure on
+          // record means the completing answer staged nothing while a
+          // violation rollback may have reverted real work. Marked,
+          // never refused: the no-ops recovery itself is legitimate.
+          const emptyDeltaAfterPriorFailure =
+            ctx.state.tasks[task.id]?.failure !== undefined && outcome.appliedChanges.length === 0;
           transition(
             task.id,
             {
@@ -1781,6 +1798,7 @@ async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
               attempt,
               startedAt: ctx.now(),
               completedAt: ctx.now(),
+              ...(emptyDeltaAfterPriorFailure ? { emptyDeltaAfterPriorFailure: true } : {}),
             },
             outcome.summary,
           );

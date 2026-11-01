@@ -90,6 +90,13 @@ export async function runScheduler(io: SchedulerIO): Promise<SchedulerResult> {
 
     switch (outcome.status) {
       case "completed": {
+        // Rollback aftermath marker (specs/rollback-completion-
+        // visibility): empty delta + a prior attempt's failure on
+        // record means the completing answer staged nothing while a
+        // violation rollback may have reverted real work. Marked,
+        // never refused: the no-ops recovery itself is legitimate.
+        const emptyDeltaAfterPriorFailure =
+          priorState.failure !== undefined && outcome.appliedChanges.length === 0;
         io.transition(
           task.id,
           {
@@ -98,6 +105,7 @@ export async function runScheduler(io: SchedulerIO): Promise<SchedulerResult> {
             attempt,
             startedAt: new Date().toISOString(),
             completedAt: new Date().toISOString(),
+            ...(emptyDeltaAfterPriorFailure ? { emptyDeltaAfterPriorFailure: true } : {}),
           },
           outcome.summary,
         );

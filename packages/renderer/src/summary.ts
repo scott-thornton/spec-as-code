@@ -80,6 +80,18 @@ export function renderRunSummary(input: SummaryInput): string {
     lines.push("");
   }
 
+  // Rollback aftermath (specs/rollback-completion-visibility): tasks
+  // that completed empty after a failed prior attempt - the revert is
+  // visible without opening raw state files.
+  const rollbackCompletions = Object.values(runState?.tasks ?? {}).filter((t) => t.emptyDeltaAfterPriorFailure);
+  if (rollbackCompletions.length > 0) {
+    lines.push("## Rollback-marked completions", "");
+    for (const t of rollbackCompletions) {
+      lines.push(`- ${t.taskId}: completed (empty delta after prior failure - prior work was reverted)`);
+    }
+    lines.push("");
+  }
+
   lines.push("## Statistics", "");
   lines.push(`- Model calls: ${runState.modelCalls}`);
   lines.push(`- Replans: ${runState.replans}`);

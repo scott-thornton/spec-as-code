@@ -46,7 +46,9 @@ class RoundProvider implements LLMProvider {
   private calls = new Map<string, number>();
   constructor(private readonly script: Record<string, unknown[]>) {}
   async generateStructured<T>(request: StructuredRequest<T>): Promise<StructuredResponse<T>> {
-    const key = request.key ?? "";
+    // Task-scoped, not dispatch-scoped: attempt 2 dispatches as
+    // "<task>@2" and must serve the script's next round.
+    const key = (request.key ?? "").split("@")[0]!;
     const answers = this.script[key] ?? [];
     const n = Math.min(this.calls.get(key) ?? 0, answers.length - 1);
     this.calls.set(key, (this.calls.get(key) ?? 0) + 1);
@@ -111,7 +113,7 @@ describe("rollback-completion-visibility (RVC-001, RVC-002)", () => {
     writePlan(repo);
     const report = await applyPlan(
       { repoRoot: repo },
-      { providerFactory: async () => new RoundProvider({ "T001@1": [CREATE_WITH_VIOLATION, NOOPS] }), log: () => {} },
+      { providerFactory: async () => new RoundProvider({ T001: [CREATE_WITH_VIOLATION, NOOPS] }), log: () => {} },
     );
     // The no-ops completion is legitimate recovery; the run still lands.
     expect(report.status).toBe("succeeded");
@@ -132,7 +134,7 @@ describe("rollback-completion-visibility (RVC-001, RVC-002)", () => {
     writePlan(repo);
     const report = await applyPlan(
       { repoRoot: repo },
-      { providerFactory: async () => new RoundProvider({ "T001@1": [CREATE] }), log: () => {} },
+      { providerFactory: async () => new RoundProvider({ T001: [CREATE] }), log: () => {} },
     );
     expect(report.status).toBe("succeeded");
     expect(eventsOf(repo, report.runId)).not.toContain("emptyDeltaAfterPriorFailure");
@@ -143,7 +145,7 @@ describe("rollback-completion-visibility (RVC-001, RVC-002)", () => {
     writePlan(repo);
     const report = await applyPlan(
       { repoRoot: repo },
-      { providerFactory: async () => new RoundProvider({ "T001@1": [CREATE_WITH_VIOLATION, CREATE] }), log: () => {} },
+      { providerFactory: async () => new RoundProvider({ T001: [CREATE_WITH_VIOLATION, CREATE] }), log: () => {} },
     );
     expect(report.status).toBe("succeeded");
     expect(eventsOf(repo, report.runId)).not.toContain("emptyDeltaAfterPriorFailure");

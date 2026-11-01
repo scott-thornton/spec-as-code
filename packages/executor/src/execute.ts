@@ -374,6 +374,7 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
         summary: "commands proposed but no command policy configured for this run",
         result,
         appliedChanges,
+        ...(attributionWrites.length > 0 ? { attributionWrites } : {}),
         failure: { code: "COMMAND_UNCONFIGURED", message: "result.commands is non-empty but ExecuteTaskInput.commands is absent; the runtime must always pass the configured command policy" },
       };
     }
@@ -385,6 +386,11 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
         summary: `command set refused: ${commandOutcome.code}`,
         result,
         appliedChanges,
+        // Attribution survives the failure (UCG follow-through): the
+        // staged writes exist in the tree, and without this record the
+        // submission guard refuses the very recovery path (no-ops
+        // retry) the requeue machinery exists to serve.
+        ...(attributionWrites.length > 0 ? { attributionWrites } : {}),
         failure: { code: commandOutcome.code, message: commandOutcome.message },
       };
     }

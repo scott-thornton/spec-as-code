@@ -49,6 +49,10 @@ export const taskStateSchema = z.strictObject({
   completedAt: z.string().optional(),
   /** Revision this task's changes were committed in (commit-per-task). */
   revision: z.string().optional(),
+  /** The completing outcome applied zero changes while the task carried
+   *  a prior attempt's failure - the aftermath of a violation rollback
+   *  (specs/rollback-completion-visibility). Pure visibility. */
+  emptyDeltaAfterPriorFailure: z.boolean().optional(),
   failure: taskFailureSchema.optional(),
 });
 
