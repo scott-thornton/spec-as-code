@@ -5,6 +5,7 @@ import { jsonSpecValidation } from "./json-views.js";
 import { compileSpecFile, loadRepoConfig, resolveRepoRoot } from "../context.js";
 import { lintSpec } from "./lint.js";
 import { loadSuiteRegistry, type SuiteDefinition } from "@spc/repo";
+import { isDeterministicCriterion } from "@spc/schema";
 
 function sourceOf(file: string): string {
   try {
@@ -84,7 +85,7 @@ export function runSpecValidate(file: string, format: "text" | "json" = "text", 
   console.log(`✓ ${propertyCount} properties (${mustCount} must)`);
   console.log(`✓ dependency graph valid`);
   const mustWithoutDeterministic = result.ir.properties.filter(
-    (p) => p.priority === "must" && !p.acceptance.some((c) => c.type === "command" || c.type === "file"),
+    (p) => p.priority === "must" && !p.acceptance.some((c) => isDeterministicCriterion(c)),
   );
   if (mustWithoutDeterministic.length > 0) {
     console.log("");
