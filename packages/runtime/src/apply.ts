@@ -16,7 +16,9 @@ import type { FollowUp, Observation, Plan, RequirementState, RunState, RunStatus
 import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { enforceProtectedPaths, executeTask, enforceWriteScope, revertPaths, runScheduler, stagingRoundsFrom, type ExecutionOutcome, type AttributionWrite } from "@spc/executor";
 import { classifyAmendmentRisk, generateAmendment } from "@spc/planner";
+import os from "node:os";
 import { commitAll, compileSpecFile, contentDelta, contentSnapshot, currentBranch, currentRevision, diffStat, git, gitOk, statusDelta, statusPorcelain, type ContentSnapshot, type WorktreeStatus } from "@spc/repo";
+import { checkApplyLease, releaseLease, writeLease } from "./apply-lease.js";
 import { checkoutBranch, checkoutRunBranch, createWorktree, removeWorktree } from "@spc/repo";
 import { observeRepository } from "@spc/repo";
 import { renderRunSummary } from "@spc/renderer";
@@ -59,6 +61,10 @@ export interface ApplyOptions {
   planFile?: string;
   resumeRunId?: string;
   allowDirty?: boolean;
+  /** Proceed past a live workspace apply lease (specs/apply-lease) -
+   *  the only door; concurrency is never config-gated because no
+   *  configuration makes concurrent in-place applies safe. */
+  allowConcurrent?: boolean;
   force?: boolean;
   /** Leave the checkout on the run branch instead of restoring (in-place run-branch mode). */
   stay?: boolean;
@@ -215,6 +221,12 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
   const specIr = loadSpecIr(paths.specsDir, plan.spec.id);
   checkPreflight(options, paths, plan, specIr);
 
+  // Workspace apply lease (specs/apply-lease): one live apply per
+  // workspace - a live holder refuses with check-then-decide remedies
+  // (never "wait"; an agent told to wait waits indefinitely); a dead
+  // holder's lease is silently reclaimed below by the fresh write.
+  checkApplyLease({ repoRoot: options.repoRoot, incomingSpecId: plan.spec.id, ...(options.allowConcurrent ? { allowConcurrent: true } : {}), log: deps.log ?? (() => {}) });
+
   // Refuse to shadow an in-flight run of the same plan.
   for (const runId of listRunIds(paths.runsDir)) {
     const meta = loadRunMeta(paths.runsDir, runId);
@@ -237,6 +249,17 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
       `run ${runId} is executing in process ${startLock.holderPid} (since ${startLock.holderAt}); one live process per run`,
     );
   }
+  writeLease(options.repoRoot, {
+    pid: process.pid,
+    host: os.hostname(),
+    runId,
+    planId: plan.metadata.id,
+    specId: specIr.spec.metadata.id,
+    specTitle: specIr.spec.metadata.title,
+    specDigest: specIr.digest,
+    mode: loadConfig(paths.configPath).execution?.inPlace ? "in-place" : "worktree",
+    startedAt: now(),
+  });
   mkdirSync(runDir, { recursive: true });
   mkdirSync(path.join(runDir, "amendments"), { recursive: true });
   {
@@ -1940,6 +1963,11 @@ async function finalize(
   requirementStates: RequirementState[],
   extra: { resultRevision?: string; diffStat?: string; changedFileCount?: number } = {},
 ): Promise<ApplyReport> {
+  // The workspace apply lease releases at finalization (specs/apply-lease):
+  // every completed path - success, failure, timeout - converges here, and
+  // a missed release (crash between write and finalize) self-heals via
+  // dead-pid reclaim on the next apply.
+  releaseLease(ctx.paths.repoRoot);
   ctx.state = {
     ...ctx.state,
     status,

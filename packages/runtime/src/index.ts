@@ -11,6 +11,7 @@ export * from "./freshness.js";
 export * from "./posture.js";
 export * from "./verify.js";
 export * from "./apply.js";
+export * from "./apply-lease.js";
 export * from "./queries.js";
 export * from "./reconcile.js";
 export * from "./cancel.js";

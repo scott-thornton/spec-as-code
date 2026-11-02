@@ -131,12 +131,13 @@ program
   .option("--allow-dirty", "skip the clean-worktree preflight")
   .option("--force", "proceed despite open blocking follow-ups")
   .option("--stay", "leave the checkout on the run branch instead of restoring (in-place run-branch mode)")
+  .option("--allow-concurrent", "proceed past a live workspace apply lease (specs/apply-lease) - the only door; queue and plan namespace stay shared")
   .option("--parent <runId>", "explicit chain parent (validated: same spec digest, git-ancestor predecessor)")
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action(
     async (
       planFile: string | undefined,
-      opts: { resume?: string; allowDirty?: boolean; force?: boolean; stay?: boolean; cwd: string },
+      opts: { resume?: string; allowDirty?: boolean; force?: boolean; stay?: boolean; allowConcurrent?: boolean; cwd: string },
     ) => {
       process.exitCode = await runApply({
         planFile,
@@ -144,6 +145,7 @@ program
         allowDirty: opts.allowDirty,
         force: opts.force,
         stay: opts.stay,
+        ...(opts.allowConcurrent ? { allowConcurrent: true } : {}),
         cwd: opts.cwd,
       });
     },
