@@ -117,7 +117,7 @@ describe("apply lease (AL-001..003)", () => {
     const repo = setupRepo("refuse");
     writePlan(repo);
     plantLease(repo, {});
-    const err = await applyPlan({ repoRoot: repo }, { providerFactory: PROVIDER, log: () => {} }).then(
+    const err = await applyPlan({ repoRoot: repo }, { providerFactory: async () => PROVIDER(), log: () => {} }).then(
       () => null,
       (e: Error & { code?: string }) => e,
     );
@@ -142,7 +142,7 @@ describe("apply lease (AL-001..003)", () => {
     const repo = setupRepo("ghost");
     writePlan(repo);
     plantLease(repo, { specId: "phase11-old", specTitle: "Phase 11 era", runId: "run-zombie-9" });
-    const err = await applyPlan({ repoRoot: repo }, { providerFactory: PROVIDER, log: () => {} }).then(
+    const err = await applyPlan({ repoRoot: repo }, { providerFactory: async () => PROVIDER(), log: () => {} }).then(
       () => null,
       (e: Error & { code?: string }) => e,
     );
@@ -155,11 +155,11 @@ describe("apply lease (AL-001..003)", () => {
     const repo = setupRepo("reclaim");
     writePlan(repo);
     plantLease(repo, { pid: deadPid() });
-    const r1 = await applyPlan({ repoRoot: repo }, { providerFactory: PROVIDER, log: () => {} });
+    const r1 = await applyPlan({ repoRoot: repo }, { providerFactory: async () => PROVIDER(), log: () => {} });
     expect(r1.status).toBe("succeeded");
     // Released at finalization: a fresh apply needs no flag.
     writePlan(repo);
-    const r2 = await applyPlan({ repoRoot: repo }, { providerFactory: PROVIDER, log: () => {} });
+    const r2 = await applyPlan({ repoRoot: repo }, { providerFactory: async () => PROVIDER(), log: () => {} });
     expect(r2.status).toBe("succeeded");
   });
 
@@ -168,7 +168,7 @@ describe("apply lease (AL-001..003)", () => {
     writePlan(repo);
     plantLease(repo, {});
     const lines: string[] = [];
-    const r = await applyPlan({ repoRoot: repo, allowConcurrent: true }, { providerFactory: PROVIDER, log: (l) => lines.push(l) });
+    const r = await applyPlan({ repoRoot: repo, allowConcurrent: true }, { providerFactory: async () => PROVIDER(), log: (l) => lines.push(l) });
     expect(r.status).toBe("succeeded");
     expect(lines.some((l) => l.includes("run-holder-1") && /concurrent/i.test(l))).toBe(true);
   });
