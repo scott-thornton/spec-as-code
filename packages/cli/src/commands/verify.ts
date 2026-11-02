@@ -188,6 +188,12 @@ export async function runVerify(
   // command whose scope digests are unchanged since its last clean
   // execution reuses the recorded result instead of re-running.
   const invocationCommandRuns = new Map<string, SharedCommandRun>();
+  // Invocation accounting (specs/tooling-sweep): executed vs reused
+  // counts, freshness-cached spec count, wall time - the reuse figure
+  // this session kept hand-counting from events.jsonl.
+  const invocationStartedAt = Date.now();
+  let cachedSpecs = 0;
+  const invocationRunIds: string[] = [];
   const commandCache = new CommandCache(repoRoot, path.join(repoRoot, ".spc", "cache", "verify-commands.json"));
   try {
     commandCache.persist();
@@ -200,6 +206,7 @@ export async function runVerify(
     if (!forceAll) {
       const freshness = freshnessCheck(repoRoot, ir, path.join(repoRoot, ".spc", "runs"));
       if (freshness.cached) {
+        cachedSpecs += 1;
         if (format === "json") {
           jsonReports.push({ spec: ir.spec.metadata.id, cached: true, priorRunId: freshness.priorRunId });
         } else {
@@ -209,6 +216,7 @@ export async function runVerify(
       }
     }
     const report = await createVerifyRun({ repoRoot, specIr: ir, config, provider, commandRuns: invocationCommandRuns, commandCache, suites });
+    invocationRunIds.push(report.runId);
     const ok = report.states.every((s) => s.status === "satisfied" || s.status === "waived");
     if (!ok) worst = 1;
 
@@ -260,6 +268,29 @@ export async function runVerify(
     console.log(JSON.stringify(multi ? jsonReports : jsonReports[0], null, 2));
   }
 
+  // Execution accounting (specs/tooling-sweep): one line, invocation-level.
+  let executed = 0;
+  let reused = 0;
+  for (const runId of invocationRunIds) {
+    try {
+      const ev = readFileSync(path.join(repoRoot, ".spc", "runs", runId, "events.jsonl"), "utf8");
+      for (const line of ev.split("\n")) {
+        if (line.includes('"COMMAND_EXECUTED"')) executed += 1;
+        if (line.includes('"COMMAND_RESULT_REUSED"')) reused += 1;
+      }
+    } catch {
+      // unreadable events: contributes nothing
+    }
+  }
+  if (executed + reused > 0) {
+    const share = Math.round((reused / (executed + reused)) * 100);
+    const wallS = Math.round((Date.now() - invocationStartedAt) / 1000);
+    if (format === "json") {
+      jsonReports.push({ executions: { executed, reused, reuseSharePercent: share, freshnessCachedSpecs: cachedSpecs, wallSeconds: wallS } });
+    } else {
+      console.log(`Executions: ${executed} executed, ${reused} reused (${share}% reuse), ${cachedSpecs} spec(s) freshness-cached, wall ${wallS}s`);
+    }
+  }
   if (worst === 0 && format !== "json") {
     console.log("");
     console.log(`Next: adversarial pass (stage 7 of 7), then push (follow: spc use-skill adversarial-loop)`);

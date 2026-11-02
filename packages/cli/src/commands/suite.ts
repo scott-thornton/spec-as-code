@@ -81,5 +81,31 @@ export function runSuiteList(cwd?: string): number {
       console.log(`${ref.padEnd(24)} ${String(count).padStart(3)} refs  UNDEFINED - no suite file defines this id`);
     }
   }
+  // Exact-match conversion candidates (specs/tooling-sweep): command
+  // criteria byte-identical to a seeded suite's command - the sweep's
+  // checklist. Exact match only; near-misses need judgment and this
+  // report encodes none.
+  const specList = (() => {
+    try {
+      return resolveAllSpecs(path.join(repoRoot, "specs"));
+    } catch {
+      return [];
+    }
+  })();
+  console.log("");
+  console.log("Exact-match conversion candidates:");
+  for (const def of [...registry.values()].sort((a, b) => a.id.localeCompare(b.id))) {
+    const hits: string[] = [];
+    for (const { ir } of specList) {
+      for (const property of ir.properties) {
+        for (const criterion of property.acceptance) {
+          if (criterion.type === "command" && criterion.command === def.command) {
+            hits.push(`${ir.spec.metadata.id}/${criterion.id}`);
+          }
+        }
+      }
+    }
+    console.log(`  ${def.id}: ${hits.length} exact-match criteria${hits.length > 0 ? ` (${hits.join(", ")})` : ""}`);
+  }
   return 0;
 }

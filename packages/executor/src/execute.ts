@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { globMatchAny, isPhysicallyContained, isSafeRelativePath, SpcError } from "@spc/core";
+import { assertNever, globMatchAny, isPhysicallyContained, isSafeRelativePath, SpcError } from "@spc/core";
 import type { AcceptanceCriterion, CommandsConfig, ObservationDraft, RepositorySnapshot, SpecIR, Task } from "@spc/schema";
 import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { makeUsageRecord } from "@spc/llm";
@@ -83,6 +83,11 @@ function summarizeCriterion(c: AcceptanceCriterion): string {
       return c.instruction ?? "";
     case "suite":
       return `suite ${c.ref ?? ""}`;
+    default:
+      // Compiler-enforced exhaustiveness (specs/tooling-sweep): the next
+      // AcceptanceCriterion member is a type error here, not a runtime
+      // surprise in a failed run.
+      return assertNever(c);
   }
 }
 

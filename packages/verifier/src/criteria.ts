@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import type { CachedRunResult } from "./command-cache.js";
 import path from "node:path";
-import { digestOf } from "@spc/core";
+import { assertNever, digestOf } from "@spc/core";
 import type {
   AcceptanceCriterion,
   Config,
@@ -593,5 +593,11 @@ export async function verifyCriterion(
       (e as Error & { code?: string }).code = "SPC_SUITE_UNRESOLVED";
       throw e;
     }
+    default:
+      // Compiler-enforced exhaustiveness (specs/tooling-sweep): the next
+      // AcceptanceCriterion member is a type error here. The suite arm
+      // above keeps its contract guard; this arm covers members not yet
+      // imagined.
+      return assertNever(criterion) as never;
   }
 }

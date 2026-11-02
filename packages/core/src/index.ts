@@ -1,4 +1,5 @@
 export * from "./errors.js";
+export * from "./assert.js";
 export * from "./canonical.js";
 export * from "./hash.js";
 export * from "./diagnostics.js";
