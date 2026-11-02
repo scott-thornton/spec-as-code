@@ -1,0 +1,113 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: tooling-sweep
+  title: Three receipt-backed tooling surfaces - exhaustive unions enforced by the compiler, reuse accounting printed, duplicate suites surfaced
+goal: >
+  Three small tooling gaps, each with session receipts, approved as a
+  set. (1) EXHAUSTIVE UNIONS: adding a schema union member broke
+  exhaustive consumers twice (summarizeCriterion - the executor
+  compile breakage that cost a replan; lintSpec's inline
+  command||file test) because TypeScript only enforces switch
+  exhaustiveness when a never-default arm exists. The fix is the
+  compiler, not a lint: assertNever default arms at every switch over
+  AcceptanceCriterion (and the known event-type consumers), so the
+  NEXT union member is a compile error at every handler site - caught
+  by the typecheck gate, not by a failed run. (2) REUSE ACCOUNTING:
+  verify --all ends silently about executions; reuse was hand-counted
+  from events.jsonl at least four times this session, and cache rate
+  is a first-class concern. The invocation summary line makes the
+  accounting free: executed vs reused counts, reuse share, wall time,
+  and freshness-cached spec count. (3) DUPLICATE SUITES: nine criteria
+  were converted to suite references; the remaining near-mechanical
+  conversions across the 77 specs are invisible - spc suite list
+  gains a duplicates section naming every criterion whose command is
+  byte-identical to a seeded suite, grouped by suite, so the sweep
+  becomes a checklist instead of archaeology. Near-misses (same
+  packages, different combos) are deliberately NOT listed - only
+  exact matches, no judgment encoded.
+requirements:
+  - id: TSW-001
+    statement: >
+      Exhaustive unions by compiler enforcement. @spc/core exports
+      assertNever(x: never): never. Every switch over
+      AcceptanceCriterion in the workspace gains a default arm that
+      calls it (at minimum: summarizeCriterion in
+      packages/executor/src/execute.ts, verifyCriterion in
+      packages/verifier/src/criteria.ts - replacing its unreachable
+      suite throw with the shared arm plus a comment preserving the
+      normalization-must-run-first contract); the lint.ts and
+      spec.ts isDeterministicCriterion consumers keep their
+      predicate form (already migrated to the shared helper). A
+      follow-up union member then fails TYPECHECK at every handler
+      site - the typecheck gate is the enforcement, and the batteries
+      prove no behavior change (every criterion type still dispatches
+      to its handler).
+    priority: must
+    scope:
+      include: [packages/core/src/**, packages/executor/src/**, packages/verifier/src/**]
+    acceptance:
+      - id: TSW-001-A
+        type: command
+        command: pnpm --filter @spc/core... build > /dev/null && pnpm --filter @spc/executor... build > /dev/null && pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/tooling-sweep.test.ts
+        discriminating: true
+  - id: TSW-002
+    statement: >
+      Reuse accounting. After the final spec in `spc verify --all`
+      (text format), the invocation prints one summary line derived
+      from the runs it created: `Executions: <executed> executed,
+      <reused> reused (<share>% reuse), <cached> spec(s)
+      freshness-cached, wall <Ns>` - executed and reused counted from
+      COMMAND_EXECUTED / COMMAND_RESULT_REUSED events across the
+      invocation's run dirs, cached from the CACHED-skip count
+      already tracked in the loop, wall from invocation start. JSON
+      format gains the same figures as an object. Single-spec verify
+      prints nothing new (one run, no sharing to report).
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: TSW-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/tooling-sweep.test.ts
+        discriminating: true
+  - id: TSW-003
+    statement: >
+      Duplicate suites surfaced. `spc suite list` gains a duplicates
+      section: for every command criterion across specs/ whose
+      command string is byte-identical to a seeded suite's command,
+      grouped by suite id - one line per suite with the count and the
+      spec/criterion pairs, e.g. `cli-battery: 2 exact-match
+      criteria (specA/XX-001-A, specB/YY-002-A)`. Exact match only:
+      near-misses are never listed (conversion needs judgment, and
+      the report encodes none). Suites with zero duplicates print a
+      `0 exact-match criteria` line.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: TSW-003-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/tooling-sweep.test.ts
+        discriminating: true
+  - id: TSW-004
+    statement: >
+      Regression: the cli battery and both touched packages'
+      batteries keep passing; existing suite list and verify --all
+      output consumers are unchanged apart from the new line and
+      section.
+    priority: must
+    acceptance:
+      - id: TSW-004-A
+        type: suite
+        ref: cli-battery
+outOfScope:
+  - >
+    A standalone source-lint command - the compiler with never-default
+    arms IS the enforcement; a second checker would drift.
+  - >
+    Near-miss conversion suggestions, auto-conversion, or any
+    judgment encoded in the duplicates report.
+  - >
+    Per-spec or per-criterion reuse breakdowns - one invocation-level
+    line.
