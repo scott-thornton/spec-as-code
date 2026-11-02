@@ -18,7 +18,7 @@ import { runPolicyExplain } from "./commands/policy.js";
 import { runQuickCommand } from "./commands/quick.js";
 import { runRectify } from "./commands/rectify.js";
 import { runAttest } from "./commands/attest.js";
-import { runPatchBuild, runPatchVerify } from "./commands/patch.js";
+import { runPatchApply, runPatchBuild, runPatchVerify } from "./commands/patch.js";
 import { runBrief } from "./commands/brief.js";
 import { runUsage } from "./commands/usage.js";
 import { runSpecLint } from "./commands/lint.js";
@@ -436,7 +436,14 @@ patch
   });
 
 patch
-  .command("verify <opsFile>")
+  .command("apply <opsFile>")
+  .description("apply a verified ops array through the applicator's exact semantics - the between-runs third leg: compose (build --batch), verify, apply; provenance logged to .spc/patch-log.jsonl")
+  .option("--root <dir>", "tree root (defaults to cwd)")
+  .action((opsFile: string, opts: { root?: string }) => {
+    process.exitCode = runPatchApply(opsFile, opts);
+  });
+patch
+  .command("verify [opsFile]")
   .description("validate a change-ops array through the applicator in memory: chain order, base digests, anchor uniqueness - nothing written")
   .option("--root <dir>", "tree root (defaults to cwd)")
   .action((opsFile: string, opts: { root?: string }) => {
