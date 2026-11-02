@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { isSafeRelativePath, SpcError } from "@spc/core";
 import { fileDigest, stageChanges, type ProposedChange } from "@spc/executor";
@@ -68,6 +68,68 @@ export function runPatchVerify(opsFile: string, options: { root?: string } = {})
   }
   return 0;
 }
+/**
+ * `spc patch apply <ops.json>` (specs/patch-apply): the composer's third
+ * leg for between-runs work. The SAME applicator semantics - digests,
+ * per-position anchor uniqueness, all-or-nothing - exposed to the client
+ * for the workload the runtime deliberately excludes from runs (protected
+ * paths, oracle updates, human-style edits). Every application appends a
+ * durable provenance line to .spc/patch-log.jsonl where run attribution
+ * cannot reach. Receipt: the slerp agent's hand-rolled Python patcher -
+ * str.replace hitting every occurrence, no digests, partial per-file
+ * writes.
+ */
+export function runPatchApply(opsFile: string, options: { root?: string } = {}): number {
+  const root = options.root ? path.resolve(options.root) : process.cwd();
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(path.resolve(process.cwd(), opsFile), "utf8"));
+  } catch (e) {
+    console.log(`ops file unreadable or not valid JSON: ${(e as Error).message}`);
+    return 1;
+  }
+  if (!Array.isArray(raw) || raw.length === 0) {
+    console.log("ops file must be a non-empty JSON array of change ops");
+    return 1;
+  }
+  const staged = stageChanges(root, raw as ProposedChange[]);
+  if (!staged.ok) {
+    console.log(`${staged.code}: ${staged.message}`);
+    return 1;
+  }
+  for (const w of staged.writes) {
+    mkdirSync(path.dirname(path.join(root, w.path)), { recursive: true });
+    writeFileSync(path.join(root, w.path), w.content, "utf8");
+    console.log(`  ${w.path}  ${w.label}`);
+  }
+  for (const d of staged.deletes) {
+    rmSync(path.join(root, d), { force: true });
+    console.log(`  ${d}  deleted`);
+  }
+  const byPath = new Set<string>([...staged.writes.map((w) => w.path), ...staged.deletes]);
+  console.log(`applied ${staged.writes.length + staged.deletes.length} op(s) across ${byPath.size} path(s)`);
+  // Durable provenance where run attribution cannot reach (specs/patch-apply).
+  try {
+    mkdirSync(path.join(root, ".spc"), { recursive: true });
+    appendFileSync(
+      path.join(root, ".spc", "patch-log.jsonl"),
+      JSON.stringify({
+        at: new Date().toISOString(),
+        command: "patch apply",
+        file: opsFile,
+        ops: [
+          ...staged.writes.map((w) => ({ path: w.path, label: w.label })),
+          ...staged.deletes.map((d) => ({ path: d, label: "deleted" })),
+        ],
+      }) + "\n",
+      "utf8",
+    );
+  } catch {
+    // best effort; the application itself already succeeded
+  }
+  return 0;
+}
+
 export function runPatchBuild(fileArg: string, options: PatchBuildOptions): number {
   if (options.batch !== undefined) {
     // Refusals print and exit 1 (the patch-verify pattern), never the
