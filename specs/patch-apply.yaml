@@ -1,0 +1,114 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: patch-apply
+  title: The composer's missing third leg - patch apply for between-runs work, and the batch form taught where agents learn
+goal: >
+  Receipt (2026-11-02, the slerp agent): a hand-rolled Python patcher
+  for a sanctioned between-runs oracle update - test files under
+  protectedPaths, operator rulings documented inline - cloning the
+  patch op with its safety features stripped: str.replace hits EVERY
+  occurrence (no uniqueness refusal), no digest binding (staleness
+  invisible), per-file writes (a missing anchor in file 2 leaves file
+  1 mutated - the applicator's all-or-nothing contract, absent). The
+  agent was not careless; the tooling is incomplete for its task:
+  patch build composes, patch verify validates, and application
+  exists ONLY inside a run's answer processing - the legitimate
+  between-runs workload (protected paths, human-style edits) has
+  compose and verify but no apply, so agents build the third leg
+  themselves. Two moves close it. (1) spc patch apply <ops.json>: the
+  SAME applicator semantics exposed to the client - full staging
+  first (digests, per-position anchor uniqueness, all-or-nothing),
+  writes only on complete success, a durable local provenance line
+  under .spc/ so out-of-run composition still leaves a record. (2)
+  Teach the batch form where agents learn: the skills and every
+  refusal/advisory message still say "compose chains with spc patch
+  build --after" - pre-batch phrasing that routes agents to the
+  slower, error-prone pattern the batch replaced. Not a second
+  execution pathway: the same stageChanges, called by the client, for
+  the workload the runtime deliberately excludes from runs.
+requirements:
+  - id: PA-001
+    statement: >
+      `spc patch apply <ops.json>`: loads the ops array (same JSON
+      shape patch build emits and answers carry), stages it through
+      the applicator's exact semantics (stageChanges - base digests,
+      anchor uniqueness at every chain position, chain order,
+      all-or-nothing), and writes the staged results to the tree only
+      on complete staging success (creates, updates, patches, deletes
+      exactly as the runtime's applicator would). On any refusal:
+      print the code and message, exit 1, write nothing. On success:
+      print the per-op summary (path + label per op) and `applied N
+      op(s) across M path(s)`. Option `--root <dir>` like the other
+      patch commands.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: PA-001-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/patch-apply.test.ts
+        discriminating: true
+  - id: PA-002
+    statement: >
+      Provenance for out-of-run application: every successful patch
+      apply appends one JSON line to .spc/patch-log.jsonl - { at,
+      command: "patch apply", file, ops: [{ path, label }] } - so
+      between-runs composition leaves a durable record where run
+      attribution cannot. The log path joins SPC_STATE_PATHS in
+      @spc/repo (the apply-lease lesson: out-of-list .spc files get
+      swept into run commits by add -A) and .gitignore.
+    priority: must
+    scope:
+      include: [packages/cli/src/**, packages/repo/src/**]
+    acceptance:
+      - id: PA-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/patch-apply.test.ts
+        discriminating: true
+  - id: PA-003
+    statement: >
+      The batch form taught where agents learn. Every composition
+      teaching text names it: the applicator's refusal messages
+      (PATCH_BASE_MISMATCH and PATCH_ANCHOR_NOT_UNIQUE in
+      @spc/executor patch.ts), the unmediated-change guard's RECOVERY
+      constant, the submit/respond chain-check hints in commands/
+      agent.ts, and the three skills that mention patch build
+      (rehearse, pipeline, answer-queue) - multi-op composition is
+      `spc patch build --batch <spec.json>`, with --after named as the
+      single-op chaining form, and between-runs edits name compose ->
+      verify -> apply.
+    priority: must
+    scope:
+      include: [packages/executor/src/**, packages/cli/src/**, .agents/skills/**]
+    acceptance:
+      - id: PA-003-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/executor... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/patch-apply.test.ts
+        discriminating: true
+      - id: PA-003-B
+        type: file
+        path: .agents/skills/rehearse/SKILL.md
+        assert:
+          contains: "--batch"
+  - id: PA-004
+    statement: >
+      Regression: the cli battery and the executor patch batteries
+      keep passing; existing patch build/verify behavior is unchanged.
+    priority: must
+    acceptance:
+      - id: PA-004-A
+        type: suite
+        ref: cli-battery
+      - id: PA-004-B
+        type: command
+        command: pnpm --filter @spc/executor... build > /dev/null && pnpm --filter @spc/executor test
+outOfScope:
+  - >
+    A second execution pathway - patch apply calls the SAME
+    stageChanges the runtime calls; no new staging semantics, no
+    scope enforcement (between-runs work is outside run scope by
+    design; protected paths are a human/agent judgment between runs).
+  - >
+    Any gating, remote confirmation, or run integration for apply -
+    it is the client-side third leg, deliberately local.
