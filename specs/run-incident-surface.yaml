@@ -1,0 +1,122 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: run-incident-surface
+  title: spc run show is the complete incident surface - live state, named failures, pending inventory, and the spec context that gives them meaning
+goal: >
+  Receipts (2026-11-01/02, two independent investigators, one session):
+  a sibling agent diagnosing a failing run hand-rolled a node one-liner
+  over state.json - and got the field shape wrong (failureReason does
+  not exist; the field is failure.code/.message), printing blank
+  reasons and falling back to grep over events.jsonl; the answering
+  agent here ran functionally identical probes dozens of times across
+  the four-spec night (state.json task tables, failure greps, pending
+  request ages). And when a criterion fails, both investigators
+  cross-reference the criterion ID to spec text BY HAND - yet every
+  run dir already persists spec-snapshot.yaml, the exact spec text the
+  run was composed against, digest-bound. The record names everything
+  precisely; no surface renders it. Mid-run observability is the gap:
+  spc run show answers "no summary written yet" - nothing else -
+  because summary.md only exists at finalization, so every question
+  that matters during an incident (what state, which task failed with
+  what code, what is pending and how close to its window, what does
+  the failing criterion actually demand) is re-derived from raw JSON
+  per incident, per agent, badly. This spec makes run show the
+  incident surface: one command rendering live run state, task
+  failures with their codes, the recent failure-shaped events, the
+  pending-request inventory against windows, and the spec section -
+  id, snapshot digest, drift against the live spec file, and property
+  lines whose criterion IDs resolve to their demands from the
+  snapshot. The snapshot was always the mechanism; it never had a
+  door.
+requirements:
+  - id: RIS-001
+    statement: >
+      Live-state rendering. `spc run show <runId>` on a run without a
+      summary renders the incident surface instead of the single
+      "no summary written yet" line: the run status; a task table
+      where every task shows id, status, attempt, and - for failed
+      tasks - failure.code and failure.message inline (the exact field
+      shape investigators keep guessing wrong); and the pending-harness
+      request inventory for THIS run (request id, age since createdAt,
+      window remaining against expiresAt), with an explicit "no
+      pending harness requests" line when the inventory is empty.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: RIS-001-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/run-incident.test.ts
+        discriminating: true
+  - id: RIS-002
+    statement: >
+      Failure-shaped recent events. The incident surface renders the
+      run's recent failure events from events.jsonl - TASK_FAILED,
+      TASK_SUBMISSION_REFUSED, TASK_STAGE_REJECTED - with timestamp,
+      task id, and the code carried in the payload, newest last, so an
+      investigator sees the refusal history (the sibling agent's
+      three-probe diagnosis - refusals, lastError, ages - collapses
+      into this one view).
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: RIS-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/run-incident.test.ts
+        discriminating: true
+  - id: RIS-003
+    statement: >
+      The spec section. Every run show rendering - live or finalized -
+      carries a spec section read from the run's spec-snapshot.yaml:
+      spec id; snapshot digest; a drift badge comparing the snapshot
+      digest to the live spec file under specs/ (matched - the live
+      file still says what the run executed; drifted - it does not;
+      absent - the spec file is gone); and one line per requirement in
+      the snapshot with its current status from the run state, where
+      non-satisfied properties list their criteria with each
+      criterion's demand resolved from the snapshot text (command
+      string, or file path + assertion) - criterion IDs in events and
+      reasons become their actual demands inline.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: RIS-003-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/run-incident.test.ts
+        discriminating: true
+  - id: RIS-004
+    statement: >
+      Finalized runs keep today's behavior and gain the spec section:
+      when summary.md exists it prints as today, followed by the
+      RIS-003 spec section (drift badge and property resolution are
+      post-mortem questions too).
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: RIS-004-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/run-incident.test.ts
+        discriminating: true
+  - id: RIS-005
+    statement: >
+      Regression: the existing run show consumers (summary printing,
+      superseded-by lookup, run directory footer) and the cli battery
+      keep passing.
+    priority: must
+    acceptance:
+      - id: RIS-005-A
+        type: suite
+        ref: cli-battery
+outOfScope:
+  - >
+    Any change to what runs record - this spec renders the existing
+    record (state.json, events.jsonl, pending requests, metadata,
+    spec-snapshot.yaml); it writes nothing.
+  - >
+    Watch/tail modes, streaming, or polling; one-shot rendering only.
+  - >
+    Cross-run views (chains, lineages) - single run scope.
