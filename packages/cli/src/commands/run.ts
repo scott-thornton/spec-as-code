@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { SpcError } from "@spc/core";
+import { compileSpecSource, SpcError } from "@spc/core";
 import { compileSpecFile, diffStat, git } from "@spc/repo";
 import { renderPrDraft } from "@spc/renderer";
 import { cancelRun, exportRun, loadRunView, replayRun, resolveChain, runSupersede, supersededByLookup } from "@spc/runtime";
@@ -17,23 +17,159 @@ export function runSupersedeCommand(runId: string, byRunId: string, cwd?: string
   return 0;
 }
 
+interface RunShowTask {
+  taskId: string;
+  status: string;
+  attempt: number;
+  failure?: { code?: string; message?: string };
+}
+
+/**
+ * The incident surface (specs/run-incident-surface): live-run observability
+ * and the spec context, rendered from the existing record. Receipts: two
+ * independent investigators hand-rolled state.json probes (one guessing the
+ * field shape wrong - failureReason does not exist), grep'd events for
+ * refusals, read pending requests for ages, and cross-referenced criterion
+ * IDs to spec text by hand while spec-snapshot.yaml sat in the run dir
+ * unrendered. One command answers all of it; nothing is recorded anew.
+ */
+function renderIncidentSurface(repoRoot: string, runDir: string, runId: string, state: { status?: string; tasks?: Record<string, RunShowTask> }): void {
+  console.log(`Run ${runId}: status ${state.status ?? "unknown"} (live - no summary yet)`);
+  console.log("");
+  console.log("Tasks:");
+  const tasks = Object.values(state.tasks ?? {}).sort((a, b) => a.taskId.localeCompare(b.taskId));
+  if (tasks.length === 0) console.log("  (no tasks recorded)");
+  for (const t of tasks) {
+    const failure = t.status === "failed" && t.failure ? ` - ${t.failure.code ?? "TASK_FAILED"}: ${(t.failure.message ?? "").slice(0, 100)}` : "";
+    console.log(`  ${t.taskId.padEnd(6)} ${t.status} (attempt ${t.attempt})${failure}`);
+  }
+  console.log("");
+  console.log("Pending harness requests:");
+  const pendingDir = path.join(repoRoot, ".spc", "harness", "pending");
+  let printed = false;
+  if (existsSync(pendingDir)) {
+    for (const f of readdirSync(pendingDir).sort()) {
+      if (!f.endsWith(".json")) continue;
+      try {
+        const req = JSON.parse(readFileSync(path.join(pendingDir, f), "utf8")) as { id?: string; runId?: string; createdAt?: string; expiresAt?: string };
+        if (req.runId !== runId || !req.id || !req.createdAt || !req.expiresAt) continue;
+        const ageMin = Math.max(0, Math.round((Date.now() - Date.parse(req.createdAt)) / 60000));
+        const windowMin = Math.round((Date.parse(req.expiresAt) - Date.now()) / 60000);
+        console.log(`  ${req.id}  age ${ageMin}m, window ${windowMin >= 0 ? `${windowMin}m left` : "ELAPSED"}`);
+        printed = true;
+      } catch {
+        // unreadable request file: contributes nothing
+      }
+    }
+  }
+  if (!printed) console.log("  (no pending harness requests)");
+  console.log("");
+  console.log("Failure events (oldest first):");
+  const FAILURE_EVENTS = new Set(["TASK_FAILED", "TASK_SUBMISSION_REFUSED", "TASK_STAGE_REJECTED"]);
+  let sawEvent = false;
+  try {
+    for (const line of readFileSync(path.join(runDir, "events.jsonl"), "utf8").split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        const e = JSON.parse(line) as { type?: string; timestamp?: string; payload?: { taskId?: string; code?: string; error?: { code?: string } } };
+        if (!e.type || !FAILURE_EVENTS.has(e.type)) continue;
+        const code = e.payload?.error?.code ?? e.payload?.code ?? "";
+        const at = (e.timestamp ?? "").replace("T", " ").slice(0, 19);
+        console.log(`  ${at}  ${e.type}  ${e.payload?.taskId ?? "?"}${code ? `  ${code}` : ""}`);
+        sawEvent = true;
+      } catch {
+        // malformed line: contributes nothing
+      }
+    }
+  } catch {
+    // no events file
+  }
+  if (!sawEvent) console.log("  (none)");
+  console.log("");
+}
+
+function renderSpecSection(repoRoot: string, runDir: string, specIdFromState: string | undefined): void {
+  let meta: { specId?: string; specDigest?: string } = {};
+  try {
+    meta = JSON.parse(readFileSync(path.join(runDir, "metadata.json"), "utf8")) as typeof meta;
+  } catch {
+    // no metadata: fall back to the state's specId
+  }
+  const specId = meta.specId ?? specIdFromState;
+  let snapshotText: string | null = null;
+  try {
+    snapshotText = readFileSync(path.join(runDir, "spec-snapshot.yaml"), "utf8");
+  } catch {
+    // no snapshot
+  }
+  if (!specId || snapshotText === null) {
+    console.log(`Spec: ${specId ?? "unknown"} (snapshot absent)`);
+    return;
+  }
+  const compiled = compileSpecSource(snapshotText, "spec-snapshot.yaml");
+  const snapshotDigest = compiled.ok && compiled.ir ? compiled.ir.digest : "unknown";
+  // Drift badge: the live spec file vs what this run executed.
+  const liveFile = findSpecFileForRun(repoRoot, specId);
+  let drift = "absent";
+  if (liveFile) {
+    const live = compileSpecFile(liveFile);
+    drift = live.ok && live.ir && live.ir.digest === snapshotDigest ? "matched" : "drifted";
+  }
+  const badge =
+    drift === "matched"
+      ? "matched (the live spec file still says what this run executed)"
+      : drift === "drifted"
+        ? "DRIFTED (the live spec file differs from the executed snapshot)"
+        : "absent (no live spec file matches this run's spec id)";
+  console.log(`Spec: ${specId}  digest ${snapshotDigest.slice(0, 16)}  drift: ${badge}`);
+  if (compiled.ok && compiled.ir) {
+    const state: { requirements?: Record<string, { status?: string }> } = (() => {
+      try {
+        return JSON.parse(readFileSync(path.join(runDir, "state.json"), "utf8")) as { requirements?: Record<string, { status?: string }> };
+      } catch {
+        return {};
+      }
+    })();
+    for (const p of compiled.ir.properties) {
+      const status = state.requirements?.[p.id]?.status ?? "unevaluated";
+      console.log(`  ${p.id}  ${status}  - ${p.statement.replace(/\s+/g, " ").slice(0, 80)}`);
+      if (status !== "satisfied" && status !== "waived") {
+        for (const c of p.acceptance) {
+          const demand =
+            c.type === "command" ? c.command
+            : c.type === "file" ? `file ${c.path} (${Object.entries(c.assert).map(([k, v]) => `${k}: ${v}`).join(", ")})`
+            : c.type === "suite" ? `suite ${c.ref}`
+            : `${c.type} criterion`;
+          console.log(`    ${c.id}: ${demand}`);
+        }
+      }
+    }
+  }
+  console.log("");
+}
+
 export function runShow(runId: string, cwd?: string): number {
   const repoRoot = resolveRepoRoot(cwd);
-  const view = loadRunView(path.join(repoRoot, ".spc", "runs"), runId);
+  const runsDir = path.join(repoRoot, ".spc", "runs");
+  const view = loadRunView(runsDir, runId);
   if (!view) {
-    throw new SpcError("RUN_NOT_FOUND", `run ${runId} not found under ${path.join(repoRoot, ".spc", "runs")}`);
+    throw new SpcError("RUN_NOT_FOUND", `run ${runId} not found under ${runsDir}`);
   }
-  const summaryFile = path.join(repoRoot, ".spc", "runs", runId, "summary.md");
+  const runDir = path.join(runsDir, runId);
+  const summaryFile = path.join(runDir, "summary.md");
   if (existsSync(summaryFile)) {
     console.log(readFileSync(summaryFile, "utf8"));
   } else {
-    console.log(`Run ${runId}: status ${view.state.status} (no summary written yet)`);
+    renderIncidentSurface(repoRoot, runDir, runId, view.state as never);
   }
-  const supersededBy = supersededByLookup(path.join(repoRoot, ".spc", "runs"), runId);
+  // The spec section renders for live AND finalized runs (drift and
+  // criterion demands are post-mortem questions too).
+  renderSpecSection(repoRoot, runDir, view.state.specId);
+  const supersededBy = supersededByLookup(runsDir, runId);
   if (supersededBy) {
     console.log(`\nSuperseded by ${supersededBy} (administrative replacement; this run's records are kept, never inherited)`);
   }
-  console.log(`\nRun directory: ${path.join(repoRoot, ".spc", "runs", runId)}`);
+  console.log(`\nRun directory: ${runDir}`);
   return 0;
 }
 
