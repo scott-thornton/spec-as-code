@@ -50,7 +50,7 @@ describe("exhaustive unions (TSW-001)", () => {
         ir.ir!.properties[0]!,
         { runId: "r", cwd: root, repositoryRevision: "0", config: {} as never, provider: null },
       ),
-    ).rejects.toThrow(/SPC_SUITE_UNRESOLVED/);
+    ).rejects.toThrow(/unresolved suite reference/);
   });
 });
 
