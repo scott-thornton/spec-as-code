@@ -168,7 +168,7 @@ describe("apply lease (AL-001..003)", () => {
     writePlan(repo);
     plantLease(repo, {});
     const lines: string[] = [];
-    const r = await applyPlan({ repoRoot: repo }, { providerFactory: PROVIDER, log: (l) => lines.push(l), allowConcurrent: true } as never);
+    const r = await applyPlan({ repoRoot: repo, allowConcurrent: true }, { providerFactory: PROVIDER, log: (l) => lines.push(l) });
     expect(r.status).toBe("succeeded");
     expect(lines.some((l) => l.includes("run-holder-1") && /concurrent/i.test(l))).toBe(true);
   });
