@@ -1,0 +1,112 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: apply-lease
+  title: One live apply per workspace - the lease converts silent coexistence into a named, decided refusal
+goal: >
+  Three receipts, one class (2026-11-01/02): a mis-fed second apply
+  launched while a run was mid-flight (cancelled by luck); a sibling
+  workspace double-started apply - two live processes 26 minutes apart
+  sharing one queue; and the worst case, a phase-11-era zombie apply
+  still alive and requeuing in a later phase's workspace, resolved by
+  an operator killing every parent-CLI process. Nothing registers live
+  apply processes, so nothing can detect any of these - concurrent
+  applies interleave silently over one harness queue and one plan
+  namespace until an operator notices the noise. The mechanism: a
+  workspace apply lease. spc apply writes .spc/apply.lease (pid, host,
+  runId, planId, specId, specTitle, specDigest, mode, startedAt)
+  before dispatching anything; a second apply finding a lease whose pid
+  is alive REFUSES - APPLY_ALREADY_RUNNING, identity-rich, with the
+  spec surfaced (id, title, digest, and the spec FILE resolved fresh at
+  refusal time, because a path recorded at lease-start can go stale
+  while a zombie holds the lease). The remedy vocabulary is check-then-
+  decide, never wait: an agent told to wait waits indefinitely. A lease
+  whose pid is dead is silently reclaimed - crashed processes cost
+  nothing. The deliberate-parallel case gets --allow-concurrent; no
+  configuration makes concurrent in-place applies safe, so there is no
+  config gate. §78 parallelism (task worktrees within one run) never
+  touches the workspace lease - only the apply entrypoint does. And the
+  lease never kills anything: spc run cancel stays the sanctioned
+  termination; the lease's job is to make coexistence impossible to
+  not notice.
+requirements:
+  - id: AL-001
+    statement: >
+      Lease lifecycle. applyPlan acquires .spc/apply.lease before
+      dispatching any task: written atomically, carrying pid, host,
+      runId, planId, specId, specTitle, specDigest, mode (in-place |
+      worktree, from config), startedAt. Released best-effort on run
+      finalization and early error exits. A lease whose pid is dead
+      (kill(pid, 0) -> ESRCH) is silently reclaimed and the apply
+      proceeds. A lease held on a different host is treated as live
+      (conservative; the refusal names the host). The lease file is
+      gitignored workspace state.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: AL-001-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/apply-lease.test.ts
+        discriminating: true
+  - id: AL-002
+    statement: >
+      The refusal. A second apply finding a live lease fails before
+      dispatch with APPLY_ALREADY_RUNNING, the message carrying: the
+      holding run's id, spec id, spec title, plan id, pid, mode, live
+      duration; the spec FILE path resolved at refusal time from the
+      live specs/ directory (specs/<file>.yaml), or "(no live spec file
+      for <id> - renamed or removed since launch)" when the id matches
+      nothing - a stale-file signal that, next to a long live-duration,
+      tells the orphan story without a probe; the remedy pair - check
+      (spc run show <runId>, naming what it renders: live state,
+      pending requests against windows, spec drift) then decide
+      (spc run cancel <runId>, stale/stuck/superseded); and when the
+      incoming apply's specId equals the lease's, the line "this is a
+      concurrent apply of the SAME spec - almost certainly a
+      double-start; cancel one." No "wait" anywhere in the remedy
+      vocabulary.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: AL-002-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/apply-lease.test.ts
+        discriminating: true
+  - id: AL-003
+    statement: >
+      --allow-concurrent (CLI flag, threaded as allowConcurrent into
+      applyPlan): proceeds past a live lease after printing a warning
+      naming the holder. The default is refuse, always - no config gate.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**, packages/cli/src/**]
+    acceptance:
+      - id: AL-003-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/apply-lease.test.ts
+        discriminating: true
+  - id: AL-004
+    statement: >
+      Regression: sequential applies in one workspace (run completes,
+      lease released, next apply proceeds) keep working - the
+      continuation-run pattern; §78 parallel task worktrees are
+      untouched; and the runtime battery keeps passing.
+    priority: must
+    acceptance:
+      - id: AL-004-A
+        type: suite
+        ref: runtime-battery
+outOfScope:
+  - >
+    Killing or signalling the holding process - run cancel remains the
+    only sanctioned termination; the lease detects and names, never
+    terminates.
+  - >
+    Leases for verify runs, plan generation, or reconcile - the
+    receipts are all apply-entrypoint class; read paths stay
+    lease-free.
+  - >
+    Any config gate on concurrency refusal - the default is always-on;
+    --allow-concurrent is the only door.
