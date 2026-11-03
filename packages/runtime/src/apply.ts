@@ -215,8 +215,6 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
   }
   const plan = loadPlanFile(planFile);
   const specIr = loadSpecIr(paths.specsDir, plan.spec.id);
-  checkPreflight(options, paths, plan, specIr);
-
   // Workspace ownership (specs/apply-ownership): kernel lock ->
   // safety block -> execute or refuse. The kernel arbitrates
   // acquisition atomically; the safety block gates execution.
@@ -227,6 +225,8 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
     specTitle: "",
     mode: "in-place",
   });
+  // Preflight AFTER ownership: the boundary must be the first thing.
+  checkPreflight(options, paths, plan, specIr);
 
   // Refuse to shadow an in-flight run of the same plan.
   for (const runId of listRunIds(paths.runsDir)) {
