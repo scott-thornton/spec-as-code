@@ -8,6 +8,8 @@ import type { ExecutionOutcome } from "./execute.js";
  */
 
 export interface SchedulerIO {
+  /** Cancellation signal: when true, stop launching new tasks (AO-003). */
+  isCancelled?: () => boolean;
   getPlan(): Plan;
   getTaskState(taskId: string): TaskState | undefined;
   /** Persist a lifecycle transition (runtime records the matching event). */
@@ -71,6 +73,10 @@ export async function runScheduler(io: SchedulerIO): Promise<SchedulerResult> {
       return { outcome: "deadlocked", failedTasks };
     }
 
+    // Cancellation check (AO-003): stop launching when cancelled
+    if (io.isCancelled?.()) {
+      return { outcome: "done", failedTasks };
+    }
     const task = ready[0]!;
     const priorState = stateOf(task.id);
     const attempt = priorState.attempt + 1;

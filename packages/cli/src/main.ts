@@ -435,6 +435,14 @@ patch
     process.exitCode = runPatchBuild(path ?? "", opts);
   });
 
+apply
+  .command("recover")
+  .description("recover an interrupted apply: verify workers stopped, write terminal event, attest, restore branch, clear safety block (AO-005)")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action((opts: { cwd?: string }) => {
+    const { runRecoveryCommand } = require("./commands/recovery.js");
+    process.exitCode = runRecoveryCommand(opts.cwd);
+  });
 patch
   .command("apply <opsFile>")
   .description("apply a verified ops array through the applicator's exact semantics - the between-runs third leg: compose (build --batch), verify, apply; provenance logged to .spc/patch-log.jsonl")
