@@ -24,6 +24,7 @@ import { renderRunSummary } from "@spc/renderer";
 import { mustPropertiesSatisfied } from "@spc/verifier";
 import { EventStore } from "./events.js";
 import { acquireOwnership, releaseOwnership, initializeIntent } from "./apply-ownership.js";
+import { clearIntent } from "./execution-intent.js";
 import { spcPaths, type SpcPaths } from "./paths.js";
 import {
   isPlanApproved,
@@ -251,6 +252,13 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
     );
   }
   mkdirSync(runDir, { recursive: true });
+  // Initialize the durable execution-intent record (specs/apply-ownership,
+  // AO-002): cause NONE, coordinator identity, before any worker launches.
+  initializeIntent(options.repoRoot, ownership, {
+    originalBranch: 'main',
+    originalHead: "HEAD",
+    restorationTarget: 'main',
+  });
   mkdirSync(path.join(runDir, "amendments"), { recursive: true });
   {
     const source = findSpecSource(paths.specsDir, plan.spec.id);
@@ -1953,10 +1961,12 @@ async function finalize(
   requirementStates: RequirementState[],
   extra: { resultRevision?: string; diffStat?: string; changedFileCount?: number } = {},
 ): Promise<ApplyReport> {
-  // The workspace apply lease releases at finalization (specs/apply-lease):
-  // every completed path - success, failure, timeout - converges here, and
-  // a missed release (crash between write and finalize) self-heals via
-  // dead-pid reclaim on the next apply.
+  // Clear the execution-intent record at finalization (specs/apply-
+  // ownership): every completed path - success, failure, timeout - converges
+  // here. The kernel lock stays held until the process exits (correct flock
+  // semantics); a crash between intent write and this clear leaves the
+  // record present - the safety block that the next apply discovers.
+  try { clearIntent(ctx.paths.repoRoot); } catch { /* best effort */ }
   ctx.state = {
     ...ctx.state,
     status,
