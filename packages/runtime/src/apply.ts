@@ -24,7 +24,7 @@ import { renderRunSummary } from "@spc/renderer";
 import { mustPropertiesSatisfied } from "@spc/verifier";
 import { EventStore } from "./events.js";
 import { acquireOwnership, releaseOwnership, initializeIntent } from "./apply-ownership.js";
-import { clearIntent } from "./execution-intent.js";
+import { clearIntent, intentFile, writeIntent } from "./execution-intent.js";
 import { spcPaths, type SpcPaths } from "./paths.js";
 import {
   isPlanApproved,
@@ -259,6 +259,11 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
     originalHead: "HEAD",
     restorationTarget: 'main',
   });
+  // Update the intent record with the actual runId (generated after acquisition)
+  try {
+    const current = JSON.parse(readFileSync(intentFile(options.repoRoot), 'utf8'));
+    writeIntent(options.repoRoot, { ...current, runId });
+  } catch { /* best effort */ }
   mkdirSync(path.join(runDir, "amendments"), { recursive: true });
   {
     const source = findSpecSource(paths.specsDir, plan.spec.id);
