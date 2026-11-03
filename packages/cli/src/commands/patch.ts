@@ -281,7 +281,7 @@ function runPatchBuildBatch(options: PatchBuildOptions): number {
   if (options.expectDigest !== undefined && options.expectDigest !== actualDigest) {
     throw new SpcError(
       "PATCH_BASE_MISMATCH",
-      `PATCH_BASE_MISMATCH: ${fileArg} content digests to ${actualDigest}, but --expect-digest declared ${options.expectDigest}; the tree changed since it was read - re-read and rebuild; multi-op chains compose in one invocation with spc patch build --batch <spec.json> (--after <ops.json> chains a single follow-up op), never op-by-op against a moving tree`,
+      `PATCH_BASE_MISMATCH: ${fileArg} content digests to ${actualDigest}, but --expect-digest declared ${options.expectDigest}; the tree changed since it was read - re-read and rebuild; compose multi-op chains in one invocation with spc patch build --batch <spec.json>, or a single follow-up with spc patch build --after <ops.json> - never op-by-op against a moving tree`,
     );
   }
 
