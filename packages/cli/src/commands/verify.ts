@@ -276,8 +276,7 @@ export async function runVerify(
     }
   }
   // Execution accounting (specs/tooling-sweep): one line, invocation-level.
-  // (json output moved to the invocation tail - it must carry the
-  // executions and failures entries, which land after this accounting.)
+  // (text only; the terminal json print carries the failures array.)
   let executed = 0;
   let reused = 0;
   for (const runId of invocationRunIds) {
@@ -294,16 +293,14 @@ export async function runVerify(
   if (executed + reused > 0) {
     const share = Math.round((reused / (executed + reused)) * 100);
     const wallS = Math.round((Date.now() - invocationStartedAt) / 1000);
-    if (format === "json") {
-      jsonReports.push({ executions: { executed, reused, reuseSharePercent: share, freshnessCachedSpecs: cachedSpecs, wallSeconds: wallS } });
-    } else {
+    if (format !== "json") {
       console.log(`Executions: ${executed} executed, ${reused} reused (${share}% reuse), ${cachedSpecs} spec(s) freshness-cached, wall ${wallS}s`);
     }
   }
   // specs/verify-failure-visibility VF-001: the failing fact is the
   // TERMINAL output - printed after the Executions line, so a tail
   // reader sees what failed last. Green runs print nothing here.
-  if (worst !== 0 && failures.length > 0 && format !== "json") {
+  if (worst !== 0 && failures.length > 0 && format === "text") {
     console.log("");
     console.log(`Unsatisfied (${failures.length}):`);
     for (const f of failures) {
