@@ -25,7 +25,8 @@
     "@spc/repo": "workspace:*",
     "@spc/schema": "workspace:*",
     "@spc/verifier": "workspace:*",
-    "yaml": "^2.8.0"
+    "yaml": "^2.8.0",
+    "fs-ext": "^2.1.1"
   },
   "devDependencies": {
     "@spc/llm-fake": "workspace:*",
