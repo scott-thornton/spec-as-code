@@ -1,0 +1,458 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: apply-ownership
+  title: Kernel-backed exclusive apply ownership, a durable workspace safety block, and honest cancellation
+goal: >
+  Supersedes specs/apply-lease.yaml (removed by this spec). Three
+  mechanisms with three distinct authorities replace the lease's
+  conflated PID/JSON/timestamp heuristics: a kernel-backed exclusive
+  lock on the .spc/ execution domain (ownership - atomic acquisition,
+  automatic release on process death); a durable execution-intent
+  record with per-worker identity registration (workspace safety -
+  survives coordinator death, blocks new applies until verified
+  recovery); and cancellation as an execution-control operation that
+  terminates the full process tree, not just the coordinator. Agents
+  in different git worktrees apply concurrently.
+requirements:
+  - id: AO-001
+    statement: >
+      Exclusive ownership. Every mutating apply entrypoint - fresh
+      apply, --resume, spc quick (from the start of its ephemeral
+      spec/plan transaction, before provider construction and harness
+      store initialization), and reconcile --apply (same
+      full-transaction boundary) - obtains the same exclusive
+      nonblocking workspace lock on the .spc/ execution domain before
+      creating or mutating any artifact. Contenders fail immediately
+      (nonblocking refusal) with APPLY_ALREADY_RUNNING carrying the
+      holder's best-effort diagnostic identity and check-then-decide
+      remedies: inspect (spc apply owner - the three-authority
+      report), then cancel (spc run cancel). Ownership is established
+      by the kernel-level lock alone; the lock is held through
+      completion persistence, attestation, and branch restoration;
+      the lock file is never unlinked while held. Entrypoints that
+      delegate to applyPlan pass an already-acquired ownership
+      handle rather than acquiring twice.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**, packages/cli/src/**]
+    acceptance:
+      - id: AO-001-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/apply-ownership.test.ts
+        discriminating: true
+      - id: AO-001-B
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/apply-ownership-cli.test.ts
+        discriminating: true
+  - id: AO-002
+    statement: >
+      Crash recovery via kernel semantics; durable execution intent
+      with per-worker registration. A coordinator that dies releases
+      the KERNEL LOCK immediately by OS semantics. Before dispatching
+      any managed worker, the coordinator durably commits an
+      execution-intent record (synchronous write, fsync or equivalent,
+      atomic publication with directory-entry persistence - a crash
+      during record creation or deletion must leave unambiguous
+      state). A malformed, truncated, or unreadable intent record is
+      treated as UNSAFE, never as absent. Every managed worker's
+      identity (PID, process start-time, host) is durably registered
+      in the intent record BEFORE that worker can begin modifying
+      the worktree - no launch-to-registration window in which a
+      worker mutates while unrecorded. The intent record also carries a DURABLE
+      INTERRUPTION CAUSE - a REQUIRED field with exactly three
+      values: NONE (persisted at intent-record creation; no
+      cancellation requested), CANCEL_REQUESTED (persisted by
+      the CANCELLATION PROCESS before it acknowledges acceptance
+      of the cancellation request - not by the owner; the
+      owner's observation is a separate downstream event),
+      CANCEL_ESCALATED (persisted before any escalation signal is
+      sent). A missing, unknown, or invalid cause value fails
+      closed during recovery - intentional absence and accidental
+      absence are indistinguishable, so absence is never treated
+      as NONE. The cause survives coordinator death,
+      cancellation-process death, and recovery retries.
+      The cause is a monotonically advancing state machine:
+      NONE -> CANCEL_REQUESTED -> CANCEL_ESCALATED. No transition
+      moves backwards; CANCEL_ESCALATED cannot be overwritten by
+      CANCEL_REQUESTED. Transitions are atomically serialized -
+      the CANCELLATION PROCESS owns all durable cause
+      transitions; the owner participates in the atomic
+      arbitration decision and writes the cooperative terminal
+      event, but does NOT rewrite the cause. A concurrent
+      escalation must not be lost to an in-flight cooperative
+      write. Cooperative terminalization
+      and escalation are mutually exclusive outcomes: if the
+      transition cannot be established unambiguously,
+      cancellation reports INCOMPLETE and preserves the safety
+      block. The serialization mechanism belongs to the ADR; the
+      guarantee belongs here.
+      ARBITRATION: there is ONE atomic decision point
+      determining whether cooperative terminalization or hard
+      escalation wins. If cooperative terminalization wins, the
+      owner commits the CANCELLED terminal event and escalation
+      cannot subsequently occur (the cancellation process
+      observes the terminal event and stands down). If escalation
+      wins, CANCEL_ESCALATED is committed and the owner cannot
+      subsequently write a cooperative terminal event (the
+      terminal event is written by the cancellation process's
+      recovery, as CANCELLED-AFTER-ESCALATION). The owner
+      commits cooperative terminalization ONLY IF it atomically
+      establishes that escalation has not already won; escalation
+      proceeds ONLY IF cooperative terminalization has not
+      already committed. If the winner cannot be determined,
+      cancellation reports INCOMPLETE and preserves the safety
+      block. The cause and the terminal event must AGREE - a
+      durable cause of CANCEL_ESCALATED with a terminal event of
+      CANCELLED is contradictory evidence and must be impossible
+      by construction. The linearization mechanism belongs to
+      the ADR; the invariant and its single decision point
+      belong here. The COORDINATOR's identity
+      (PID, process start-time, host) is also durably recorded
+      before any mutation begins; cancellation verifies this
+      identity and obtains an identity-bound OS process handle
+      before escalation - missing, stale, or unverifiable
+      coordinator identity results in INCOMPLETE, never signalling
+      a PID based solely on advisory metadata. Recovery must account for all
+      descendants of the coordinator, not merely direct children; if
+      the complete worker set cannot be established from the record
+      plus process-tree inspection, recovery fails closed. The
+      intent record's lifecycle matches the entire protected
+      operation - cleared only after ALL of: all workers verified
+      stopped and reaped, run state persisted and attested, branch
+      restoration complete. Managed subprocesses do not inherit the
+      lock descriptor (close-on-exec or equivalent). Stale diagnostic
+      metadata never blocks kernel acquisition. Elapsed time alone
+      cannot cause takeover from a live owner.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: AO-002-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/apply-ownership.test.ts
+        discriminating: true
+  - id: AO-003
+    statement: >
+      Honest cancellation with full process-tree termination. spc
+      run cancel on a live owner requests cancellation without
+      appending to that run's event log or overwriting its state
+      (single-writer event semantics). The owner observes
+      cancellation while waiting on harness or provider I/O
+      (interruptible), stops dispatching (scheduler receives a
+      cancellation input; the CANCEL_REQUESTED cause was already
+      durably written by the cancellation process - the owner's
+      observation does not rewrite it), terminates and reaps its managed
+      subprocesses (the full process tree, not just direct
+      children), writes one terminal cancelled event, clears its
+      execution-intent record (only after the AO-002 finalization
+      boundary: workers stopped, state persisted, attested, branch
+      restored), then exits. Late harness responses arriving after
+      cancellation cannot append to or mutate the terminal run; they
+      are rejected and recorded as rejected in a separate location.
+      Bounded escalation: when cooperative cancellation does not
+      complete within a documented, tested upper bound, cancel
+      escalates (durably recording CANCEL_ESCALATED in the
+      intent record before signalling) by terminating the verified
+      owner AND its verified
+      managed workers. Termination is IDENTITY-BOUND: the signal is
+      delivered through an OS process handle bound to the verified
+      identity (pidfd or equivalent), not a PID that was checked
+      before the signal - a check-then-signal window in which the
+      process dies and the PID is reused must not reach an unrelated
+      process. Where the platform cannot provide identity-bound
+      termination, cancellation reports INCOMPLETE rather than risk
+      signalling an unverified target. Worker termination is the
+      cancellation mechanism's responsibility - killing the
+      coordinator alone does not terminate children. OWNERSHIP
+      HANDOFF after escalation: the cancellation process, having
+      terminated the owner and workers, acquires the same kernel
+      lock, performs the AO-005 recovery procedure (full
+      finalization boundary: state reconciled, attested, branch
+      restored), and reports success only after that boundary is
+      complete. If the lock cannot be acquired or reconciliation
+      cannot complete, cancellation reports INCOMPLETE and the
+      safety block remains. Cancellation reports success only when
+      the owner and all managed workers have verifiably stopped AND
+      state has been reconciled AND attested AND branch restored
+      under exclusive ownership. When worker termination cannot be
+      confirmed, cancellation reports INCOMPLETE (never success),
+      the execution-intent record is preserved, and the safety
+      block of AO-005 remains active. IDEMPOTENT RETRY covers BOTH cancellation
+      states. For CANCEL_REQUESTED (the prior cancellation
+      process died after the durable write but before owner
+      notification): the retry re-delivers the cooperative
+      request safely, without duplicating events; if the owner
+      has already terminalized cooperatively, the retry observes
+      the terminal event and stands down FROM ESCALATION (it does
+      not escalate; the arbitration already resolved); if the
+      owner is still alive, the retry lets it finish under its
+      existing ownership; if the owner has died after writing the
+      terminal event but before completing attestation, branch
+      restoration, and workspace verification, the retry acquires
+      ownership when available and completes the REMAINING AO-005
+      finalization - the terminal event stands (exactly one), but
+      a terminal event alone does not mean workspace
+      finalization is complete;
+      if the cooperative deadline expires, the existing atomic
+      arbitration determines whether escalation proceeds. For
+      CANCEL_ESCALATED (the prior process died between the
+      escalation write and its signal): the retry must not
+      downgrade or rewrite the cause; it revalidates the
+      persisted coordinator and worker identities, reacquires
+      identity-bound process handles, and continues the
+      outstanding termination operation; once all managed
+      processes are verifiably stopped, the retry acquires the
+      kernel lock and completes the AO-005 recovery. Both
+      CANCEL_REQUESTED and CANCEL_ESCALATED represent
+      recoverable, resumable operations. The cause is never
+      downgraded or rewritten. If identity or termination
+      cannot be established on retry, it reports INCOMPLETE. Terminal event semantics
+      are threefold and distinct (the mapping is defined in
+      AO-005's outcome-aware recovery): unexpected coordinator
+      death produces RECOVERED; cooperative user cancellation
+      produces CANCELLED (the owner writes it before exiting,
+      or recovery writes it if the owner died mid-cooperation);
+      hard escalation produces CANCELLED-AFTER-ESCALATION.
+      Exactly one terminal event per interrupted run.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**, packages/cli/src/**, packages/llm/src/**, packages/llm-harness/src/**, packages/executor/src/**]
+    acceptance:
+      - id: AO-003-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/apply-cancellation.test.ts
+        discriminating: true
+      - id: AO-003-B
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/apply-cancellation.test.ts -t "escalation race"
+        discriminating: true
+      - id: AO-003-C
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/apply-cancellation.test.ts -t "cancellation crash retry"
+        discriminating: true
+      - id: AO-003-D
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/apply-cancellation.test.ts -t "pre-notification crash retry"
+        discriminating: true
+  - id: AO-004
+    statement: >
+      Worktree independence. Agents in different git worktrees of
+      the same repository apply concurrently: each worktree's .spc/
+      has its own lock, own queue, own plans, own runs; neither
+      refuses the other. The lock guards the shared execution
+      resources inside one checkout, not the repository's git
+      directory. Two applies in the SAME worktree never execute
+      concurrently (AO-001); two in DIFFERENT worktrees always may.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: AO-004-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/apply-ownership.test.ts
+        discriminating: true
+  - id: AO-005
+    statement: >
+      Workspace safety block, recovery, and the reacquisition
+      distinction. The execution-intent record of AO-002 doubles as
+      the safety block: its presence after coordinator death means
+      the workspace may be unsafe. The next apply acquires the
+      kernel lock (which is always available after coordinator
+      death), reads the safety block AFTER lock acquisition
+      (recovery serialized by the lock), and refuses EXECUTION with
+      a diagnostic naming the unresolved intent and the recovery
+      command (spc apply recover). Lock acquisition and execution
+      permission are distinct events: the next apply acquires the
+      lock, discovers the block, and is refused execution - it does
+      not silently proceed, and it does not fail to acquire. The
+      blocked state cannot be bypassed by --force, --allow-dirty,
+      elapsed time, or any override. spc apply recover acquires the
+      kernel lock, then: (a) for each recorded worker identity (PID +
+      process-start-time + host all verified): where the process is
+      absent from the live process table, it is stopped; where it is
+      present, recovery attempts identity-bound termination (the
+      same safe mechanism as AO-003 escalation), then verifies
+      termination. A recorded host that does not match the current
+      host must NOT be treated as proof a worker is stopped. Where
+      the complete descendant set cannot be established (including
+      processes reparented after coordinator death), or where the
+      process table is unavailable, recovery fails closed with a
+      documented operator intervention procedure after which spc
+      apply recover can be retried. (b) Reconciles the interrupted
+      run's state - writes exactly ONE terminal event, DERIVED
+      FROM the durable interruption cause in the intent record
+      (AO-002): cause NONE = RECOVERED (unexpected death);
+      CANCEL_REQUESTED = CANCELLED (cooperative cancellation the
+      owner did not complete); CANCEL_ESCALATED = CANCELLED-
+      AFTER-ESCALATION (hard-escalated user cancellation). The
+      cause is read from durable storage, never inferred from
+      context or passed as a volatile argument - it survives
+      cancellation-process death and recovery retries. A
+      missing, unreadable, or ambiguous cause fails closed. Recovery never
+      writes a second terminal event for a run that already has
+      one.
+      (c) Generates and persists the recovery attestation. (d)
+      Completes branch restoration. (e) Verifies the resulting workspace state.
+      The intent record (or the existing durable run metadata it
+      references) must contain sufficient branch-restoration context
+      (original branch, original HEAD, restoration target), committed
+      before the first branch or worktree mutation; recovery must
+      never depend on information held only in the dead coordinator's
+      memory. Only after ALL of (a)-(e) - the full AO-002
+      finalization boundary - does recovery clear the intent
+      record. Recovery that cannot establish any step fails closed;
+      the block persists. Intent cleanup on
+      ordinary exits: failure before workers launch (lock release +
+      intent clear); normal completion (release after full
+      finalization + clear); exception with all workers verified
+      stopped (complete the entire AO-002 finalization
+      boundary, then clear the intent record and release);
+      exception with
+      worker termination unconfirmed (release on exit, intent
+      PRESERVED); coordinator killed (OS release, intent PRESERVED);
+      successful recovery (normal cycle + clear). This workspace
+      safety block is distinct from a terminal run-level blocked
+      status. A recursive spc apply from inside an active SPC task
+      fails immediately with parent-run diagnostics.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**, packages/cli/src/**]
+    acceptance:
+      - id: AO-005-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/apply-ownership.test.ts
+        discriminating: true
+      - id: AO-005-B
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/apply-ownership-cli.test.ts
+        discriminating: true
+  - id: AO-006
+    statement: >
+      Three authorities, no bypass, owner inspection. (1) KERNEL LOCK
+      - authoritative for coordinator ownership. (2) SAFETY BLOCK -
+      authoritative for workspace safety. (3) Owner METADATA -
+      advisory. Acquisition protocol: kernel lock (nonblocking) ->
+      safety block -> execute OR blocked/refuse. No flag or override
+      permits concurrent coordinators on one worktree's queue and
+      plan namespace; --allow-concurrent is removed with a migration
+      diagnostic. spc apply owner reports the three authorities
+      distinctly: lock occupancy (kernel-authoritative), safety
+      block state (safety-authoritative), and run metadata
+      (advisory) - each labelled with its authority level, plus
+      actionable next steps (recover, cancel, or proceed).
+    priority: must
+    scope:
+      include: [packages/runtime/src/**, packages/cli/src/**]
+    acceptance:
+      - id: AO-006-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/apply-ownership.test.ts
+        discriminating: true
+      - id: AO-006-B
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/apply-ownership-cli.test.ts
+        discriminating: true
+  - id: AO-007
+    statement: >
+      Supersession and regression. specs/apply-lease.yaml is REMOVED
+      from the active specification set; its oracle
+      (packages/runtime/src/apply-lease.test.ts) is removed or
+      replaced - not left alongside the new tests. The per-run
+      execution.lock stale-takeover mechanism is retired as an APPLY
+      OWNERSHIP mechanism: no runtime path reintroduces timeout-
+      based apply ownership (the harness store's separate
+      short-lived queue mutation lock is a different invariant,
+      untouched). No active spec, test, or runtime code enforces PID
+      reclamation, age-based apply takeover, or --allow-concurrent.
+      A terminal run-level blocked status is distinguished from the
+      workspace safety block. Existing parallel task execution (§78),
+      event replay, run-state projection, attestation, and the
+      runtime battery remain valid. After normal success, failure,
+      block, or cancellation with confirmed worker stop, a
+      subsequent apply acquires the lock AND is permitted to execute
+      immediately (safety block clear). After incomplete
+      cancellation or unresolved worker safety, a subsequent apply
+      acquires the lock but is refused execution by the safety block
+      until spc apply recover clears it.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**, packages/cli/src/**, specs/**]
+    acceptance:
+      - id: AO-007-A
+        type: suite
+        ref: runtime-battery
+      - id: AO-007-B
+        type: file
+        path: specs/apply-lease.yaml
+        assert:
+          exists: false
+      - id: AO-007-D
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/apply-ownership.test.ts -t "no stale takeover"
+        discriminating: true
+      - id: AO-007-C
+        type: command
+        command: test ! -f packages/runtime/src/apply-lease.test.ts || exit 1; test ! -f packages/runtime/src/apply-lease.ts || exit 1; git grep -qE "checkApplyLease|writeLease|releaseLease|readLease" -- packages/runtime/src/apply.ts packages/runtime/src/index.ts packages/cli/src/main.ts packages/cli/src/commands/apply.ts && exit 1; test $? -eq 1 && echo "legacy implementation removed"
+  - id: AO-008
+    statement: >
+      Pre-execution oracle gate (a mandatory precondition). This
+      repository's .spc/config.yaml sets verification.requireRedPhase
+      to true, so the apply run's red phase WILL execute every
+      discriminating criterion at the base revision. The process-
+      level tests (apply-ownership.test.ts, apply-cancellation.
+      test.ts, apply-ownership-cli.test.ts) must be written and
+      committed to the base revision BEFORE the apply run - so the
+      red phase demonstrates two spawned processes entering
+      concurrently, a hung coordinator that cannot be cancelled, and
+      a stale lease that still blocks - each for the intended
+      behavioural reason, not file-not-found. A test file existing
+      is necessary but not sufficient; the discriminating criteria
+      on AO-001 through AO-006 reference these same test files, and
+      the red phase enforced by requireRedPhase proves they
+      genuinely discriminate between the current and desired
+      implementations.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**, packages/cli/src/**, .spc/config.yaml]
+    acceptance:
+      - id: AO-008-A
+        type: file
+        path: packages/runtime/src/apply-ownership.test.ts
+        assert:
+          exists: true
+      - id: AO-008-D
+        type: file
+        path: .spc/config.yaml
+        assert:
+          contains: "requireRedPhase: true"
+      - id: AO-008-B
+        type: file
+        path: packages/runtime/src/apply-cancellation.test.ts
+        assert:
+          exists: true
+      - id: AO-008-C
+        type: file
+        path: packages/cli/src/apply-ownership-cli.test.ts
+        assert:
+          exists: true
+outOfScope:
+  - >
+    Distributed coordination across hosts or network filesystems
+    without reliable cross-host OS locking.
+  - >
+    A global repository-wide lock spanning git worktrees - each
+    worktree's .spc/ is its own execution domain by design.
+  - >
+    Making arbitrary external processes honor the workspace lock.
+  - >
+    Killing an unrelated external harness agent - cancellation stops
+    SPC's own coordinator and managed workers; the external agent is
+    informed via request retirement, never terminated.
+  - >
+    Implementation mechanism (native binding, platform adapter, lock
+    library) - belongs to the plan and ADR; the ADR must preserve
+    the kernel-backed exclusion requirement and specify which
+    platforms provide the required semantics. Unsupported platforms
+    fail explicitly, never silently falling back to a heartbeat
+    lease.
