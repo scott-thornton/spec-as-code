@@ -2,7 +2,6 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import path from "node:path";
 
 export const RUN_LOCK_HELD = "RUN_LOCK_HELD";
-export const RUN_LOCK_STALE_MS = 15 * 60 * 1000;
 
 export interface ExecutionLock {
   pid: number;
@@ -43,9 +42,7 @@ export function acquireExecutionLock(
   if (existsSync(file)) {
     try {
       const held = JSON.parse(readFileSync(file, "utf8")) as ExecutionLock;
-      const age = Date.parse(now()) - Date.parse(held.at);
-      const stale = Number.isNaN(age) || age > RUN_LOCK_STALE_MS;
-      if (!stale && pidAlive(held.pid)) {
+      if (pidAlive(held.pid)) {
         return { ok: false, code: RUN_LOCK_HELD, holderPid: held.pid, holderAt: held.at };
       }
     } catch {

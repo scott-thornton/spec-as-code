@@ -22,6 +22,7 @@ import { runPatchApply, runPatchBuild, runPatchVerify } from "./commands/patch.j
 import { runBrief } from "./commands/brief.js";
 import { runUsage } from "./commands/usage.js";
 import { runSpecLint } from "./commands/lint.js";
+import { runApplyOwner } from "./commands/owner.js";
 
 const program = new Command();
 
@@ -131,7 +132,6 @@ program
   .option("--allow-dirty", "skip the clean-worktree preflight")
   .option("--force", "proceed despite open blocking follow-ups")
   .option("--stay", "leave the checkout on the run branch instead of restoring (in-place run-branch mode)")
-  .option("--allow-concurrent", "proceed past a live workspace apply lease (specs/apply-lease) - the only door; queue and plan namespace stay shared")
   .option("--parent <runId>", "explicit chain parent (validated: same spec digest, git-ancestor predecessor)")
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action(
@@ -435,6 +435,13 @@ patch
     process.exitCode = runPatchBuild(path ?? "", opts);
   });
 
+patch
+  .command("owner")
+  .description("the three-authority report: kernel lock occupancy, safety block state, advisory metadata (AO-006)")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action((opts: { cwd?: string }) => {
+    process.exitCode = runApplyOwner(opts.cwd);
+  });
 patch
   .command("recover")
   .description("recover an interrupted apply: verify workers stopped, write terminal event, attest, restore branch, clear safety block (AO-005)")
