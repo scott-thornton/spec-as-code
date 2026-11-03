@@ -50,20 +50,41 @@ Each git worktree has its own `.spc/` directory (own harness queue, plans, runs)
 
 **On Linux:** `pidfd_open()` + `pidfd_send_signal()` — the pidfd is bound to the specific process instance; if that process dies, the pidfd becomes invalid and signalling it returns ESRCH, not a signal to an unrelated process.
 
-**On macOS:** no pidfd equivalent. Options:
-- `proc_pidinfo()` for identity verification + `kill()` (narrower race window, still not atomic)
-- Process ports (Mach) — complex, not exposed in Node
-- **Decision: attempt verification + kill on macOS; report INCOMPLETE if identity cannot be verified with sufficient confidence.** The spec permits this: "where the platform cannot provide identity-bound termination, cancellation reports INCOMPLETE rather than risk signalling an unverified target."
+**On macOS:** no pidfd equivalent. No identity-bound process handle is available through Node.js. Options evaluated:
+- `proc_pidinfo()` + `kill()` — has a TOCTOU race (check-then-signal); the spec prohibits this
+- Process ports (Mach) — not exposed in Node
+- **Decision: macOS does NOT support hard escalation. Cancellation reports INCOMPLETE when cooperative cancellation fails and escalation is needed.** The spec permits this: "where the platform cannot provide identity-bound termination, cancellation reports INCOMPLETE rather than risk signalling an unverified target." Cooperative cancellation still works (the owner observes and stops voluntarily); only the hard-stop path is unavailable.
 
 ### Platform support matrix
 
 | Platform | Lock | Process control | Status |
 |----------|------|-----------------|--------|
 | Linux (local FS) | `flock` via fs-ext | `pidfd` | Fully supported |
-| macOS (local FS) | `flock` via fs-ext | verification + kill (no pidfd) | Supported; escalation may report INCOMPLETE more often |
+| macOS (local FS) | `flock` via fs-ext | cooperative only; escalation → INCOMPLETE | Lock fully supported; hard escalation unavailable |
 | Windows | No `flock` | Different API entirely | **Not supported** — explicit `PLATFORM_LOCK_UNSUPPORTED` error |
 | NFS/SMB/network FS | Varies by version/config | N/A | **Not supported** — explicit error at lock acquisition |
 | Docker/containers (local storage) | Passes through to host FS | Depends on host | Supported if underlying FS supports flock |
+
+### Arbitration lock
+
+A **separate stable lock file** (`.spc/execution-intent.lock`) serializes the terminalization-vs-escalation decision — distinct from the workspace lock (which the owner holds for its entire transaction, making it unavailable to the cancellation process). The arbitration lock uses the same kernel flock mechanism but guards only the intent record's cause transitions and terminal-event commit:
+
+- **Owner cooperative terminalization:** acquire arbitration lock → check escalation hasn't won (cause != CANCEL_ESCALATED) → durably write terminal event → release arbitration lock.
+- **Cancellation escalation:** acquire arbitration lock → check cooperative terminalization hasn't committed (no terminal event) → durably write CANCEL_ESCALATED → release arbitration lock → signal.
+- **Whoever commits first wins.** Recovery reads the durable result and never produces a contradictory event.
+
+The JSON intent file is never locked directly (atomic replacement via rename changes the underlying file object); the arbitration lock is on a separate, never-renamed file.
+
+### Process containment
+
+Every managed worker is spawned through a **ManagedProcessSupervisor** that:
+- Opens an identity-bound handle (pidfd on Linux) BEFORE the process can mutate the worktree
+- Durably registers the worker's identity in the intent record
+- Tracks descendants via process groups (Linux `setpgid`/macOS `setpgid`) or explicit registration
+- On coordinator death: reparented descendants remain discoverable via the durable registry + OS process-tree inspection
+- If the complete descendant set cannot be established from the registry plus process-tree inspection, recovery fails closed
+
+The supervisor is a contract, not a specific implementation — the ADR defers the platform mechanism to the implementation plan.
 
 ### The durable intent record
 
