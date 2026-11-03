@@ -14,7 +14,27 @@ const CLI = new URL("../dist/main.js", import.meta.url).pathname;
 const root = mkdtempSync(path.join(tmpdir(), "spc-vfvis-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-function specYaml(id: string, requirementId: string, markerFile: string): string {
+function specYaml(id: string, requirementId: string, markerFile: string, withCommandCriterion: boolean): string {
+  const criteria = [
+    `      - id: ${requirementId}-A`,
+    "        type: file",
+    `        path: ${markerFile}`,
+    "        assert:",
+    '          contains: "done"',
+  ];
+  if (withCommandCriterion) {
+    // One cheap command criterion so the invocation records COMMAND_
+    // EXECUTED and the Executions accounting line prints - the block's
+    // "after the Executions line" position is only observable when an
+    // executions line exists.
+    criteria.push(
+      `      - id: ${requirementId}-B`,
+      "        type: command",
+      `        command: echo ${id}-marker`,
+      "        expect:",
+      "          exitCode: 0",
+    );
+  }
   return [
     "apiVersion: spc.dev/v1alpha1",
     "kind: Spec",
@@ -27,11 +47,7 @@ function specYaml(id: string, requirementId: string, markerFile: string): string
     "    statement: The marker file carries the done mark.",
     "    priority: must",
     "    acceptance:",
-    `      - id: ${requirementId}-A`,
-    "        type: file",
-    `        path: ${markerFile}`,
-    "        assert:",
-    '          contains: "done"',
+    ...criteria,
     "",
   ].join("\n");
 }
@@ -40,8 +56,8 @@ function specYaml(id: string, requirementId: string, markerFile: string): string
 function setupRepo(name: string): string {
   const repo = path.join(root, name);
   mkdirSync(path.join(repo, "specs"), { recursive: true });
-  writeFileSync(path.join(repo, "specs", "vf-good.yaml"), specYaml("vf-good", "GOOD-001", "marker-good.txt"));
-  writeFileSync(path.join(repo, "specs", "vf-bad.yaml"), specYaml("vf-bad", "BAD-001", "marker-bad.txt"));
+  writeFileSync(path.join(repo, "specs", "vf-good.yaml"), specYaml("vf-good", "GOOD-001", "marker-good.txt", true));
+  writeFileSync(path.join(repo, "specs", "vf-bad.yaml"), specYaml("vf-bad", "BAD-001", "marker-bad.txt", false));
   writeFileSync(path.join(repo, "marker-good.txt"), "done\n"); // satisfied
   // marker-bad.txt deliberately absent: BAD-001-A is contradicted
   spawnSync("git", ["init", "-b", "main"], { cwd: repo });

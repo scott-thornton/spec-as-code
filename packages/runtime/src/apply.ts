@@ -947,8 +947,15 @@ async function driveRun(ctx: RunContext): Promise<ApplyReport> {
     return "failed";
   };
 
-  const execute = (task: Task, attempt: number, failureContext?: { code: string; message: string }): Promise<ExecutionOutcome> =>
-    executeTaskInRun(ctx, usageSink, task, attempt, failureContext, worktree);
+  // Cancellation input (specs/apply-ownership, AO-003): the owner
+  // observing REQUEST_RETIRED must stop dispatching - no further task
+  // launches after the cancellation signal, however runnable they look.
+  let cancellationObserved = false;
+  const execute = async (task: Task, attempt: number, failureContext?: { code: string; message: string }): Promise<ExecutionOutcome> => {
+    const outcome = await executeTaskInRun(ctx, usageSink, task, attempt, failureContext, worktree);
+    if (outcome.failure?.code === "REQUEST_RETIRED") cancellationObserved = true;
+    return outcome;
+  };
 
   const result = await runScheduler({
     getPlan: () => currentPlan,
@@ -957,6 +964,7 @@ async function driveRun(ctx: RunContext): Promise<ApplyReport> {
     execute,
     onNeedsReplan,
     maxTaskRetries: ctx.config.execution.maxTaskRetries,
+    isCancelled: () => cancellationObserved,
   });
   schedulerFailedTasks = result.failedTasks;
   schedulerOutcome = result.outcome;
@@ -1709,6 +1717,10 @@ async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
   const inFlight = new Map<string, Promise<void>>();
   const inFlightWrites = new Map<string, string[]>();
   const BLOCKING = new Set(["failed", "blocked", "cancelled", "needs_replan"]);
+  // Cancellation input (specs/apply-ownership, AO-003): once a task
+  // observes REQUEST_RETIRED, no further task launches; in-flight tasks
+  // drain, then the run finalizes.
+  let cancellationObserved = false;
 
   const replanFor = async (taskId: string): Promise<"amended" | "failed"> => {
     // Drain in-flight siblings before touching the plan.
@@ -1868,6 +1880,8 @@ async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
         removeWorktree(ctx.paths.repoRoot, wt.path);
       }
 
+      if (outcome.failure?.code === "REQUEST_RETIRED") cancellationObserved = true;
+
       switch (outcome.status) {
         case "completed":
           // Rollback aftermath marker (specs/rollback-completion-
@@ -1944,7 +1958,12 @@ async function driveRunParallel(ctx: RunContext): Promise<ApplyReport> {
     const ready = pending.filter((t) =>
       (t.dependsOn ?? []).every((d) => stateOf(d).status === "completed" || stateOf(d).status === "skipped"),
     );
-    if (ready.length > 0) {
+    // Cancellation input (AO-003): stop launching; drain in-flight, then
+    // finalize. Cancelled-but-unlaunched tasks stay pending - the run's
+    // terminal state is the canceller's and recovery's record.
+    if (cancellationObserved) {
+      if (inFlight.size === 0) break;
+    } else if (ready.length > 0) {
       for (const task of ready) {
         if (inFlight.size >= maxParallel) break;
         const writes = task.targets?.write ?? [];

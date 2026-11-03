@@ -134,4 +134,30 @@ describe("sequential DAG scheduler", () => {
     expect(r.outcome).toBe("done");
     expect(h.order).toEqual(["T001@2"]);
   });
+
+  it("isCancelled stops launching new tasks - a retirement observed by one task never dispatches its siblings (AO-003)", async () => {
+    // T001 observes the cancellation (the runtime blocks it with
+    // REQUEST_RETIRED); T002 must never be dispatched.
+    const retired: ExecutionOutcome = {
+      ...outcome("T001", "blocked", "harness request retired (run cancellation observed)"),
+      failure: { code: "REQUEST_RETIRED", message: "retired" },
+    };
+    const h = harness(
+      [task("T001"), task("T002")],
+      (id) => (id === "T001" ? retired : outcome(id, "completed")),
+    );
+    let cancelled = false;
+    h.io.isCancelled = () => cancelled;
+    const originalExecute = h.io.execute;
+    h.io.execute = async (t, attempt, failureContext) => {
+      const r = await originalExecute(t, attempt, failureContext);
+      if (r.failure?.code === "REQUEST_RETIRED") cancelled = true; // the runtime sets this flag
+      return r;
+    };
+    const res = await runScheduler(h.io);
+    expect(res.outcome).toBe("done");
+    expect(h.order).toEqual(["T001@1"]); // T002 never launched
+    expect(h.states.get("T001")?.status).toBe("blocked");
+    expect(h.states.has("T002")).toBe(false); // never launched, never transitioned
+  });
 });
