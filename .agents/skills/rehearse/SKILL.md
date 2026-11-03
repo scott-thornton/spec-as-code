@@ -16,9 +16,11 @@ is the whole skill.
    to the run.
 2. **Build ops with spc patch build - never hand-write digests.**
    Anchors and base digests come from the actual bytes: `spc patch
-   build <path> --anchor-file <a> --replacement-file <r>`. For multiple
-   ops on one file, chain them with `--after <prior-ops.json>` so each
-   op's digest binds the content after the previous op applies.
+   build <path> --anchor-file <a> --replacement-file <r>`. Compose
+   multi-op chains in one invocation with `spc patch build --batch
+   <spec.json>` (array order = chain order); `--after <prior-ops.json>`
+   chains a single follow-up op, its digest binding the content after
+   the prior op applies.
    Assemble op arrays in explicit chain order, never by filename sort -
    an --after-chained op sorted before its sibling is the top staging
    refusal - and check the whole array with `spc patch verify

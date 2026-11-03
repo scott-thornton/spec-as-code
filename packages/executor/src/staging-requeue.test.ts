@@ -154,9 +154,12 @@ describe("staging requeue (SR-001)", () => {
     const outcome = await runTask(deps);
     expect(outcome.status).toBe("completed");
     expect(calls.length).toBe(2);
-    // The re-dispatch carries the actual refusal text, guidance included.
+    // The re-dispatch carries the actual refusal text, guidance included:
+    // the batch form for multi-op chains, --after for a single follow-up
+    // (specs/patch-apply PA-003 teaching shape).
     expect(calls[1]!.previousRejection).toMatch(/PATCH_BASE_MISMATCH/);
-    expect(calls[1]!.previousRejection).toMatch(/patch build --after/);
+    expect(calls[1]!.previousRejection).toMatch(/patch build --batch/);
+    expect(calls[1]!.previousRejection).toMatch(/--after/);
     // The rejection was durably recorded BEFORE the next dispatch.
     expect(rejectionsAtRequeue).toBe(1);
     expect(rejections).toEqual(["PATCH_BASE_MISMATCH"]);

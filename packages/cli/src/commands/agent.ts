@@ -390,7 +390,7 @@ export async function runAgentSubmit(options: { id: string; file?: string; stdin
     if (compositionDefect) {
       console.log(`PATCH_CHAIN_INVALID: the changes array would be refused at staging - fix it here, at composition time:`);
       console.log(staged.message);
-      console.log(`Assemble op arrays in explicit chain order (spc patch build --after), then check with: spc patch verify <ops.json>`);
+      console.log(`Assemble multi-op chains in one invocation (spc patch build --batch <spec.json>; --after <ops.json> for a single follow-up), then check with: spc patch verify <ops.json>`);
       return 1;
     }
   }
@@ -513,7 +513,7 @@ export function runAgentRespond(options: { id: string; file?: string; stdin?: bo
     if (compositionDefect) {
       console.log(`PATCH_CHAIN_INVALID: the changes array would be refused at staging - fix it here, at composition time:`);
       console.log(staged.message);
-      console.log(`Assemble op arrays in explicit chain order (spc patch build --after), then check with: spc patch verify <ops.json>`);
+      console.log(`Assemble multi-op chains in one invocation (spc patch build --batch <spec.json>; --after <ops.json> for a single follow-up), then check with: spc patch verify <ops.json>`);
       return 1;
     }
   }

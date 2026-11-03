@@ -70,7 +70,9 @@ describe("spc patch verify (PV-001)", () => {
     expect(reversed.status).toBe(1);
     expect(reversed.stdout).toMatch(/PATCH_BASE_MISMATCH/);
     expect(reversed.stdout).toMatch(/lib\/chain\.txt/);
-    expect(reversed.stdout).toMatch(/patch build --after/);
+    // Guidance teaches both composition forms (specs/patch-apply PA-003).
+    expect(reversed.stdout).toMatch(/patch build --batch/);
+    expect(reversed.stdout).toMatch(/--after/);
   });
 
   it("an array whose first op was built against a since-changed file fails with the stale digest named", () => {

@@ -64,7 +64,7 @@ export interface SubmissionCheck {
 }
 
 const RECOVERY =
-  "revert the unattributed changes and propose them as patch operations (spc patch build chains, spc patch verify, spc agent dry-run, spc agent submit)";
+  "revert the unattributed changes and propose them as patch operations (multi-op chains compose in one invocation: spc patch build --batch <spec.json>; a single follow-up chains with spc patch build --after <ops.json>; then spc patch verify, spc agent dry-run, spc agent submit)";
 
 export function evaluateSubmission(input: SubmissionCheckInput): SubmissionCheck {
   const { worktreeRoot, baselineRevision, writeTargets, attribution } = input;

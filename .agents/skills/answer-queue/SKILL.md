@@ -104,9 +104,10 @@ guidance.
 The canonical loop for executor requests is compose, preflight,
 respond:
 
-1. Compose ops with `spc patch build` - chaining multiple edits to one
-   file with `spc patch build --after <ops.json>`, never hand-typed
-   digests.
+1. Compose ops with `spc patch build` - multi-op chains in one
+   invocation with `spc patch build --batch <spec.json>` (array order =
+   chain order); a single follow-up op chains with `spc patch build
+   --after <ops.json>`. Never hand-typed digests.
 2. Preflight the assembled draft with `spc agent dry-run <id> --file
    draft.json` - one command checks the schema, stages against the
    request's base revision (not the live tree), predicts apply-time

@@ -13,7 +13,9 @@ description: The spc pipeline - the seven stages from authored spec to pushed re
 3. **Plan** - `spc plan <spec>`; answer the planner request through the
    queue. Exit: a validated plan persisted under .spc/plans/.
 4. **Answer discipline** - for every executor request: scratch-draft,
-   build ops with spc patch build, `spc agent validate`, `spc agent
+   build ops with spc patch build (multi-op chains in one invocation:
+   `spc patch build --batch <spec.json>`; single follow-up: `--after
+   <ops.json>`), `spc agent validate`, `spc agent
    dry-run --gates`, then `spc agent submit` (the disciplined tail as
    one command: chain check, preflight, respond) - or save-candidate
    under window pressure (follow: spc use-skill rehearse). Develop
