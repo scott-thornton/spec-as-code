@@ -1,0 +1,81 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: verify-failure-visibility
+  title: The failing fact last on screen - verify's unsatisfied block is the terminal output, not the seventy-first spec alphabetically
+goal: >
+  Field incident (2026-11-03): PA-003-B had contradicted in every CI
+  verify log since its red-oracle birth (e32868a, 2026-11-02), each time
+  buried mid-stream among 68 specs' output while noisier failures took
+  the attention; when those cleared, it took three CI round-trips to
+  find it. The local case is the same defect: `spc verify --all` prints
+  each unsatisfied requirement exactly once where that spec falls in
+  the alphabetical march, then ends with a wall of green and the
+  Executions line - a tail reader (a human skimming, an agent parsing,
+  CI log greppers) sees everything EXCEPT what failed. The exit code is
+  honest; the output buries the only line that matters. This spec makes
+  failure the terminal fact: when standalone verification exits
+  non-zero, the output ENDS with one block enumerating every
+  unsatisfied requirement across all verified specs - spec id,
+  requirement id, reason - after the Executions line, so the worst
+  truth is the last thing on screen. The structured formats carry the
+  same enumeration as data. No satisfaction semantics, exit codes, or
+  cache behavior change - visibility only.
+requirements:
+  - id: VF-001
+    statement: >
+      Text format terminal failure block: when standalone `spc verify`
+      (single spec or --all) exits non-zero, the output ends with an
+      "Unsatisfied (N)" block - printed AFTER the Executions summary
+      line - listing every unsatisfied requirement across all verified
+      specs, one line each: spec id, requirement id, and the recorded
+      reason (criterion id plus verdict, e.g. "criterion PA-003-B
+      contradicted (file evidence contradicts)"). Satisfied and waived
+      requirements never appear. A fully green verification prints no
+      block and its output is unchanged. The oracle asserts through the
+      real CLI against a fixture with one failing and one passing spec:
+      non-zero exit, the block present naming exactly the failing
+      spec's requirement and reason, the passing spec's requirement
+      absent, and the block positioned after the Executions line.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: VF-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/verify-failure-visibility.test.ts
+        discriminating: true
+  - id: VF-002
+    statement: >
+      Structured failures array: `spc verify --format json` (single spec
+      or --all) reports its failures as data - a `failures` array of
+      {spec, requirement, reason} entries, one per unsatisfied
+      requirement, alongside the existing executions summary - and
+      exits non-zero when it is non-empty. An all-green verification
+      reports an empty array. The github format is unchanged (its
+      per-spec error annotations already surface each failure to CI).
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: VF-002-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/verify-failure-visibility.test.ts
+        discriminating: true
+  - id: VF-003
+    statement: >
+      Regression guard: the full cli suite and the workspace typecheck
+      stay green - green-path verify output is byte-identical to today
+      (the block and the array are additions on the failing path only),
+      exit codes and satisfaction semantics unchanged.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: VF-003-A
+        type: suite
+        ref: cli-battery
+outOfScope:
+  - any change to exit codes, satisfaction semantics, or the command cache (investigated 2026-11-03 - the cache held, every contradiction was recorded truthfully; the defect was presentation)
+  - the github format (CI annotations already enumerate failures per spec)
+  - per-criterion detail beyond the recorded reason (the block is a summary; the spec's own section remains the drill-down)
