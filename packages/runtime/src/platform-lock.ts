@@ -30,10 +30,10 @@ export const PLATFORM_LOCK_UNSUPPORTED = "PLATFORM_LOCK_UNSUPPORTED";
 import { createRequire } from "node:module";
 const requireNative = createRequire(import.meta.url);
 
-function loadFlock(): { flock(fd: number, flags: string): number } | null {
+function loadFlock(): { flock(fd: number, flags: string): void } | null {
   try {
-    const fsExt = requireNative("fs-ext") as { flockSync(fd: number, flags: string): number };
-    return { flock: (fd: number, flags: string) => { fsExt.flockSync(fd, flags as never); } };
+    const fsExt = requireNative("fs-ext") as { flockSync(fd: number, flags: string): void };
+    return { flock: fsExt.flockSync.bind(fsExt) };
   } catch {
     return null;
   }
