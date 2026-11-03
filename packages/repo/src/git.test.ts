@@ -106,12 +106,19 @@ describe("commit identity", () => {
       GIT_CONFIG_GLOBAL: "/dev/null",
       GIT_CONFIG_SYSTEM: "/dev/null",
     };
+    // The scrubbed keys' prior values too: cleanup RESTORES them - the
+    // old cleanup deleted them, leaking a missing HOME/GIT_CONFIG_* into
+    // every later test on this worker.
+    const savedScrubbed: Record<string, string | undefined> = {};
     try {
       for (const key of IDENTITY_ENV_KEYS) {
         saved[key] = process.env[key];
         delete process.env[key];
       }
-      for (const [key, value] of Object.entries(scrubbed)) process.env[key] = value;
+      for (const [key, value] of Object.entries(scrubbed)) {
+        savedScrubbed[key] = process.env[key];
+        process.env[key] = value;
+      }
 
       const sha = commitAll(dir, "a change");
       expect(sha).toMatch(/^[0-9a-f]{40}$/);
@@ -122,7 +129,10 @@ describe("commit identity", () => {
         if (saved[key] === undefined) delete process.env[key];
         else process.env[key] = saved[key];
       }
-      for (const key of Object.keys(scrubbed)) delete process.env[key];
+      for (const [key, value] of Object.entries(savedScrubbed)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
     }
   });
 });
