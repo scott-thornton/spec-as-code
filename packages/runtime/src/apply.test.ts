@@ -16,7 +16,7 @@ function initRepo(name: string): string {
   const repo = path.join(root, name);
   mkdirSync(repo, { recursive: true });
   gitOk(repo, ["init", "-b", "main"]);
-  writeFileSync(path.join(repo, ".gitignore"), ".spc/runs/\n.spc/worktrees/\n.spc/plans/\n");
+  writeFileSync(path.join(repo, ".gitignore"), ".spc/\n");
   return repo;
 }
 

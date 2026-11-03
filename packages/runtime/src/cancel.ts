@@ -44,7 +44,7 @@ export function cancelRun(
   }
   const state = JSON.parse(readFileSync(stateFile, "utf8")) as RunState;
   if (state.status !== "running") {
-    return { status: "already-finished", detail: `run ${runId} already finished with status ${state.status}`, runId };
+    throw new SpcError("RUN_ALREADY_FINISHED", `run ${runId} already finished with status ${state.status}; only running runs can be cancelled`);
   }
 
   // Read the execution-intent record for this run

@@ -102,7 +102,9 @@ describe("run execution lock (RX-001)", () => {
     const fourth = acquireExecutionLock(runDir, process.pid, () => new Date().toISOString());
     expect(fourth.ok).toBe(true);
 
-    // An old-but-alive lock (older than the stale window) is taken over.
+    // A live holder is protected REGARDLESS of age (specs/apply-ownership
+    // AO-002: elapsed time alone cannot cause takeover from a live owner —
+    // the old 15-minute stale window is retired).
     releaseExecutionLock(runDir);
     const old = new Date(Date.now() - 20 * 60 * 1000).toISOString();
     writeFileSync(
@@ -111,7 +113,8 @@ describe("run execution lock (RX-001)", () => {
       "utf8",
     );
     const fifth = acquireExecutionLock(runDir, process.pid, () => new Date().toISOString());
-    expect(fifth.ok).toBe(true);
+    expect(fifth.ok).toBe(false);
+    if (!fifth.ok) expect(fifth.code).toBe(RUN_LOCK_HELD);
     releaseExecutionLock(runDir);
   });
 });

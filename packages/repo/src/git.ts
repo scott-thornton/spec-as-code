@@ -132,7 +132,7 @@ export function diffPatch(cwd: string, from: string, to: string, maxBytes: numbe
 }
 
 /** spc-owned state directories; they never belong in result commits. */
-const SPC_STATE_PATHS = [".spc/runs", ".spc/plans", ".spc/worktrees", ".spc/cache", ".spc/harness", ".spc/apply.lease", ".spc/patch-log.jsonl"];
+const SPC_STATE_PATHS = [".spc/runs", ".spc/plans", ".spc/worktrees", ".spc/cache", ".spc/harness", ".spc/apply.lease", ".spc/patch-log.jsonl", ".spc/apply.lock", ".spc/execution-intent.json", ".spc/execution-intent.lock"];
 
 /**
  * Commit message with machine-provenance trailers (git interpret-trailers

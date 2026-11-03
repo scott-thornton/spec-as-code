@@ -226,7 +226,8 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
     specTitle: "",
     mode: "in-place",
   });
-  // Preflight AFTER ownership: the boundary must be the first thing.
+
+  try {  // Preflight AFTER ownership: the boundary must be the first thing.
   checkPreflight(options, paths, plan, specIr);
 
   // Refuse to shadow an in-flight run of the same plan.
@@ -486,7 +487,9 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
   }
 
   return ctx.config.execution.parallelism > 1 ? driveRunParallel(ctx) : driveRun(ctx);
-}
+  } finally {
+    try { ownership.lock.release(); } catch { /* already released */ }
+  }}
 
 /**
  * Red-phase sweep (verification.requireRedPhase): before any task runs,
