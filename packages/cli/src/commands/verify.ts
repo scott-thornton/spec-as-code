@@ -179,6 +179,12 @@ export async function runVerify(
 
   let worst = 0;
   const jsonReports: unknown[] = [];
+  // specs/verify-failure-visibility: every unsatisfied requirement
+  // across all verified specs - the terminal failure block (text) and
+  // the failures array (json) are built from this, so the worst truth
+  // is the last thing on screen, not the seventy-first spec in the
+  // alphabetical march.
+  const failures: { spec: string; requirement: string; reason: string }[] = [];
   // The execution memo belongs to the INVOCATION (specs/verify-dedup):
   // ONE map threaded through every spec's verification, so repeated
   // commands across specs share a physical execution. Created here,
@@ -219,6 +225,11 @@ export async function runVerify(
     invocationRunIds.push(report.runId);
     const ok = report.states.every((s) => s.status === "satisfied" || s.status === "waived");
     if (!ok) worst = 1;
+    for (const s of report.states) {
+      if (s.status !== "satisfied" && s.status !== "waived") {
+        failures.push({ spec: ir.spec.metadata.id, requirement: s.propertyId, reason: s.reason ?? "" });
+      }
+    }
 
     if (format === "json") {
       jsonReports.push({
@@ -264,11 +275,9 @@ export async function runVerify(
       if (multi) console.log("");
     }
   }
-  if (format === "json") {
-    console.log(JSON.stringify(multi ? jsonReports : jsonReports[0], null, 2));
-  }
-
   // Execution accounting (specs/tooling-sweep): one line, invocation-level.
+  // (json output moved to the invocation tail - it must carry the
+  // executions and failures entries, which land after this accounting.)
   let executed = 0;
   let reused = 0;
   for (const runId of invocationRunIds) {
@@ -290,6 +299,23 @@ export async function runVerify(
     } else {
       console.log(`Executions: ${executed} executed, ${reused} reused (${share}% reuse), ${cachedSpecs} spec(s) freshness-cached, wall ${wallS}s`);
     }
+  }
+  // specs/verify-failure-visibility VF-001: the failing fact is the
+  // TERMINAL output - printed after the Executions line, so a tail
+  // reader sees what failed last. Green runs print nothing here.
+  if (worst !== 0 && failures.length > 0 && format !== "json") {
+    console.log("");
+    console.log(`Unsatisfied (${failures.length}):`);
+    for (const f of failures) {
+      console.log(`  ${f.spec}  ${f.requirement} - ${f.reason}`);
+    }
+  }
+  // VF-002: the failures array as data, emitted with the final json
+  // print (after accounting, so executions and failures ride together).
+  if (format === "json") {
+    if (multi) jsonReports.push({ failures });
+    const output = multi ? jsonReports : { ...((jsonReports[0] as Record<string, unknown>) ?? {}), failures };
+    console.log(JSON.stringify(output, null, 2));
   }
   if (worst === 0 && format !== "json") {
     console.log("");
