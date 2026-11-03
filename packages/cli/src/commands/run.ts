@@ -254,20 +254,26 @@ function findSpecFileForRun(repoRoot: string, specId: string): string | null {
   return null;
 }
 
-/** `spc run cancel <runId>` - make an interrupted run's terminal state truthful. */
+/** `spc run cancel <runId>` - honest execution control (specs/apply-ownership, AO-003). */
 export function runCancel(runId: string, cwd?: string): number {
   const repoRoot = resolveRepoRoot(cwd);
-  const state = cancelRun(repoRoot, runId);
+  const result = cancelRun(repoRoot, runId);
   // The sanctioned kill must not orphan: retire this run's stamped
-  // pendings into stale/ so no agent ever answers a dead run again.
+  // pendings into stale/ so no agent ever answers a dead run again
+  // (idempotent - cancelRun already retired during its grace wait).
   const retired = new HarnessStore(repoRoot).expireForRun(runId);
-  console.log(`Run ${runId} cancelled (was running; task states preserved).`);
+  // Honest reporting: success only when the owner verifiably stopped and
+  // state was reconciled; INCOMPLETE is INCOMPLETE, never "cancelled".
+  if (result.status === "cancelled") {
+    console.log(`Run ${runId}: cancelled. ${result.detail}`);
+  } else {
+    console.error(`Run ${runId}: cancellation INCOMPLETE. ${result.detail}`);
+  }
   if (retired.length > 0) {
     console.log(`Retired ${retired.length} harness request(s) into stale/: ${retired.join(", ")}`);
   }
   console.log(`Run directory: ${path.join(repoRoot, ".spc", "runs", runId)}`);
-  void state;
-  return 0;
+  return result.status === "cancelled" ? 0 : 1;
 }
 
 /** `spc run export <runId>`: self-contained evidence bundle. */

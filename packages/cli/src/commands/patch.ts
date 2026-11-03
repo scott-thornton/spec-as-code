@@ -235,6 +235,7 @@ function runPatchBuildBatch(options: PatchBuildOptions): number {
 }
 
 
+  try {
   const root = options.root ? path.resolve(options.root) : process.cwd();
 
   const exactlyOne = (text: string | undefined, file: string | undefined, label: string): string => {
@@ -280,7 +281,7 @@ function runPatchBuildBatch(options: PatchBuildOptions): number {
   if (options.expectDigest !== undefined && options.expectDigest !== actualDigest) {
     throw new SpcError(
       "PATCH_BASE_MISMATCH",
-      `PATCH_BASE_MISMATCH: ${fileArg} content digests to ${actualDigest}, but --expect-digest declared ${options.expectDigest}; the tree changed since it was read - re-read and rebuild`,
+      `PATCH_BASE_MISMATCH: ${fileArg} content digests to ${actualDigest}, but --expect-digest declared ${options.expectDigest}; the tree changed since it was read - re-read and rebuild; chains compose in one invocation with --batch, never op-by-op against a moving tree`,
     );
   }
 
@@ -295,4 +296,11 @@ function runPatchBuildBatch(options: PatchBuildOptions): number {
 
   console.log(JSON.stringify(op, null, 2));
   return 0;
+  } catch (e) {
+    // Refusals print and exit 1 (the patch-verify pattern), never the
+    // top-level SpcError path's exit 2 - a refused op is a named
+    // composition outcome, not a crash.
+    console.log((e as Error).message);
+    return 1;
+  }
 }

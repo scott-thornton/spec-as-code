@@ -22,12 +22,23 @@ export async function runApply(options: {
     providerFactory: async () => createProvider(config, repoRoot),
     log: (line: string) => console.log(line),
   };
-  const report = options.resumeRunId
-    ? await resumeRun({ repoRoot, resumeRunId: options.resumeRunId, allowDirty: options.allowDirty, force: options.force }, deps)
-    : await applyPlan({ repoRoot, planFile: options.planFile, allowDirty: options.allowDirty, force: options.force, stay: options.stay,
-    parentRunId: options.parent, ...(options.allowConcurrent ? { allowConcurrent: true } : {}) }, deps);
-  printReport(report);
-  return report.status === "succeeded" ? 0 : 1;
+  try {
+    const report = options.resumeRunId
+      ? await resumeRun({ repoRoot, resumeRunId: options.resumeRunId, allowDirty: options.allowDirty, force: options.force }, deps)
+      : await applyPlan({ repoRoot, planFile: options.planFile, allowDirty: options.allowDirty, force: options.force, stay: options.stay,
+      parentRunId: options.parent, ...(options.allowConcurrent ? { allowConcurrent: true } : {}) }, deps);
+    printReport(report);
+    return report.status === "succeeded" ? 0 : 1;
+  } catch (err) {
+    // Ownership refusals (specs/apply-ownership) are diagnostics, not
+    // crashes: render the code + guidance without a stack dump.
+    const code = (err as { code?: string }).code;
+    if (typeof code === "string" && (code.startsWith("APPLY_") || code === "PLATFORM_LOCK_UNSUPPORTED")) {
+      console.error(`error ${code}: ${(err as Error).message}`);
+      return 2;
+    }
+    throw err;
+  }
 }
 
 export function printReport(report: ApplyReport): void {

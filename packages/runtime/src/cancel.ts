@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, renameSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { SpcError } from "@spc/core";
 import type { RunState } from "@spc/schema";
@@ -25,6 +25,12 @@ import { tryExclusiveLock } from "./platform-lock.js";
 
 export const CANCEL_GRACE_MS = 30_000; // documented, tested upper bound
 export const CANCEL_INCOMPLETE = "CANCEL_INCOMPLETE";
+
+/** Synchronous sleep without busy-waiting (the grace and termination
+ *  waits run in a sync CLI process; Atomics.wait parks the thread). */
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
 
 interface CancellationResult {
   status: "cancelled" | "incomplete" | "already-finished";
@@ -105,9 +111,8 @@ function cooperativeCancel(
         return { status: "cancelled", detail: `run ${runId} completed cooperatively (${current.status})`, runId };
       }
     }
-    // Brief poll (not busy-wait)
-    const ms = Date.now();
-    while (Date.now() - ms < 500) { /* synchronous wait */ }
+    // Brief poll (parked, not busy-wait)
+    sleepSync(500);
   }
 
   // Grace period expired — check if escalation is possible
@@ -164,8 +169,7 @@ function escalatedCancel(
   const deadline = Date.now() + 5000;
   while (Date.now() < deadline) {
     try { process.kill(coordinatorPid, 0); } catch { break; } // dead
-    const ms = Date.now();
-    while (Date.now() - ms < 200) { /* wait */ }
+    sleepSync(200);
   }
 
   // Mark the run cancelled (the cancellation process is now the writer,
@@ -207,7 +211,6 @@ function retireRunRequests(repoRoot: string, runId: string): void {
   const pendingDir = path.join(repoRoot, ".spc", "harness", "pending");
   const staleDir = path.join(repoRoot, ".spc", "harness", "stale");
   if (!existsSync(pendingDir)) return;
-  const { readdirSync, renameSync, mkdirSync } = require("node:fs") as typeof import("node:fs");
   mkdirSync(staleDir, { recursive: true });
   for (const f of readdirSync(pendingDir)) {
     if (!f.endsWith(".json")) continue;

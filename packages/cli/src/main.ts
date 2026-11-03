@@ -23,6 +23,7 @@ import { runBrief } from "./commands/brief.js";
 import { runUsage } from "./commands/usage.js";
 import { runSpecLint } from "./commands/lint.js";
 import { runApplyOwner } from "./commands/owner.js";
+import { runRecoveryCommand } from "./commands/recovery.js";
 
 const program = new Command();
 
@@ -125,7 +126,7 @@ plan
     process.exitCode = runPlanApprove(planId);
   });
 
-program
+const applyCmd = program
   .command("apply [planFile]")
   .description("execute a plan in an isolated worktree, then verify")
   .option("--resume <runId>", "resume an interrupted run")
@@ -133,23 +134,44 @@ program
   .option("--force", "proceed despite open blocking follow-ups")
   .option("--stay", "leave the checkout on the run branch instead of restoring (in-place run-branch mode)")
   .option("--parent <runId>", "explicit chain parent (validated: same spec digest, git-ancestor predecessor)")
+  .option("--allow-concurrent", "(removed) refused with a migration diagnostic (specs/apply-ownership)")
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action(
     async (
       planFile: string | undefined,
       opts: { resume?: string; allowDirty?: boolean; force?: boolean; stay?: boolean; allowConcurrent?: boolean; cwd: string },
     ) => {
+      if (opts.allowConcurrent) {
+        console.error("error: --allow-concurrent was removed (specs/apply-ownership): the workspace lease was replaced by exclusive kernel-backed ownership, and concurrent applies in one worktree are refused. Migrate to sequential applies or one agent per worktree; inspect state with: spc apply owner");
+        process.exitCode = 2;
+        return;
+      }
       process.exitCode = await runApply({
         planFile,
         resumeRunId: opts.resume,
         allowDirty: opts.allowDirty,
         force: opts.force,
         stay: opts.stay,
-        ...(opts.allowConcurrent ? { allowConcurrent: true } : {}),
         cwd: opts.cwd,
       });
     },
   );
+
+applyCmd
+  .command("owner")
+  .description("the three-authority report: kernel lock occupancy, safety block state, advisory metadata (AO-006)")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action((opts: { cwd?: string }) => {
+    process.exitCode = runApplyOwner(opts.cwd);
+  });
+
+applyCmd
+  .command("recover")
+  .description("recover an interrupted apply: verify workers stopped, write terminal event, attest, restore branch, clear safety block (AO-005)")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action((opts: { cwd?: string }) => {
+    process.exitCode = runRecoveryCommand(opts.cwd);
+  });
 
 program
   .command("verify [specFile]")
@@ -435,21 +457,6 @@ patch
     process.exitCode = runPatchBuild(path ?? "", opts);
   });
 
-patch
-  .command("owner")
-  .description("the three-authority report: kernel lock occupancy, safety block state, advisory metadata (AO-006)")
-  .option("--cwd <dir>", "repository directory", process.cwd())
-  .action((opts: { cwd?: string }) => {
-    process.exitCode = runApplyOwner(opts.cwd);
-  });
-patch
-  .command("recover")
-  .description("recover an interrupted apply: verify workers stopped, write terminal event, attest, restore branch, clear safety block (AO-005)")
-  .option("--cwd <dir>", "repository directory", process.cwd())
-  .action((opts: { cwd?: string }) => {
-    const { runRecoveryCommand } = require("./commands/recovery.js");
-    process.exitCode = runRecoveryCommand(opts.cwd);
-  });
 patch
   .command("apply <opsFile>")
   .description("apply a verified ops array through the applicator's exact semantics - the between-runs third leg: compose (build --batch), verify, apply; provenance logged to .spc/patch-log.jsonl")

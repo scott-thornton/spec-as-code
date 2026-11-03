@@ -366,6 +366,11 @@ export class HarnessStore {
     return existsSync(path.join(this.base, "answered", `${id}.json`));
   }
 
+  /** True while the request is still in the live pending queue. */
+  hasPending(id: string): boolean {
+    return existsSync(path.join(this.base, "pending", `${id}.json`));
+  }
+
   /** A portable answer candidate by id (see candidates.ts). */
   getCandidate(id: string): import("./candidates.js").CandidateRecord | null {
     return getCandidate(this, id);

@@ -4,6 +4,10 @@ import { LLMError, LLM_INVALID_STRUCTURED_OUTPUT, LLM_TIMEOUT, validateStructure
 import { HarnessStore } from "./store.js";
 
 export const HARNESS_RESPONSE_TIMEOUT = "LLM_HARNESS_RESPONSE_TIMEOUT";
+/** The request was retired out of the live queue while we waited (the
+ *  cancellation path, specs/apply-ownership AO-03): cooperative
+ *  cancellation's notification IS the pending file's disappearance. */
+export const HARNESS_REQUEST_RETIRED = "REQUEST_RETIRED";
 
 const POLL_INTERVAL_MS = 1_000;
 
@@ -137,7 +141,19 @@ export class HarnessProvider implements LLMProvider {
 
     while (this.now() < windowStart + windowMs) {
       await this.sleep(POLL_INTERVAL_MS);
-      if (!this.store.hasAnswer(id)) continue;
+      if (!this.store.hasAnswer(id)) {
+        // Cooperative cancellation (specs/apply-ownership, AO-003): the
+        // canceller retires the run's pending requests into stale/. A
+        // vanished pending file with no answer is that notification -
+        // stop waiting immediately instead of burning the window.
+        if (!this.store.hasPending(id)) {
+          throw new LLMError(
+            HARNESS_REQUEST_RETIRED,
+            `harness request ${id} (role ${request.role}) was retired from the live queue while awaiting an answer (run cancellation); see .spc/harness/stale/${id}.json`,
+          );
+        }
+        continue;
+      }
 
       const answer = this.store.getAnswer(id);
       if (!answer) continue;

@@ -3,52 +3,89 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+import { compileSpecSource } from "@spc/core";
 
 // Oracle for specs/apply-ownership.yaml AO-008 (pre-execution gate):
-// cancellation process-level tests. These MUST fail against the current
-// implementation for the intended behavioural reasons:
-// - a hung coordinator cannot be cancelled (the workspace stays locked)
-// - cancellation does not terminate the process tree
-// - there is no cooperative cancellation path
-// - there is no idempotent retry after cancellation-process crash
+// cancellation process-level tests. Real spawned applies hang on the
+// harness queue (see apply-ownership.test.ts for the fixture recipe);
+// `spc run cancel` must stop them cooperatively - the owner observes the
+// retirement of its pending request, finalizes truthfully, and exits,
+// freeing the workspace without any escalation.
 const CLI = path.resolve(import.meta.dirname, "../../cli/dist/main.js");
 const root = mkdtempSync(path.join(tmpdir(), "spc-ao-cancel-"));
 afterAll(() => {
   if (!process.env.SPC_KEEP_FIXTURE) rmSync(root, { recursive: true, force: true });
 });
 
-function git(cwd: string, args: string[]): void {
+const SPEC_YAML = `apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: ao-cancel
+  title: T
+goal: G
+requirements:
+  - id: T-001
+    statement: S
+    priority: must
+    acceptance:
+      - id: T-001-A
+        type: file
+        path: src/out.mjs
+        assert:
+          contains: "done"
+`;
+
+const CONFIG_YAML = `version: 1
+provider:
+  name: harness
+execution:
+  requirePlanApproval: false
+  inPlace: true
+verification:
+  requireRedPhase: false
+`;
+
+function git(cwd: string, args: string[]): string {
   const r = spawnSync("git", args, { cwd, encoding: "utf8" });
   if (r.status !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr}`);
+  return r.stdout;
 }
 
 function setupRepo(name: string): string {
   const repo = path.join(root, name);
   mkdirSync(path.join(repo, "specs"), { recursive: true });
   mkdirSync(path.join(repo, ".spc", "plans"), { recursive: true });
-  mkdirSync(path.join(repo, ".spc", "harness", "pending"), { recursive: true });
   writeFileSync(path.join(repo, ".gitignore"), ".spc/\n", "utf8");
-  writeFileSync(
-    path.join(repo, "specs", "spec.yaml"),
-    `apiVersion: spc.dev/v1alpha1\nkind: Spec\nmetadata:\n  id: ao-cancel\n  title: T\ngoal: G\nrequirements:\n  - id: T-001\n    statement: S\n    priority: must\n    acceptance:\n      - id: T-001-A\n        type: file\n        path: src/out.mjs\n        assert:\n          contains: "done"\n`,
-    "utf8",
-  );
-  writeFileSync(path.join(repo, ".spc", "config.yaml"), "version: 1\nprovider:\n  name: fake\n  script: .spc/fake.yaml\nverification:\n  requireRedPhase: false\n");
-  writeFileSync(path.join(repo, ".spc", "fake.yaml"), "planner:\n  value: {}\n");
+  writeFileSync(path.join(repo, "specs", "spec.yaml"), SPEC_YAML, "utf8");
+  writeFileSync(path.join(repo, ".spc", "config.yaml"), CONFIG_YAML, "utf8");
   git(repo, ["init", "-q", "-b", "main"]);
   git(repo, ["config", "user.email", "t@t"]);
   git(repo, ["config", "user.name", "t"]);
   git(repo, ["add", "."]);
   git(repo, ["commit", "-q", "-m", "base"]);
+
+  const compiled = compileSpecSource(SPEC_YAML, "spec.yaml");
+  if (!compiled.ok || !compiled.ir) throw new Error("fixture spec does not compile");
+  const revision = git(repo, ["rev-parse", "HEAD"]).trim();
   writeFileSync(
     path.join(repo, ".spc", "plans", "plan-hang.json"),
     JSON.stringify({
       apiVersion: "spc.dev/v1alpha1",
       kind: "Plan",
       metadata: { id: "plan-hang", createdAt: new Date().toISOString() },
-      spec: { id: "ao-cancel", digest: "sha256:" + "0".repeat(64) },
-      repository: { revision: "0".repeat(40), snapshotDigest: "sha256:" + "0".repeat(64) },
-      tasks: [{ id: "T001", title: "hang", kind: "modify", intent: "i", dependsOn: [], satisfies: ["T-001"], targets: { write: ["src/out.mjs"] } }],
+      spec: { id: "ao-cancel", digest: compiled.ir.digest },
+      repository: { revision, snapshotDigest: "sha256:" + "0".repeat(64) },
+      tasks: [
+        {
+          id: "T001",
+          title: "hang",
+          kind: "modify",
+          intent: "await an executor answer that never comes",
+          dependsOn: [],
+          satisfies: ["T-001"],
+          targets: { write: ["src/out.mjs"] },
+        },
+      ],
     }),
     "utf8",
   );
@@ -63,7 +100,10 @@ interface TrackedChild {
 
 function trackChild(proc: ReturnType<typeof spawn>): TrackedChild {
   const c: TrackedChild = { proc, exited: false, code: null };
-  proc.on("exit", (code) => { c.exited = true; c.code = code; });
+  proc.on("exit", (code) => {
+    c.exited = true;
+    c.code = code;
+  });
   return c;
 }
 
@@ -71,111 +111,92 @@ function startApply(cwd: string): TrackedChild {
   return trackChild(spawn(process.execPath, [CLI, "apply", ".spc/plans/plan-hang.json"], { cwd, stdio: "pipe" }));
 }
 
-function runCancel(cwd: string): { status: number; stdout: string } {
-  const r = spawnSync(process.execPath, [CLI, "run", "cancel", "$(ls -t .spc/runs | head -1)"], { cwd, encoding: "utf8", shell: "/bin/bash" });
+function sh(cwd: string, args: string[], timeoutMs?: number): { status: number; stdout: string } {
+  const r = spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: "utf8", ...(timeoutMs ? { timeout: timeoutMs } : {}) });
   return { status: r.status ?? -1, stdout: (r.stdout ?? "") + (r.stderr ?? "") };
 }
 
+/** The most recent run id in a fixture repo (mtimes, newest first). */
+function latestRunId(repo: string): string {
+  const runsDir = path.join(repo, ".spc", "runs");
+  const entries = spawnSync("ls", ["-t", runsDir], { encoding: "utf8" }).stdout.trim().split("\n");
+  const latest = entries[0] ?? "";
+  if (!latest) throw new Error("no runs created in fixture");
+  return latest;
+}
+
+async function waitExited(child: TrackedChild, timeoutMs: number): Promise<boolean> {
+  const start = Date.now();
+  while (!child.exited && Date.now() - start < timeoutMs) {
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  return child.exited;
+}
+
+function cleanup(repo: string, ...children: TrackedChild[]): void {
+  for (const c of children) if (!c.exited) c.proc.kill("SIGKILL");
+  sh(repo, ["apply", "recover"]);
+}
+
 describe("AO-003: cooperative cancellation (process-level)", () => {
-  it("cancellation race: hanging coordinator + cancel produces a terminal event and frees the workspace", { timeout: 45000 }, async () => {
+  it("cancel: hanging coordinator stops, finalizes, and frees the workspace for the next apply", { timeout: 60000 }, async () => {
     const repo = setupRepo("coop");
     const applyChild = startApply(repo);
-    // Let the apply start and hang on the harness
-    await new Promise((r) => setTimeout(r, 4000));
-    expect(applyChild.exited).toBe(false);
-    // Find the run ID and cancel it
-    const runsDir = path.join(repo, ".spc", "runs");
-    let latestRun = "";
-    if (existsSync(runsDir)) {
-      const entries = spawnSync("ls", ["-t", runsDir], { encoding: "utf8" }).stdout.trim().split("\n");
-      latestRun = entries[0] ?? "";
-    }
-    expect(latestRun).toBeTruthy();
-    const cancelResult = spawnSync(process.execPath, [CLI, "run", "cancel", latestRun], { cwd: repo, encoding: "utf8" });
-    // Wait for the apply process to exit (cooperative cancellation should stop it)
-    // With the correct implementation: the owner notices, stops, finalizes, exits.
-    // With the broken implementation: the process keeps running until window expiry.
-    const start = Date.now();
-    while (!applyChild.exited && Date.now() - start < 20000) {
-      await new Promise((r) => setTimeout(r, 500));
-    }
-    // The apply process should have exited (cooperatively or via escalation)
-    expect(applyChild.exited).toBe(true);
-    // The workspace should be free for a new apply
-    const next = startApply(repo);
     await new Promise((r) => setTimeout(r, 3000));
-    expect(next.exited).toBe(false); // acquired, hanging on harness
-    next.proc.kill("SIGKILL");
-    await new Promise((r) => setTimeout(r, 1000));
-  });
-});
+    expect(applyChild.exited).toBe(false); // hanging on the harness queue
 
-describe("AO-003: cancellation crash retry (process-level)", () => {
-  it("pre-notification crash retry: cancellation process dies after CANCEL_REQUESTED, retry completes the cancellation", { timeout: 45000 }, async () => {
-    const repo = setupRepo("crash-retry");
-    const applyChild = startApply(repo);
-    await new Promise((r) => setTimeout(r, 4000));
-    expect(applyChild.exited).toBe(false);
-    // Get the run ID
-    const runsDir = path.join(repo, ".spc", "runs");
-    let latestRun = "";
-    if (existsSync(runsDir)) {
-      const entries = spawnSync("ls", ["-t", runsDir], { encoding: "utf8" }).stdout.trim().split("\n");
-      latestRun = entries[0] ?? "";
-    }
-    expect(latestRun).toBeTruthy();
-    // Start a cancel process and kill it immediately (simulating a crash
-    // after the durable CANCEL_REQUESTED write but before notification)
-    // With the implementation, we'd need a way to inject this crash.
-    // For now, this test verifies the retry works after a normal cancel
-    // attempt that might have partially completed.
-    const first = spawnSync(process.execPath, [CLI, "run", "cancel", latestRun], { cwd: repo, encoding: "utf8", timeout: 5000 });
-    // The first cancel may or may not have completed; retry regardless
-    const retry = spawnSync(process.execPath, [CLI, "run", "cancel", latestRun], { cwd: repo, encoding: "utf8" });
-    // Wait for the apply to stop
-    const start = Date.now();
-    while (!applyChild.exited && Date.now() - start < 20000) {
-      await new Promise((r) => setTimeout(r, 500));
-    }
-    expect(applyChild.exited).toBe(true);
-    // Workspace free for next apply
+    const runId = latestRunId(repo);
+    const cancel = sh(repo, ["run", "cancel", runId]);
+    expect(cancel.status).toBe(0);
+    expect(cancel.stdout).toMatch(/cancelled/);
+
+    // The owner observed the retirement and finalized - no escalation.
+    expect(await waitExited(applyChild, 20000)).toBe(true);
+
+    // Workspace freed: the next apply acquires and hangs on its own request.
     const next = startApply(repo);
     await new Promise((r) => setTimeout(r, 3000));
     expect(next.exited).toBe(false);
-    next.proc.kill("SIGKILL");
-    await new Promise((r) => setTimeout(r, 1000));
+    cleanup(repo, next);
   });
 
-  it("escalation race: contention at the terminalization/escalation decision point produces exactly one outcome", { timeout: 45000 }, async () => {
+  it("cancel retry after a first cancellation attempt is safe (idempotent, never two outcomes)", { timeout: 60000 }, async () => {
+    const repo = setupRepo("crash-retry");
+    const applyChild = startApply(repo);
+    await new Promise((r) => setTimeout(r, 3000));
+    expect(applyChild.exited).toBe(false);
+
+    const runId = latestRunId(repo);
+    // A first cancel may complete cooperatively; a retry must either
+    // report idempotent success (still finalizing) or the honest
+    // RUN_ALREADY_FINISHED refusal - never a second cancellation.
+    const first = sh(repo, ["run", "cancel", runId]);
+    const retry = sh(repo, ["run", "cancel", runId]);
+    const accepted = first.status === 0 || /cancelled|INCOMPLETE/.test(first.stdout);
+    expect(accepted).toBe(true);
+    expect(
+      retry.status === 0 ||
+        /RUN_ALREADY_FINISHED|cancelled|INCOMPLETE/.test(retry.stdout),
+    ).toBe(true);
+
+    expect(await waitExited(applyChild, 20000)).toBe(true);
+    cleanup(repo);
+  });
+
+  it("exactly one terminal event per cancelled run (arbitration invariant)", { timeout: 60000 }, async () => {
     const repo = setupRepo("esc-race");
     const applyChild = startApply(repo);
-    await new Promise((r) => setTimeout(r, 4000));
-    const runsDir = path.join(repo, ".spc", "runs");
-    let latestRun = "";
-    if (existsSync(runsDir)) {
-      const entries = spawnSync("ls", ["-t", runsDir], { encoding: "utf8" }).stdout.trim().split("\n");
-      latestRun = entries[0] ?? "";
-    }
-    expect(latestRun).toBeTruthy();
-    // Cancel - this will exercise either cooperative or escalated path
-    const cancel = spawnSync(process.execPath, [CLI, "run", "cancel", latestRun], { cwd: repo, encoding: "utf8" });
-    // Wait for apply to stop
-    const start = Date.now();
-    while (!applyChild.exited && Date.now() - start < 20000) {
-      await new Promise((r) => setTimeout(r, 500));
-    }
-    expect(applyChild.exited).toBe(true);
-    // Verify exactly one terminal event (check the events file)
-    if (existsSync(runsDir) && latestRun) {
-      const eventsFile = path.join(runsDir, latestRun, "events.jsonl");
-      if (existsSync(eventsFile)) {
-        const events = readFileSync(eventsFile, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as { type: string });
-        const terminalEvents = events.filter((e) => e.type === "RUN_COMPLETED");
-        // Exactly one terminal event per run
-        expect(terminalEvents.length).toBe(1);
-      }
-    }
-    // Clean up
-    if (!applyChild.exited) applyChild.proc.kill("SIGKILL");
+    await new Promise((r) => setTimeout(r, 3000));
+    const runId = latestRunId(repo);
+
+    sh(repo, ["run", "cancel", runId]);
+    expect(await waitExited(applyChild, 20000)).toBe(true);
+
+    const eventsFile = path.join(repo, ".spc", "runs", runId, "events.jsonl");
+    expect(existsSync(eventsFile)).toBe(true);
+    const events = readFileSync(eventsFile, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as { type: string });
+    const terminal = events.filter((e) => e.type === "RUN_COMPLETED");
+    expect(terminal.length).toBe(1);
+    cleanup(repo);
   });
 });

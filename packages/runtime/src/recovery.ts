@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { SpcError } from "@spc/core";
 import type { RunState } from "@spc/schema";
@@ -108,10 +109,11 @@ function verifyWorkers(repoRoot: string, record: ExecutionIntent): { ok: boolean
       // Worker is alive — attempt to terminate (identity-bound mechanism
       // deferred to platform adapter; SIGTERM with PID for now)
       try { process.kill(worker.pid, "SIGTERM"); } catch { /* may have died */ }
-      // Wait briefly
+      // Wait briefly (parked, not busy-wait)
       const deadline = Date.now() + 3000;
       while (Date.now() < deadline) {
         try { process.kill(worker.pid, 0); } catch { break; } // dead
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
       }
       // Recheck
       try {
@@ -123,7 +125,7 @@ function verifyWorkers(repoRoot: string, record: ExecutionIntent): { ok: boolean
     }
 
     // Host mismatch check: a different host is NOT proof of stopped
-    if (worker.host !== require("node:os").hostname()) {
+    if (worker.host !== os.hostname()) {
       return { ok: false, detail: `worker pid ${worker.pid} recorded on host ${worker.host} (different from current host — cannot verify from here)` };
     }
   }
@@ -184,10 +186,14 @@ function persistRecoveryAttestation(
   events.load();
   const evidence = new EvidenceStore(paths.evidenceFile(record.runId));
   evidence.load();
+  const stateFile = paths.stateFile(record.runId);
+  const specId = existsSync(stateFile)
+    ? (JSON.parse(readFileSync(stateFile, "utf8")) as RunState).specId
+    : "";
   attestRecords({
     runDir,
     runId: record.runId,
-    specId: "", // from state if available
+    specId,
     status: outcome as "cancelled" | "succeeded" | "failed" | "partially_satisfied",
     events,
     evidence: [...evidence.all()],
@@ -214,8 +220,8 @@ function verifyWorkspaceState(repoRoot: string): { ok: boolean; detail?: string 
   // For now: check that .spc is writable and the intent can be cleared
   try {
     const testFile = path.join(repoRoot, ".spc", ".recovery-check");
-    require("node:fs").writeFileSync(testFile, "ok");
-    require("node:fs").unlinkSync(testFile);
+    writeFileSync(testFile, "ok");
+    unlinkSync(testFile);
     return { ok: true };
   } catch (e) {
     return { ok: false, detail: `workspace not writable: ${(e as Error).message}` };

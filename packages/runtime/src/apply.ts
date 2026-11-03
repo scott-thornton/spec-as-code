@@ -255,10 +255,12 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
   mkdirSync(runDir, { recursive: true });
   // Initialize the durable execution-intent record (specs/apply-ownership,
   // AO-002): cause NONE, coordinator identity, before any worker launches.
+  // The checkout is still on its original branch here (the run branch is
+  // switched later), so the restoration context is captured truthfully.
   initializeIntent(options.repoRoot, ownership, {
-    originalBranch: 'main',
-    originalHead: "HEAD",
-    restorationTarget: 'main',
+    originalBranch: currentBranch(options.repoRoot),
+    originalHead: currentRevision(options.repoRoot),
+    restorationTarget: currentBranch(options.repoRoot),
   });
   // Update the intent record with the actual runId (generated after acquisition)
   try {
@@ -486,7 +488,12 @@ export async function applyPlan(options: ApplyOptions, deps: ApplyDeps): Promise
     await runRedPhaseSweep(ctx);
   }
 
-  return ctx.config.execution.parallelism > 1 ? driveRunParallel(ctx) : driveRun(ctx);
+  // `await`, not bare `return`: a returned promise inside try/finally runs
+  // the finally immediately (the completion value is adopted, not awaited),
+  // which released the workspace lock the moment the scheduler dispatched
+  // and left the whole run executing detached and unowned (AO-001 incident,
+  // caught by the AO-008 process-level oracle).
+  return await (ctx.config.execution.parallelism > 1 ? driveRunParallel(ctx) : driveRun(ctx));
   } finally {
     try { ownership.lock.release(); } catch { /* already released */ }
   }}
@@ -602,6 +609,17 @@ export async function resumeRun(options: ApplyOptions & { resumeRunId: string },
   }
   const meta = loadRunMeta(paths.runsDir, runId);
   if (!meta) throw new SpcError(RUNTIME_ERROR, `run ${runId} has no metadata.json`);
+  // Workspace ownership first (specs/apply-ownership): --resume is a
+  // mutating apply entrypoint like any other and enters through the same
+  // kernel-lock boundary before touching run state.
+  const ownership = acquireOwnership(options.repoRoot, {
+    runId,
+    planId: meta.planId ?? "",
+    specId: meta.specId,
+    specTitle: "",
+    mode: "in-place",
+  });
+  try {
   // The state-based in-flight check is inherently racy (run-mvix4mfx:
   // the original process was still executing when a resume started) -
   // the pid lock is the sound fence.
@@ -617,6 +635,17 @@ export async function resumeRun(options: ApplyOptions & { resumeRunId: string },
       `run ${runId} is executing in process ${resumeLock.holderPid} (since ${resumeLock.holderAt}); one live process per run - a stale lock (dead pid, or older than 15 minutes) is taken over automatically`,
     );
   }
+  // Durable intent for the resumed run (specs/apply-ownership, AO-002):
+  // workers may launch during the resume, so the safety block must be
+  // present from here until the finally releases ownership. Restoration
+  // context comes from the run's own metadata (originalBranch recorded at
+  // first start; absent in current-branch in-place mode, where the branch
+  // never changed).
+  initializeIntent(options.repoRoot, ownership, {
+    originalBranch: meta.originalBranch ?? currentBranch(options.repoRoot),
+    originalHead: meta.baseRevision ?? currentRevision(options.repoRoot),
+    restorationTarget: meta.originalBranch ?? meta.branch ?? currentBranch(options.repoRoot),
+  });
   const planFile = paths.planFile(meta.planId ?? "");
   if (!existsSync(planFile)) throw new SpcError(RUNTIME_ERROR, `plan file for run ${runId} is missing`);
   const plan = loadPlanFile(planFile);
@@ -697,7 +726,12 @@ export async function resumeRun(options: ApplyOptions & { resumeRunId: string },
   if (ctx.config.verification.requireRedPhase) {
     await runRedPhaseSweep(ctx);
   }
-  return ctx.config.execution.parallelism > 1 ? driveRunParallel(ctx) : driveRun(ctx);
+  // `await` for the same reason as applyPlan: a bare returned promise runs
+  // the finally immediately and releases the workspace lock mid-run.
+  return await (ctx.config.execution.parallelism > 1 ? driveRunParallel(ctx) : driveRun(ctx));
+  } finally {
+    try { ownership.lock.release(); } catch { /* already released */ }
+  }
 }
 
 /**
@@ -1425,7 +1459,25 @@ export async function executeTaskInRun(
       },
     );
   } catch (e) {
-    return failedOutcome(task, (e as { code?: string }).code ?? "EXECUTOR_ERROR", (e as Error).message);
+    const code = (e as { code?: string }).code ?? "EXECUTOR_ERROR";
+    // Cooperative cancellation (specs/apply-ownership, AO-003): a retired
+    // harness request must not retry - a fresh request would sit in the
+    // queue for its whole window. Block the task; with no runnable work
+    // the scheduler finishes the run, the owner finalizes truthfully,
+    // and the canceller observes completion within its grace period.
+    if (code === "REQUEST_RETIRED") {
+      ctx.events.append("TASK_BLOCKED", { taskId: task.id, attempt, error: { code, message: (e as Error).message } });
+      ctx.log(`Task ${task.id} blocked: harness request retired (run cancellation observed)`);
+      return {
+        taskId: task.id,
+        status: "blocked",
+        summary: (e as Error).message,
+        result: { status: "blocked", summary: (e as Error).message, changes: [], commands: [], observations: [], evidenceCandidates: [], followups: [] },
+        appliedChanges: [],
+        failure: { code, message: (e as Error).message },
+      };
+    }
+    return failedOutcome(task, code, (e as Error).message);
   }
 
   // ADR-0013, executor side: when the demotion policy is active and a task
@@ -1971,9 +2023,9 @@ async function finalize(
 ): Promise<ApplyReport> {
   // Clear the execution-intent record at finalization (specs/apply-
   // ownership): every completed path - success, failure, timeout - converges
-  // here. The kernel lock stays held until the process exits (correct flock
-  // semantics); a crash between intent write and this clear leaves the
-  // record present - the safety block that the next apply discovers.
+  // here. The kernel lock is released by applyPlan/resumeRun's finally once
+  // this promise chain settles; a crash between intent write and this clear
+  // leaves the record present - the safety block the next apply discovers.
   try { clearIntent(ctx.paths.repoRoot); } catch { /* best effort */ }
   ctx.state = {
     ...ctx.state,
