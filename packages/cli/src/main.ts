@@ -435,7 +435,7 @@ patch
     process.exitCode = runPatchBuild(path ?? "", opts);
   });
 
-apply
+patch
   .command("recover")
   .description("recover an interrupted apply: verify workers stopped, write terminal event, attest, restore branch, clear safety block (AO-005)")
   .option("--cwd <dir>", "repository directory", process.cwd())

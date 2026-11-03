@@ -24,3 +24,5 @@ export * from "./replay.js";
 export * from "./drift.js";
 export * from "./quick.js";
 export * from "./bundle.js";
+
+export * from "./recovery.js";

@@ -85,7 +85,6 @@ describe("AO-003: cooperative cancellation (process-level)", () => {
     expect(applyChild.exited).toBe(false);
     // Find the run ID and cancel it
     const runsDir = path.join(repo, ".spc", "runs");
-    const runId = existsSync(runsDir) ? readFileSync.path : null;
     let latestRun = "";
     if (existsSync(runsDir)) {
       const entries = spawnSync("ls", ["-t", runsDir], { encoding: "utf8" }).stdout.trim().split("\n");

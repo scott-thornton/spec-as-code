@@ -19,5 +19,8 @@ export function runRecoveryCommand(cwd?: string): number {
       console.log(`Recovery incomplete: ${result.detail}`);
       console.log(`The safety block remains. Resolve the issue and retry: spc apply recover`);
       return 1;
+    default:
+      console.log(`Unknown recovery status: ${result.status}`);
+      return 1;
   }
 }

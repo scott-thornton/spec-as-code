@@ -91,11 +91,11 @@ export function runRecovery(repoRoot: string): { status: "recovered" | "incomple
   }
 }
 
-function deriveTerminalOutcome(cause: ExecutionIntent["cause"]): string {
+function deriveTerminalOutcome(cause: ExecutionIntent["cause"]): "cancelled" | "recovered" | "partially_satisfied" {
   switch (cause) {
     case "NONE": return "recovered";
     case "CANCEL_REQUESTED": return "cancelled";
-    case "CANCEL_ESCALATED": return "cancelled-after-escalation";
+    case "CANCEL_ESCALATED": return "cancelled" as const;
     default: return "recovered"; // unreachable (readIntent validates cause)
   }
 }
@@ -156,7 +156,7 @@ function writeTerminalEvent(
 
   // Write the cause-derived terminal event
   events.append("RUN_COMPLETED", {
-    status: outcome,
+    status: outcome as "cancelled" | "succeeded" | "failed" | "partially_satisfied",
     reason: `recovered by spc apply recover (cause: ${record.cause})`,
     tasks: {},
   });
@@ -188,7 +188,7 @@ function persistRecoveryAttestation(
     runDir,
     runId: record.runId,
     specId: "", // from state if available
-    status: outcome,
+    status: outcome as "cancelled" | "succeeded" | "failed" | "partially_satisfied",
     events,
     evidence: [...evidence.all()],
     now: () => new Date().toISOString(),
