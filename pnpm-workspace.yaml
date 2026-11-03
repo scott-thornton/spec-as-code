@@ -3,3 +3,4 @@ packages:
   - "evals/runner"
 allowBuilds:
   esbuild: true
+  fs-ext: set this to true or false
