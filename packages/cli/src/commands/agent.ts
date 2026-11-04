@@ -173,13 +173,13 @@ export function runAgentList(cwd: string | undefined, format: "text" | "json"): 
     const seen = preflighted.get(r.id) ?? 0;
     const answeredAt = store.getAnswer(r.id)?.answeredAt ?? null;
     const answered = answeredAt ? `  answered: yes (${answeredAt.slice(11, 16)} UTC)` : "  answered: no";
-    const retry = r.lastError ? "  · retry needed" : "";
+    const retry = r.lastError ? "  · feedback" : "";
     console.log(`${r.id}  [${r.role}]  ${r.schemaName}  ${describeRequestState(r)}${answered}${retry}${seen > 0 ? `  preflighted ${seen}x` : ""}`);
     if (r.note) {
       console.log(`    note: ${r.note}`);
     }
     if (r.lastError) {
-      console.log(`    retry needed - previous answer invalid: ${r.lastError.split("\n")[0]}`);
+      console.log(`    feedback: ${r.lastError.split("\n")[0]}`);
     }
   }
   console.log("\nInspect with:  spc agent show <id>");
@@ -222,6 +222,28 @@ function extractPromptPayload(prompt: string): unknown {
   return null;
 }
 
+/**
+ * specs/submit-refusal-feedback: a submit-gate refusal records its named
+ * cause on the pending request (requeueWithFeedback - the same mechanism
+ * the run uses for rejected answers), so the next attempt - model or
+ * human - sees what the fence said instead of retrying blind. Never
+ * passes a window refresh: the owner's poll anchor is in-memory, and a
+ * refreshed stamp would keep the request listed and let store.answer
+ * accept into a window the run already abandoned. Store-boundary
+ * REQUEST_* refusals never route through here (the duplicate-submission
+ * guard keys on an absent lastError).
+ */
+function recordRefusalFeedback(store: HarnessStore, id: string, code: string, detail: string, remediation: string): void {
+  const firstLine = detail.split("\n")[0] ?? "";
+  const feedback = `${code}: ${firstLine} | ${remediation}`.slice(0, 1500);
+  try {
+    store.requeueWithFeedback(id, feedback);
+    console.log(`feedback recorded on request ${id} - the next attempt sees it: spc agent show ${id}`);
+  } catch {
+    // request absent or unreadable - the stdout teaching stands alone
+  }
+}
+
 export function runAgentShow(id: string, cwd: string | undefined, part?: AgentShowPart): number {
   const { store } = storeFor(cwd);
   const request = store.getRequest(id);
@@ -256,6 +278,9 @@ export function runAgentShow(id: string, cwd: string | undefined, part?: AgentSh
   }
   console.log(`=== SYSTEM ===\n${request.system}\n\n=== PROMPT ===\n${request.prompt}\n\n=== SCHEMA (${request.schemaName}) ===`);
   console.log(JSON.stringify(request.jsonSchema, null, 2));
+  if (request.lastError) {
+    console.log(`\n=== FEEDBACK (last refusal - fix before answering) ===\n${request.lastError}`);
+  }
   return 0;
 }
 
@@ -388,6 +413,7 @@ export async function runAgentSubmit(options: { id: string; file?: string; stdin
       staged.ok === false &&
       (staged.code === "PATCH_BASE_MISMATCH" || staged.code === "PATCH_ANCHOR_ABSENT" || staged.code === "PATCH_ANCHOR_NOT_UNIQUE");
     if (compositionDefect) {
+      recordRefusalFeedback(store, options.id, "PATCH_CHAIN_INVALID", staged.message, "compose multi-op chains in one invocation (spc patch build --batch <spec.json>; --after <ops.json> for a single follow-up), then spc patch verify");
       console.log(`PATCH_CHAIN_INVALID: the changes array would be refused at staging - fix it here, at composition time:`);
       console.log(staged.message);
       console.log(`Assemble multi-op chains in one invocation (spc patch build --batch <spec.json>; --after <ops.json> for a single follow-up), then check with: spc patch verify <ops.json>`);
@@ -400,6 +426,7 @@ export async function runAgentSubmit(options: { id: string; file?: string; stdin
   // nothing is answered, the request stays pending.
   const localRefusal = submissionGuardRefusal(repoRoot, options.id);
   if (localRefusal) {
+    recordRefusalFeedback(store, options.id, localRefusal.code, localRefusal.message, "revert the unattributed changes and propose them as patch operations");
     console.log(`${localRefusal.code}: ${localRefusal.message}`);
     console.log(`submit refused without answering - revert the unattributed changes and propose them as patch operations`);
     return 1;
@@ -413,8 +440,10 @@ export async function runAgentSubmit(options: { id: string; file?: string; stdin
       throw new SpcError("HARNESS_RESPOND_INPUT", "the dry-run step needs --file (write the draft to disk, or pass --no-preflight)");
     }
     void store;
-    const preflight = await runAgentDryRun({ id: options.id, file: options.file, gates: false, cwd: options.cwd });
+    let preflightRefusal: string | null = null;
+    const preflight = await runAgentDryRun({ id: options.id, file: options.file, gates: false, cwd: options.cwd, onRefusal: (named) => { preflightRefusal = named; } });
     if (preflight !== 0) {
+      recordRefusalFeedback(store, options.id, "PREFLIGHT_REFUSED", preflightRefusal ?? "the dry-run preflight refused this draft", "fix the named cause and submit again, or pass --no-preflight to push through");
       console.log(`submit stopped: the dry-run preflight refused this draft (exit ${preflight}); fix and submit again, or pass --no-preflight to push through`);
       return 1;
     }
@@ -475,6 +504,7 @@ export function runAgentRespond(options: { id: string; file?: string; stdin?: bo
   // predicate.
   const refusal = submissionGuardRefusal(repoRoot, options.id);
   if (refusal) {
+    recordRefusalFeedback(store, options.id, refusal.code, refusal.message, "revert the unattributed changes and propose them as patch operations");
     console.log(`${refusal.code}: ${refusal.message}`);
     console.log(`answer refused - revert the unattributed changes and propose them as patch operations`);
     return 1;
@@ -511,6 +541,7 @@ export function runAgentRespond(options: { id: string; file?: string; stdin?: bo
       staged.ok === false &&
       (staged.code === "PATCH_BASE_MISMATCH" || staged.code === "PATCH_ANCHOR_ABSENT" || staged.code === "PATCH_ANCHOR_NOT_UNIQUE");
     if (compositionDefect) {
+      recordRefusalFeedback(store, options.id, "PATCH_CHAIN_INVALID", staged.message, "compose multi-op chains in one invocation (spc patch build --batch <spec.json>; --after <ops.json> for a single follow-up), then spc patch verify");
       console.log(`PATCH_CHAIN_INVALID: the changes array would be refused at staging - fix it here, at composition time:`);
       console.log(staged.message);
       console.log(`Assemble multi-op chains in one invocation (spc patch build --batch <spec.json>; --after <ops.json> for a single follow-up), then check with: spc patch verify <ops.json>`);
@@ -643,7 +674,7 @@ export function runAgentValidate(options: { id: string; file: string; cwd?: stri
  * (CHK3643) until it could bind to the request base and run with real
  * dependencies too.
  */
-export async function runAgentDryRun(options: { id: string; file: string; gates?: string[] | boolean; cwd?: string }): Promise<number> {
+export async function runAgentDryRun(options: { id: string; file: string; gates?: string[] | boolean; cwd?: string; onRefusal?: (named: string) => void }): Promise<number> {
   const { repoRoot, store } = storeFor(options.cwd);
   const request = store.getRequest(options.id);
   if (!request) {
@@ -687,6 +718,7 @@ export async function runAgentDryRun(options: { id: string; file: string; gates?
       console.log(`  ${issue.path}: ${issue.message}`);
     }
     recordPreflight({ staged: 0, refusals: [], criteria: { pass: 0, total: 0 }, gates: null });
+    options.onRefusal?.(`draft schema issue at ${schemaIssues[0]!.path}: ${schemaIssues[0]!.message} (${schemaIssues.length} issue(s) - run spc agent dry-run for all)`);
     return 1;
   }
 
@@ -749,6 +781,7 @@ export async function runAgentDryRun(options: { id: string; file: string; gates?
       }
       console.error(staged.message);
       recordPreflight({ staged: 0, refusals: [], criteria: { pass: 0, total: 0 }, gates: null });
+      options.onRefusal?.(`staging refused: ${staged.code} - ${(staged.message ?? "").split("\n")[0]}`);
       return 1;
     }
 
@@ -773,6 +806,7 @@ export async function runAgentDryRun(options: { id: string; file: string; gates?
       }
       console.log('Fix the draft and preflight again; apply would refuse this answer.');
       recordPreflight({ staged: staged.writes.length, refusals: violations.map((v) => v.code), criteria: { pass: 0, total: 0 }, gates: null });
+      options.onRefusal?.(`predicted refusal at apply: ${violations.map((v) => v.code).join(", ")} - ${violations[0]!.reason}`);
       return 1;
     }
     if (writePatterns.length > 0) {
