@@ -1,0 +1,139 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: submit-refusal-feedback
+  title: The fence writes what it says - submit refusals land on the request, not just stdout
+goal: >
+  Field evidence (har succession take five, 2026-11-02, run-mvysd8aw): an
+  external answering agent made 8 model-completed executor attempts
+  against one pending request through spc agent submit; every attempt was
+  correctly refused by a client-side gate (chain check, submission guard,
+  dry-run preflight - schema enums, op vocabulary, enforcement
+  predictions); the request's lastError stayed "none" throughout, and the
+  final attempt was one enum value from passing. The gates name their
+  causes to stdout and exit 1, but requeueWithFeedback - the store's
+  existing feedback mechanism, exercised by the RUN when it rejects an
+  accepted answer - has exactly one caller (the harness provider poll
+  loop). The dry-run even promises the missing behavior in its own
+  stdout ("a submit would requeue with the same errors") - the fence
+  advertises a wire that does not exist. An agent polling the request
+  (har watch, any harness) cannot see WHY its answer was refused, so
+  each retry is a blind guess against a fence that explained itself
+  eight times. This spec closes the wire: when spc agent submit refuses
+  at any of its gates, the named cause is written to the pending
+  request's lastError before exit - the same mechanism, the same field,
+  the same convergence loop the run side already provides. The fence's
+  refusals are its UI (PLAN_INVALID names digests, APPLY_ALREADY_RUNNING
+  names the holder, verify ends with the Unsatisfied block); submit's
+  gates are the one fence still talking only to stdout.
+requirements:
+  - id: SF-001
+    statement: >
+      The refusal exits of the submit flow record their named cause on
+      the pending request before exiting non-zero: the composition chain
+      check (PATCH_CHAIN_INVALID plus the applicator's named code), the
+      submission-boundary guard at the submit door (UNMEDIATED_CHANGES,
+      GUARD_VERSION_SKEW), the dry-run preflight refusal, and - because
+      submit's tail flows through respond - the submission guard and
+      chain check at the respond door. The write goes through the
+      harness store's existing requeueWithFeedback (request id
+      unchanged, request stays pending, lock-serialized). EXCLUDED -
+      store-boundary refusals (REQUEST_WINDOW_ELAPSED,
+      REQUEST_ALREADY_ANSWERED, unknown-id) never write feedback: the
+      duplicate-submission guard keys on an absent lastError
+      (store.answer refuses an unconsumed answer only while lastError is
+      unset; a feedback write there would un-arm it and let the next
+      duplicate submit silently overwrite a valid unconsumed answer -
+      specs/queue-legibility's pinned semantics). A submit that succeeds
+      writes no feedback; the pending record stays feedback-free until
+      the run consumes it asynchronously (exactly as today - store.answer
+      writes the answer and leaves the pending file for the owner's
+      clearPending). The oracle asserts through the real CLI against
+      fixture pending requests: a chain-broken changes array and an
+      unmediated-changes worktree each leave lastError naming the code;
+      a clean submit leaves the pending record feedback-free.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: SF-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/submit-refusal-feedback.test.ts
+        discriminating: true
+  - id: SF-002
+    statement: >
+      Feedback shape is a teaching diagnostic, bounded to one screen:
+      the refusal code, the cause's first line (the applicator's or
+      guard's named message), and the remediation pointer the stdout
+      already prints (compose with spc patch build --batch / revert and
+      propose through the patch workflow); never the full answer body.
+      Each feedback-writing refusal exit's stdout gains one line noting
+      the feedback was recorded on the request. The feedback becomes
+      visible where agents already look: spc agent show gains a feedback
+      section rendering lastError (today it appears only via --part
+      json), and spc agent list's label is neutralized from "retry
+      needed - previous answer invalid" to a frame true for pre-answer
+      refusals too (the current label lies for every refusal this spec
+      wires).
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: SF-002-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/submit-refusal-feedback.test.ts
+        discriminating: true
+  - id: SF-003
+    statement: >
+      The preflight leg names the refusing check, not the exit code.
+      The dry-run's refusal surface is exactly three causes - draft
+      schema issues (the first issues, as the stdout prints them), the
+      applicator's staging refusal code, and the predicted enforcement
+      refusal code; criteria verdicts and suite outcomes never affect
+      the dry-run's exit (exit 0 whether criteria pass or fail - the
+      preflight leg of submit fires only on these three). The recorded
+      feedback carries whichever of the three fired, by name - never
+      just "preflight refused (exit 1)", which is literally today's
+      message. The implementation may thread this by returning the
+      named outcome from the dry-run step or capturing its refusal
+      record; the contract is that the queue carries what the dry-run
+      knew - making true the dry-run's own stdout promise that "a
+      submit would requeue with the same errors".
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: SF-003-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/submit-refusal-feedback.test.ts
+        discriminating: true
+  - id: SF-004
+    statement: >
+      Regression and ownership guards: existing submit, respond, and
+      patch-verify behavior is unchanged apart from the feedback writes
+      and the rendering fixes (PV-002's contract holds and its wording
+      is superseded on one point - a refused respond leaves nothing
+      ANSWERED and the request stays pending, now with feedback
+      attached; every existing oracle uses regex assertions and stays
+      green). The window is NOT touched from the answering side - no
+      expiresAt refresh, no poll-anchor extension: the owner's window
+      anchor is in-memory in the run process, so a client-side stamp
+      refresh would not extend the owner's life but WOULD keep the
+      request listed and sweep-protected and let store.answer accept an
+      answer into a window the owner has already abandoned (a
+      refused-then-expired request sweeps to stale visibly, which is
+      honest). The full cli battery stays green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: SF-004-A
+        type: suite
+        ref: cli-battery
+outOfScope:
+  - store-boundary refusals (REQUEST_WINDOW_ELAPSED, REQUEST_ALREADY_ANSWERED, unknown-id) - writing feedback there would un-arm the duplicate-submission guard that keys on an absent lastError (specs/queue-legibility)
+  - respond-direct-only refusal exits (claim rejection, PREFLIGHT_ADVISABLE friction) - the same failure mode, but unreachable through the submit flow; a named follow-up if harnesses drive respond directly at scale
+  - standalone spc agent dry-run and spc agent validate - draft-checking tools run on many variants by design; recording would poison the queue (agent-dryrun's own outOfScope says it - never a record)
+  - clearing a prior lastError on eventual success - the refuse-then-fixed request carries its history until the run consumes it; cosmetic, and the fix would live in the store, not the cli
+  - any window-extension protocol for refused submits (the owner's poll anchor is in-memory; extending it from the answering side needs an owner-observed mechanism - its own spec if take-five-style loops keep burning windows; today the expiry sweep is the honest signal)
+  - the run-side feedback loop (specs/staging-requeue SR-001 and the provider's invalid-answer requeue already cover rejected ACCEPTED answers; this spec covers the gates BEFORE an answer exists)
