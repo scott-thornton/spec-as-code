@@ -597,6 +597,9 @@ importers:
       '@spc/llm':
         specifier: workspace:*
         version: link:../llm
+      '@spc/repo':
+        specifier: workspace:*
+        version: link:../repo
       '@spc/schema':
         specifier: workspace:*
         version: link:../schema

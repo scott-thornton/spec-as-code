@@ -1,0 +1,119 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: git-deadline
+  title: A hung git fails loudly in bounded time - every git subprocess on a coordinator path carries its own deadline
+goal: >
+  The repo package's git adapter is the runtime's hands: apply, finalize,
+  branch restore, and every scaffold operation go through ONE spawn
+  choke point (git.ts, spawnSync("git", ...)) with NO timeout - and
+  three sibling spawns sit beside it on the same coordinator paths
+  (executor's dispatch baseline and submission guard, the verifier's
+  command-cache ls-files), equally unbounded. A hung git subprocess
+  blocks the calling thread inside the syscall - vitest's per-test
+  timeout cannot even fire (the timer callback never runs) - and in the
+  coordinator path a wedged git hangs the entire run past every window,
+  where on macOS the cancellation machinery can only report INCOMPLETE.
+  The false-red work scoped a 30s test budget for slowness; its
+  adversarial pass named the remaining hole - "a true hang needs a
+  subprocess deadline in the adapter, a separate concern". Two facts
+  shape the mechanism, both probed on this machine (2026-11-04): Node's
+  spawnSync timeout does NOT escalate its kill signal - with the default
+  SIGTERM, a signal-trapping child blocks spawnSync forever (probe: no
+  return after 6s; with killSignal SIGKILL: return in 806ms with
+  ETIMEDOUT) - so the deadline is only real if it kills with SIGKILL;
+  and a child killed at expiry leaves stderr empty, so the failure must
+  be synthesized, never gleaned. Budgets are per spawn and callers fan
+  out (commitAll alone issues ~6 sequential adapter calls), so a wedged
+  coordinator is bounded at roughly ops-times-budget, not one budget -
+  infinitely better than today's eternal hang, and honest about the
+  arithmetic. This spec closes the class repo-wide: every git
+  subprocess on a coordinator path is bounded; expiry kills the child
+  with SIGKILL and surfaces a typed, command-identifying failure. Below
+  the bound, nothing changes.
+requirements:
+  - id: GD-001
+    statement: >
+      The adapter's single spawn choke point (packages/repo/src/git.ts)
+      is bounded: spawnSync gains timeout (default 60_000ms - scaffold
+      git is sub-second, this is hang insurance, not a behavior bound)
+      and MANDATORY killSignal "SIGKILL" (Node never escalates; SIGTERM
+      leaves a trapping child blocking forever - the repo's own
+      executor made this same ruling, commands.ts kills its trees with
+      SIGKILL). Expiry detection is typed, not string-matched:
+      GitResult gains a timedOut boolean (mirroring CommandRunResult's
+      precedent), defined as status === null AND error.code ===
+      ETIMEDOUT - a child that exits 0 while a grandchild delays
+      collection is a success, never a deadline; gitOk() throws a new
+      SPC_GIT_DEADLINE SpcError naming the command and the budget, with
+      a remediation hint that a SIGKILLed add/commit may leave a stale
+      index.lock to clear. The stderr marker is synthesized
+      presentation, never the contract. The budget is overridable via
+      the SPC_GIT_TIMEOUT_MS environment variable, read at call time;
+      unparsable values or values below 1 fall back to the default -
+      the deadline can be tightened or raised, never disabled (env not
+      config by design: the primary consumer is the test hook, and the
+      leaf adapter takes no config coupling; operator-facing command
+      budgets remain execution.commandTimeoutMs). The adapter accepts
+      an optional gitBinary override (default "git") so tests exercise
+      the real path hermetically without PATH games; the identity probe
+      routes through the same choke point and is bounded with it (a
+      fired probe falls back to the spc identity silently - same class
+      as any probe failure today, now bounded). The dead execFileSync
+      import goes in the same edit. The oracle: a SIGTERM-TRAPPING
+      fake git (node script via gitBinary) that sleeps - a correct
+      implementation returns at the bound with SPC_GIT_DEADLINE naming
+      the command; a naive SIGTERM implementation hangs the suite,
+      loudly (that hang is the discrimination); a control call against
+      real git under a tightened override completes normally.
+    priority: must
+    scope:
+      include: [packages/repo/src/**]
+    acceptance:
+      - id: GD-001-A
+        type: command
+        command: pnpm --filter @spc/repo... build > /dev/null && pnpm --filter @spc/repo exec vitest run src/git-deadline.test.ts
+        discriminating: true
+  - id: GD-002
+    statement: >
+      The class closes repo-wide: the three sibling git spawns on
+      coordinator paths - executor's dispatch baseline
+      (execute.ts, git rev-parse HEAD), executor's submission guard
+      (unmediated-guard.ts, git rev-parse HEAD), and the verifier's
+      command cache (command-cache.ts, git ls-files) - route through
+      the bounded adapter instead of their own spawnSync calls
+      (executor already depends on @spc/repo; verifier gains the leaf
+      dependency - no cycle). No spawnSync("git") call remains in
+      runtime, executor, or verifier sources outside the adapter and
+      runCommand's own tree-killed contract. The oracle asserts the
+      absence at source level (the AO-007 precedent: behavioral
+      guarantees of absence may check the source they constrain).
+    priority: must
+    scope:
+      include: [packages/executor/src/**, packages/verifier/src/**]
+    acceptance:
+      - id: GD-002-A
+        type: command
+        command: pnpm --filter @spc/repo... build > /dev/null && pnpm --filter @spc/repo exec vitest run src/git-deadline.test.ts
+        discriminating: true
+  - id: GD-003
+    statement: >
+      Regression guard: the full cli battery (which executes the repo,
+      executor, and verifier suites via workspace deps) stays green -
+      below the bound nothing changes (an unfired timeout option never
+      touches the result; GitResult's existing fields keep their shapes
+      and meanings, an inspection invariant the battery proxies).
+      Callers of the adapter are untouched apart from the three sibling
+      routings.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: GD-003-A
+        type: suite
+        ref: cli-battery
+outOfScope:
+  - process-group or tree kills for git invocations that spawn children (hooks, filters) - verified that this repo and its fixtures install no hooks, but inPlace mode executes commit in USER repositories where pre-commit hooks may exist; a SIGKILLed git can orphan a hook process - accepted (a leak, not a block; the deadline still returns), tracked to future supervision if it ever bites
+  - any change to runCommand's command budget (criteria commands carry commandTimeoutMs and their own SIGKILL tree kill, external review #3)
+  - an async rewrite of the adapter (the sync contract is load-bearing for the coordinator paths)
+  - fire observability beyond the typed field and the thrown message (timedOut exists on every result; non-throwing callers read it when they care - no new logging surface)
