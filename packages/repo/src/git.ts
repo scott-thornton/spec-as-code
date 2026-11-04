@@ -1,15 +1,33 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { SpcError } from "@spc/core";
 
 export const GIT_ERROR = "SPC_GIT_ERROR";
+export const GIT_DEADLINE = "SPC_GIT_DEADLINE";
+
+/**
+ * specs/git-deadline: the per-spawn budget. Default 60_000ms - scaffold
+ * git is sub-second; this is hang insurance, not a behavior bound. The
+ * SPC_GIT_TIMEOUT_MS override is read at call time; unparsable values
+ * and values below 1 fall back to the default - the deadline can be
+ * tightened or raised, never disabled.
+ */
+function gitDeadlineMs(): number {
+  const raw = Number(process.env.SPC_GIT_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : 60_000;
+}
 
 export interface GitResult {
   ok: boolean;
   stdout: string;
   stderr: string;
   exitCode: number | null;
+  /** specs/git-deadline: the child was killed at the budget (typed, the
+   *  CommandRunResult precedent - never a string-matching contract).
+   *  Defined as status null AND ETIMEDOUT: a child that exits 0 while a
+   *  grandchild delays collection succeeded and is NOT a deadline. */
+  timedOut: boolean;
 }
 
 const SPC_IDENTITY_ARGS = ["-c", "user.name=spc", "-c", "user.email=spc@local"];
@@ -36,24 +54,40 @@ function commitIdentityArgs(cwd: string): string[] {
  * Thin, synchronous Git adapter. All commands are explicit and captured;
  * nothing is shell-interpolated from untrusted input.
  */
-export function git(cwd: string, args: string[], options: { identity?: boolean; input?: string } = {}): GitResult {
+export function git(cwd: string, args: string[], options: { identity?: boolean; input?: string; gitBinary?: string } = {}): GitResult {
   const finalArgs = options.identity ? [...commitIdentityArgs(cwd), ...args] : args;
-  const r = spawnSync("git", finalArgs, {
+  const budgetMs = gitDeadlineMs();
+  const r = spawnSync(options.gitBinary ?? "git", finalArgs, {
     cwd,
     encoding: "utf8",
     maxBuffer: 32 * 1024 * 1024,
+    // specs/git-deadline: SIGKILL is mandatory - Node never escalates
+    // its kill signal, and a SIGTERM-trapping child would block this
+    // spawnSync forever (probe-proven 2026-11-04; the executor's own
+    // runCommand made the same ruling for its trees).
+    timeout: budgetMs,
+    killSignal: "SIGKILL",
     ...(options.input !== undefined ? { input: options.input } : {}),
   });
+  const timedOut = r.status === null && (r.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT";
   return {
-    ok: r.status === 0,
+    ok: r.status === 0 && !timedOut,
     stdout: r.stdout ?? "",
-    stderr: r.stderr ?? "",
+    // The killed child's stderr is empty - the deadline failure is
+    // synthesized here, presentation only (the contract is timedOut).
+    stderr: timedOut
+      ? `${GIT_DEADLINE}: git ${args.join(" ")} was killed at the ${budgetMs}ms deadline - the subprocess hung. If the interrupted operation was add/commit, a stale index.lock may remain; clear it before retrying.`
+      : r.stderr ?? "",
     exitCode: r.status,
+    timedOut,
   };
 }
 
-export function gitOk(cwd: string, args: string[], options: { identity?: boolean; input?: string } = {}): string {
+export function gitOk(cwd: string, args: string[], options: { identity?: boolean; input?: string; gitBinary?: string } = {}): string {
   const r = git(cwd, args, options);
+  if (r.timedOut) {
+    throw new SpcError(GIT_DEADLINE, r.stderr.trim());
+  }
   if (!r.ok) {
     throw new SpcError(GIT_ERROR, `git ${args.join(" ")} failed in ${cwd}: ${r.stderr.trim() || r.stdout.trim()}`);
   }

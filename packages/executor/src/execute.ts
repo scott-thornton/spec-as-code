@@ -1,11 +1,10 @@
-import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { assertNever, globMatchAny, isPhysicallyContained, isSafeRelativePath, SpcError } from "@spc/core";
 import type { AcceptanceCriterion, CommandsConfig, ObservationDraft, RepositorySnapshot, SpecIR, Task } from "@spc/schema";
 import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { makeUsageRecord } from "@spc/llm";
-import { listMatchingFiles, readExcerpt, statusPorcelain } from "@spc/repo";
+import { git, listMatchingFiles, readExcerpt, statusPorcelain } from "@spc/repo";
 import { enforceWriteScope, UNSAFE_PATH } from "./enforce.js";
 import { buildExecutorPrompt, EXECUTOR_SYSTEM, type ExecutorTaskContext } from "./prompts.js";
 import { executorResultSchema, type ExecutorResult } from "./result.js";
@@ -192,8 +191,8 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
   // tasks), so the run snapshot is not the baseline.
   let dispatchBaseline = snapshot.revision;
   {
-    const h = spawnSync("git", ["rev-parse", "HEAD"], { cwd: worktreeRoot, encoding: "utf8" });
-    if (h.status === 0 && h.stdout.trim()) dispatchBaseline = h.stdout.trim();
+    const h = git(worktreeRoot, ["rev-parse", "HEAD"]);
+    if (h.ok && h.stdout.trim()) dispatchBaseline = h.stdout.trim();
   }
 
   let result: ExecutorResult;

@@ -1,8 +1,7 @@
-import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { globMatchAny } from "@spc/core";
-import { statusPorcelain } from "@spc/repo";
+import { git, statusPorcelain } from "@spc/repo";
 import { fileDigest } from "./patch.js";
 
 /**
@@ -73,8 +72,8 @@ export function evaluateSubmission(input: SubmissionCheckInput): SubmissionCheck
   // dispatch baseline carries unmediated change whether or not git
   // status is clean. Nothing in the executor flow commits mid-task, so
   // refusal here is exact rather than conservative.
-  const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: worktreeRoot, encoding: "utf8" });
-  if (head.status === 0 && head.stdout.trim() !== baselineRevision) {
+  const head = git(worktreeRoot, ["rev-parse", "HEAD"]);
+  if (head.ok && head.stdout.trim() !== baselineRevision) {
     return {
       decision: "refuse",
       code: "UNMEDIATED_CHANGES",

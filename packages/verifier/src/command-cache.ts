@@ -1,7 +1,7 @@
-import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { git } from "@spc/repo";
 
 /**
  * Scope-addressed cross-invocation command cache (specs/verify-cache).
@@ -170,8 +170,8 @@ function digestOfContent(content: string): string {
 /** Tracked files under the scope dirs (git ls-files), sorted, excluding node_modules and dist. */
 function trackedFiles(root: string, dirs: string[]): string[] {
   if (dirs.length === 0) return [];
-  const r = spawnSync("git", ["ls-files"], { cwd: root, encoding: "utf8" });
-  if (r.status !== 0) return [];
+  const r = git(root, ["ls-files"]);
+  if (!r.ok) return [];
   const prefixes = dirs.map((d) => path.relative(root, d) + path.sep);
   return r.stdout
     .split("\n")
