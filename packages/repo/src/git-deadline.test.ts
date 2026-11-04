@@ -87,7 +87,7 @@ describe("GD-002: no sibling git spawns outside the adapter", () => {
     ];
     for (const rel of sites) {
       const src = readFileSync(path.resolve(import.meta.dirname, rel), "utf8");
-      expect(src, `${rel} still spawns git directly`).not.toContain('spawnSync("git"');
+      expect(src, `${rel} still spawns git directly`).not.toMatch(/spawnSync\(["']git/);
     }
   });
 });
