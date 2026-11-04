@@ -173,7 +173,7 @@ export function runAgentList(cwd: string | undefined, format: "text" | "json"): 
     const seen = preflighted.get(r.id) ?? 0;
     const answeredAt = store.getAnswer(r.id)?.answeredAt ?? null;
     const answered = answeredAt ? `  answered: yes (${answeredAt.slice(11, 16)} UTC)` : "  answered: no";
-    const retry = r.lastError ? "  · feedback" : "";
+    const retry = r.lastError ? "  · retry needed" : "";
     console.log(`${r.id}  [${r.role}]  ${r.schemaName}  ${describeRequestState(r)}${answered}${retry}${seen > 0 ? `  preflighted ${seen}x` : ""}`);
     if (r.note) {
       console.log(`    note: ${r.note}`);
@@ -234,6 +234,12 @@ function extractPromptPayload(prompt: string): unknown {
  * guard keys on an absent lastError).
  */
 function recordRefusalFeedback(store: HarnessStore, id: string, code: string, detail: string, remediation: string): void {
+  // An unconsumed valid answer on record: a client-gate refusal of the
+  // NEW draft must not write lastError - the duplicate-submission guard
+  // keys on an absent lastError, and a write here would falsely smear
+  // the pending answer as invalid and invite its overwrite (adversarial
+  // pass 1, F-01). The stdout teaching stands alone.
+  if (store.hasAnswer(id)) return;
   const firstLine = detail.split("\n")[0] ?? "";
   const feedback = `${code}: ${firstLine} | ${remediation}`.slice(0, 1500);
   try {
@@ -443,7 +449,7 @@ export async function runAgentSubmit(options: { id: string; file?: string; stdin
     let preflightRefusal: string | null = null;
     const preflight = await runAgentDryRun({ id: options.id, file: options.file, gates: false, cwd: options.cwd, onRefusal: (named) => { preflightRefusal = named; } });
     if (preflight !== 0) {
-      recordRefusalFeedback(store, options.id, "PREFLIGHT_REFUSED", preflightRefusal ?? "the dry-run preflight refused this draft", "fix the named cause and submit again, or pass --no-preflight to push through");
+      recordRefusalFeedback(store, options.id, "PREFLIGHT_REFUSED", preflightRefusal ?? "preflight refused WITHOUT a named cause (drift: an exit-1 path in spc agent dry-run lacks its onRefusal call - report this)", "fix the named cause and submit again, or pass --no-preflight to push through");
       console.log(`submit stopped: the dry-run preflight refused this draft (exit ${preflight}); fix and submit again, or pass --no-preflight to push through`);
       return 1;
     }
