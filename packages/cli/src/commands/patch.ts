@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { isSafeRelativePath, SpcError } from "@spc/core";
 import { fileDigest, stageChanges, type ProposedChange } from "@spc/executor";
@@ -108,6 +108,39 @@ export function runPatchApply(opsFile: string, options: { root?: string } = {}):
   }
   const byPath = new Set<string>([...staged.writes.map((w) => w.path), ...staged.deletes]);
   console.log(`applied ${staged.writes.length + staged.deletes.length} op(s) across ${byPath.size} path(s)`);
+  // specs/patch-fresh-build: invalidate the incremental build state of
+  // every touched package - two shipped type errors hid behind stale
+  // .tsbuildinfo reporting success for changed sources. What the fixer
+  // validates next must be a FRESH build of what just shipped.
+  const packageDirs = new Set<string>();
+  for (const rel of byPath) {
+    let dir = path.dirname(path.resolve(root, rel));
+    for (;;) {
+      if (existsSync(path.join(dir, "package.json"))) {
+        packageDirs.add(dir);
+        break;
+      }
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  }
+  let invalidated = 0;
+  for (const dir of packageDirs) {
+    for (const entry of readdirSync(dir)) {
+      if (entry.endsWith(".tsbuildinfo")) {
+        try {
+          rmSync(path.join(dir, entry), { force: true });
+          invalidated += 1;
+        } catch {
+          // best effort - the next build may simply be slower
+        }
+      }
+    }
+  }
+  if (packageDirs.size > 0) {
+    console.log(`invalidated build caches for ${packageDirs.size} package(s): ${[...packageDirs].map((d) => path.relative(root, d) || ".").join(", ")}`);
+  }
   // Durable provenance where run attribution cannot reach (specs/patch-apply).
   try {
     mkdirSync(path.join(root, ".spc"), { recursive: true });
