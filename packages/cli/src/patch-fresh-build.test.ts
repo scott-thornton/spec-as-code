@@ -28,11 +28,9 @@ writeFileSync(path.join(root, "pkg-b", "tsconfig.tsbuildinfo"), "STALE", "utf8")
 const op = JSON.parse(
   spawnSync(process.execPath, [CLI, "patch", "build", "pkg-a/a.txt", "--anchor", "alpha", "--replacement", "ALPHA", "--root", root], { encoding: "utf8" }).stdout as string,
 ) as Record<string, unknown>;
-const apply = spawnSync(process.execPath, [CLI, "patch", "apply", "/dev/stdin"], {
-  input: JSON.stringify([op]),
-  cwd: root,
-  encoding: "utf8",
-});
+const opsFile = path.join(root, "ops.json");
+writeFileSync(opsFile, JSON.stringify([op]), "utf8");
+const apply = spawnSync(process.execPath, [CLI, "patch", "apply", opsFile], { cwd: root, encoding: "utf8" });
 // The apply itself must succeed and patch the content.
 expect(apply.status).toBe(0);
 
