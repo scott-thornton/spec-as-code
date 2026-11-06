@@ -1,0 +1,90 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: skew-carveout
+  title: Author territory is not unmediated - the committed-bypass refuses what changed, not that anything changed
+goal: >
+  Field evidence (har, phase 18, 2026-11-06): a mid-run oracle fix - a
+  protected-path author-side commit, the legitimate way the doctrine
+  amends tests outside a run - moved HEAD off the task's dispatch
+  baseline, and the unmediated-change guard's committed-bypass refused
+  every subsequent submit for the run: three refused submissions that
+  would have passed against the current tree. The bypass's letter ("an
+  execution tree whose HEAD moved off the task's dispatch baseline
+  carries unmediated change") conflates two kinds of movement: task
+  territory (source the run owns - always unmediated) and author
+  territory (protected paths, which no run task may write by
+  construction). A commit confined to protected paths is not a task's
+  mutation escaping attribution; it is the author doing what only the
+  author may do. This spec carves the boundary the doctrine already
+  draws: the committed-bypass inspects WHAT moved - when every path in
+  the baseline..HEAD delta matches the protected patterns, the bypass
+  does not fire; when any non-protected path moved, it refuses as
+  today, naming the offending paths. The carve-out is explicit input
+  (protectedPatterns threaded from verification.protectedPaths), never
+  ambient: without the patterns the guard behaves exactly as today.
+requirements:
+  - id: SC-001
+    statement: >
+      evaluateSubmission's committed-bypass inspects the delta: when
+      HEAD differs from the dispatch baseline, the guard computes the
+      changed paths of baseline..HEAD; if EVERY changed path matches the
+      input's protectedPatterns, the bypass does not fire (author
+      territory - the working-tree dirt checks proceed unchanged); if
+      ANY changed path is non-protected, the bypass refuses as today
+      and the refusal message names the non-protected paths. The input
+      gains protectedPatterns (optional, default empty: no patterns, no
+      carve-out - byte-identical behavior for unthreaded callers). The
+      oracle drives the real guard against git fixtures: baseline
+      commit, then (a) a commit touching only a protected-matching path
+      with patterns threaded -> allow; (b) a commit touching a source
+      path -> refuse, message names it; (c) the same protected-only
+      commit with NO patterns threaded -> refuse (the carve-out is
+      explicit input, not ambient).
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: SC-001-A
+        type: command
+        command: pnpm --filter @spc/executor... build > /dev/null && pnpm --filter @spc/executor exec vitest run src/skew-carveout.test.ts
+        discriminating: true
+  - id: SC-002
+    statement: >
+      Both CLI doors thread the patterns: submissionGuardRefusal (the
+      submit door and the respond door) loads the repository config's
+      verification.protectedPaths and passes them to the guard, so a
+      workspace whose config protects its test paths does not refuse
+      submits after an author-side oracle amendment. The oracle runs
+      the real CLI against a fixture (run/plan scaffolding, pending
+      request, a protected-only commit after the dispatch baseline,
+      config.yaml declaring the protected pattern): the submit passes
+      the guard door (the refusal class UNMEDIATED_CHANGES does not
+      appear; the submit proceeds to its next gate); a control fixture
+      with a non-protected commit still refuses naming the path.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: SC-002-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/skew-carveout-cli.test.ts
+        discriminating: true
+  - id: SC-003
+    statement: >
+      Regression guard: the executor suite and the cli battery stay
+      green - the unthreaded path, the working-tree dirt checks, and
+      every existing guard oracle behave identically (the committed
+      bypass still refuses HEAD movement when patterns are absent or
+      the movement is not confined to them).
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: SC-003-A
+        type: suite
+        ref: cli-battery
+outOfScope:
+  - changing the dry-run's base-revision staging (criteria results are advisory-only and never refuse a submit; the false-prefusal mechanism was the guard, not the dry-run)
+  - weakening the working-tree dirt checks or the write-scope enforcement (unchanged)
+  - auto-detecting protected paths from the spec registry (the config is the single declared source; ambient detection would make the carve-out unauditable)
