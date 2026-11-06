@@ -1,0 +1,71 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: per-request-budget
+  title: Right-sized per call - thinking budgets ride the request, not just the route
+goal: >
+  Field ask (har, 2026-11-06): provider-budget shipped per-route budgets
+  (maxTokens, thinkingBudgetTokens, timeoutMs - har's routing config
+  uses them all), but a responder calling the adapter for ONE specific
+  request cannot say "this executor task is a multi-file change; it
+  needs a bigger budget than its route default." Route-level budgets
+  apply uniformly: over-provision every request (expensive) or
+  under-provision the big ones (they die - truncated at the token
+  ceiling or starved for thinking). The request is the natural unit of
+  right-sizing: the dispatcher knows the task's shape when it builds
+  the request. StructuredRequest already carries maxTokens flat (both
+  adapters merge it over their configured value for that call) - the
+  ask is the same flat treatment for the thinking budget, with the
+  adapter's existing validation discipline applied to the merged
+  values: a per-call thinking budget must satisfy every invariant the
+  configured one satisfies (>= 1024, strictly below the effective max,
+  mutually exclusive with a configured effort control), refused BEFORE
+  the fetch with the same self-diagnosing PROVIDER_CONFIG shape.
+requirements:
+  - id: PRB-001
+    statement: >
+      StructuredRequest gains thinkingBudgetTokens?: number (flat,
+      mirroring the existing maxTokens). The anthropic-compatible
+      adapter merges it for that call only: when present, the request
+      body carries thinking {type: enabled, budget_tokens: <request
+      value>} regardless of the configured reasoning control; the
+      effective max is request.maxTokens ?? configured maxTokens as
+      today. The merged values pass the SAME validation as configured
+      values, refused before the fetch with the PROVIDER_CONFIG shape:
+      request thinking budget >= 1024; request thinking budget strictly
+      below the effective max; a request thinking budget conflicts with
+      a CONFIGURED reasoningEffort (pick one control per call - the
+      request wins only when the config has none). The oracle drives
+      the adapter in-process with a captured fetch: (a) request
+      thinking 2000 under max 8192 -> body carries the enabled budget;
+      (b) request thinking + configured effort -> refused before fetch;
+      (c) request thinking >= effective max -> refused before fetch;
+      (d) no request overrides, no configured controls -> the body
+      carries no thinking key (byte-shape unchanged).
+    priority: must
+    scope:
+      include: [packages/llm/src/**, packages/llm-anthropic/src/**]
+    acceptance:
+      - id: PRB-001-A
+        type: command
+        command: pnpm --filter @spc/llm-anthropic... build > /dev/null && pnpm --filter @spc/llm-anthropic exec vitest run src/per-request-budget.test.ts
+        discriminating: true
+  - id: PRB-002
+    statement: >
+      Regression guard: every existing llm-anthropic and llm-openai
+      test stays green (the openai adapter already merges flat
+      request.maxTokens and is untouched; the anthropic non-streaming
+      and streaming paths keep their configured-control behavior when
+      the request carries no overrides) - validated in CI (the
+      cli-battery suite covers both packages via workspace deps).
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: PRB-002-A
+        type: suite
+        ref: cli-battery
+outOfScope:
+  - per-request timeoutMs (the streaming stall timer is provider-level; a request-level timeout invites per-call starvation games - ask again with evidence)
+  - queue stamping of budgets on pending harness requests (har's responder constructs its own request objects; the JSON surface can ride a later spec if harnesses need the run's sanctioned budgets visible on the queue)
+  - the openai adapter (already merges flat maxTokens; thinkingBudgetTokens has no openai-wire equivalent in this repo's dialect - add when evidence demands)
