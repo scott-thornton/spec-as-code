@@ -131,14 +131,20 @@ export function runBrief(cwd: string | undefined, format: "text" | "json" = "tex
   const strayWorktrees = existsSync(worktreesDir) ? readdirSync(worktreesDir) : [];
 
   if (format === "json") {
+    // specs/brief-json-contract: this shape is a pinned MACHINE
+    // contract - additive evolution only (new optional fields); renames
+    // and removals are breaks requiring a superseding spec.
     console.log(JSON.stringify({
       specs: specs.map((s) => ({
         id: s.id,
         lastRun: s.lastRun ? { id: s.lastRun.id, status: s.lastRun.status } : null,
         configChanged: s.configChanged,
         openBlockingFollowups: s.lastRun?.openBlocking ?? [],
-        ...(s.chainDepth ? { chainDepth: s.chainDepth } : {}),
+        // Always present: consumers index, never guess.
+        chainDepth: s.chainDepth ?? 0,
       })),
+      specCount: specs.length,
+      unresolvedCount: specs.reduce((n, s) => n + (s.lastRun?.openBlocking.length ?? 0), 0),
       pendingHarness,
       unmergedRunBranches,
       strayWorktrees,
