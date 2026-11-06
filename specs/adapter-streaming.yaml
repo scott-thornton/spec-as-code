@@ -1,0 +1,136 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: adapter-streaming
+  title: The line stays open while data flows - streaming transport for the anthropic-compatible adapter
+goal: >
+  Field evidence (har, take six, 2026-11-05): the z.ai anthropic-
+  compatible gateway kills non-streaming connections at ~300 seconds
+  regardless of thinking budget - tested at 12000, 4000, and 1024 on
+  both GLM-5.3 and GLM-5.3-Flash, every attempt dying at 290-301s
+  before the model produces a text block. Real executor answers
+  (25K-char input, multi-file JSON output) exceed the window in pure
+  generation time; short prompts complete in seconds. The ceiling is
+  the gateway, not the model - and not the feedback loop either:
+  har's words, "the feedback loop you shipped works - the model just
+  never gets far enough to be refused by it." The adapter's own
+  non-streaming shape makes it worse: one POST, total-wall timeout
+  race, response parsed whole. This spec moves the transport only:
+  an opt-in streaming mode for the anthropic-compatible adapter -
+  stream: true on the wire, SSE events reassembled into the SAME
+  text-based structured-output contract (thinking blocks skipped,
+  text deltas joined, parseStructured unchanged at the end). The
+  timeout becomes what a streaming transport actually needs: a stall
+  timer - no chunks for timeoutMs aborts; while data flows, the line
+  stays open for as long as generation takes. A stream that dies
+  mid-answer discards its partials, named, never parsed. Off (the
+  default), the wire is byte-identical to today.
+requirements:
+  - id: ST-001
+    statement: >
+      Opt-in streaming mode: AnthropicProviderOptions gains stream?
+      (boolean). When true, the request body carries stream: true and
+      the response is consumed as SSE: message_start (input usage),
+      content_block_start/content_block_delta/content_block_stop
+      (text deltas concatenated per block; thinking blocks skipped,
+      exactly as the non-streaming path filters them), message_delta
+      (stop_reason, output usage), message_stop. The reassembled
+      result feeds the SAME parseStructured and returns the SAME
+      StructuredResponse shape - value, usage (input from
+      message_start, output and cache fields from message_delta,
+      absent fields left undefined, never invented). When stream is
+      unset or false, the request body and response handling are
+      byte-identical to today. The oracle drives both modes against
+      equivalent fixtures through the injected fetchImpl: the
+      streaming leg (a ReadableStream of SSE events) and the
+      non-streaming leg (a JSON body) yield identical value and usage;
+      and the streaming request body carries stream: true only under
+      the opt-in.
+    priority: must
+    scope:
+      include: [packages/llm-anthropic/src/**]
+    acceptance:
+      - id: ST-001-A
+        type: command
+        command: pnpm --filter @spc/llm-anthropic... build > /dev/null && pnpm --filter @spc/llm-anthropic exec vitest run src/streaming.test.ts
+        discriminating: true
+  - id: ST-002
+    statement: >
+      Stall timeout, not total wall: in streaming mode the configured
+      timeoutMs measures the longest gap between chunks - the timer
+      resets on every received event; a gap exceeding timeoutMs aborts
+      the stream with LLM_TIMEOUT naming the stall (ms since the last
+      chunk, total chunks received). While chunks flow, total stream
+      duration is unbounded - a 20-minute generation with steady
+      deltas completes; that is the point of the transport. The
+      non-streaming path keeps its total-wall semantics unchanged.
+      The oracle: a fixture stream that delivers one event then never
+      resolves another chunk, with a small timeoutMs - the call throws
+      LLM_TIMEOUT naming the stall within a bounded elapsed time, not
+      after a total-wall window.
+    priority: must
+    scope:
+      include: [packages/llm-anthropic/src/**]
+    acceptance:
+      - id: ST-002-A
+        type: command
+        command: pnpm --filter @spc/llm-anthropic... build > /dev/null && pnpm --filter @spc/llm-anthropic exec vitest run src/streaming.test.ts
+        discriminating: true
+  - id: ST-003
+    statement: >
+      Mid-stream death discards, never parses: a stream that errors,
+      closes before message_stop, or delivers an in-stream error event
+      throws a named failure (LLM_STREAM_ABORTED for transport death -
+      naming chunks received, bytes received, and the last event type;
+      LLM_PROVIDER_FAILURE carrying the payload for in-stream error
+      events). Partial text is NEVER reassembled into a parse attempt
+      - truncated structured output must not parse as if complete.
+      The oracle: a fixture stream dying after several text deltas
+      throws LLM_STREAM_ABORTED with the diagnostics and yields no
+      value; a fixture carrying an SSE error event mid-stream throws
+      LLM_PROVIDER_FAILURE with the payload surfaced.
+    priority: must
+    scope:
+      include: [packages/llm-anthropic/src/**]
+    acceptance:
+      - id: ST-003-A
+        type: command
+        command: pnpm --filter @spc/llm-anthropic... build > /dev/null && pnpm --filter @spc/llm-anthropic exec vitest run src/streaming.test.ts
+        discriminating: true
+  - id: ST-004
+    statement: >
+      Failure parity across the transport boundary: pre-stream HTTP
+      failures map exactly as the non-streaming path maps them today
+      (401/403 credentials, 429 rate limited, 400-context exhausted,
+      other non-OK with the body slice); end-of-stream conditions map
+      to the existing codes (no text blocks -> LLM_EMPTY_COMPLETION
+      with the same diagnostics; stop_reason max_tokens ->
+      LLM_TRUNCATED_OUTPUT with the same remediation text). The oracle
+      exercises the empty and truncated legs through streaming
+      fixtures and asserts the same codes and message shapes the
+      existing non-streaming tests assert.
+    priority: must
+    scope:
+      include: [packages/llm-anthropic/src/**]
+    acceptance:
+      - id: ST-004-A
+        type: command
+        command: pnpm --filter @spc/llm-anthropic... build > /dev/null && pnpm --filter @spc/llm-anthropic exec vitest run src/streaming.test.ts
+        discriminating: true
+  - id: ST-005
+    statement: >
+      Regression guard: the full llm-anthropic suite (all existing
+      non-streaming behavior unchanged) and the cli battery stay
+      green.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: ST-005-A
+        type: suite
+        ref: cli-battery
+outOfScope:
+  - the OpenAI-compatible adapter (same family; ships on evidence when an OpenAI-compatible gateway shows the same cut)
+  - any change to the structured-output contract, prompt shape, schema hints, or the harness provider (the transport moves; nothing else)
+  - retry-on-stream-death policy (the caller retries; provider-budget and window mechanics unchanged)
+  - streaming for the fake or harness providers (no HTTP; nothing to stream)
