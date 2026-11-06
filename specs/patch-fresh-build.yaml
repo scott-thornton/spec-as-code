@@ -1,0 +1,58 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: patch-fresh-build
+  title: Patch apply invalidates build caches - what you validate is what ships
+goal: >
+  Two shipped type errors in one session (2026-11-06), both the same
+  shape: a between-runs rectification applied via spc patch apply
+  passed the local INCREMENTAL tsc build (stale .tsbuildinfo reporting
+  success for changed sources), and only fresh builds - the run's
+  throwaway, CI - surfaced the error (adapter-streaming's
+  ReadableStreamReadResult, caught pre-ship at the cost of a debug
+  cycle; skew-carveout's readonly-to-mutable assignment, shipped RED to
+  CI and hotfixed at 3924025). The between-runs patch leg is the
+  sanctioned delivery path for rectifications; its validation is only
+  as honest as the next build. This spec closes the gap at the source:
+  spc patch apply invalidates the incremental build state of every
+  package it touches, so the next build of patched sources is always
+  fresh - what the fixer validates is what ships.
+requirements:
+  - id: PF-001
+    statement: >
+      spc patch apply, after applying an ops array, deletes the
+      incremental TypeScript build state (.tsbuildinfo files) of every
+      workspace package touched by the ops: for each distinct package
+      directory (nearest ancestor with a package.json) among the ops'
+      target paths, remove its *.tsbuildinfo files. The deletion is
+      reported in the apply output (one line: invalidated build caches
+      for N package(s)) so the fixer knows the next build is fresh. The
+      oracle: a fixture package with a planted .tsbuildinfo file, an
+      op applied through the real CLI - the file content is patched AND
+      the .tsbuildinfo is gone; a control package untouched by the ops
+      keeps its .tsbuildinfo.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: PF-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/patch-fresh-build.test.ts
+        discriminating: true
+  - id: PF-002
+    statement: >
+      Regression guard: existing patch apply behavior unchanged apart
+      from the cache invalidation (provenance log, all-or-nothing
+      staging, refusal messages); the cli battery stays green (CI-
+      owned).
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: PF-002-A
+        type: suite
+        ref: cli-battery
+outOfScope:
+  - deleting caches for packages NOT touched by the ops (surgical invalidation; a repo-wide sweep is a hammer the evidence does not require)
+  - the run's own applicator (runs stage in throwaways whose builds are already fresh)
+  - pnpm store or node_modules caches (the failure class is tsc's .tsbuildinfo only)
