@@ -28,6 +28,14 @@ export interface StructuredRequest<T> {
   runId?: string;
   maxTokens?: number;
   /**
+   * Per-call thinking budget (specs/per-request-budget), flat like
+   * maxTokens: merged over the provider's configured value for THIS
+   * call only - the dispatcher that knows the task's shape right-sizes
+   * it. Adapters apply their configured-value validation to the merged
+   * result and refuse before the fetch when invariants break.
+   */
+  thinkingBudgetTokens?: number;
+  /**
    * Rejection reason from a prior attempt at this role (e.g. plan
    * validation diagnostics). The harness provider surfaces it as the
    * pending request's lastError, so the answering agent sees WHY there

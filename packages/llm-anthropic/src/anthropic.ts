@@ -160,10 +160,29 @@ export class AnthropicCompatProvider implements LLMProvider {
         `PROVIDER_CONFIG: request max_tokens override (${effectiveMax}) is not above the configured thinking budget (${this.thinkingBudgetTokens}) - refusing before the fetch`,
       );
     }
+    // specs/per-request-budget: the request's thinking budget is merged
+    // for THIS call only, with the configured value's full validation
+    // discipline applied to the merged result - refused before the fetch,
+    // self-diagnosing, never a half-wired wire shape.
+    const requestThinking = (request as { thinkingBudgetTokens?: number }).thinkingBudgetTokens;
+    if (requestThinking !== undefined) {
+      if (requestThinking < 1024) {
+        throw new Error(`PROVIDER_CONFIG: request thinkingBudgetTokens must be >= 1024 (got ${requestThinking}) - refusing before the fetch`);
+      }
+      if (requestThinking >= effectiveMax) {
+        throw new Error(`PROVIDER_CONFIG: request thinkingBudgetTokens (${requestThinking}) must be below the effective max_tokens (${effectiveMax}) - thinking draws from the same output budget - refusing before the fetch`);
+      }
+      if (this.reasoningEffort !== undefined) {
+        throw new Error(`PROVIDER_CONFIG: request thinkingBudgetTokens and configured reasoningEffort are mutually exclusive (pick one reasoning control per call) - refusing before the fetch`);
+      }
+    }
+    const effectiveThinking = requestThinking ?? this.thinkingBudgetTokens;
     const reasoningDesc = this.reasoningEffort !== undefined
       ? `reasoningEffort ${this.reasoningEffort}`
-      : this.thinkingBudgetTokens !== undefined
-        ? `thinkingBudgetTokens ${this.thinkingBudgetTokens}`
+      : effectiveThinking !== undefined
+        ? requestThinking !== undefined
+          ? `request thinkingBudgetTokens ${requestThinking}`
+          : `thinkingBudgetTokens ${effectiveThinking}`
         : "no reasoning control configured";
     const remediation = `raise provider.maxTokens, lower provider.thinkingBudgetTokens, or lower provider.reasoningEffort (${reasoningDesc})`;
 
@@ -202,8 +221,8 @@ export class AnthropicCompatProvider implements LLMProvider {
     if (this.reasoningEffort !== undefined) {
       body["output_config"] = { effort: this.reasoningEffort };
       body["thinking"] = { type: "adaptive" };
-    } else if (this.thinkingBudgetTokens !== undefined) {
-      body["thinking"] = { type: "enabled", budget_tokens: this.thinkingBudgetTokens };
+    } else if (effectiveThinking !== undefined) {
+      body["thinking"] = { type: "enabled", budget_tokens: effectiveThinking };
     }
     if (this.sendTemperature === true) body["temperature"] = 0;
     if (this.stream) body["stream"] = true;
