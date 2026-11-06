@@ -388,6 +388,11 @@ export class AnthropicCompatProvider implements LLMProvider {
           if (type === "message_start") {
             const usage = ((payload["message"] as Record<string, unknown>) ?? {})["usage"] as Record<string, number | undefined> | undefined;
             inputTokens = usage?.input_tokens;
+            // The real Anthropic wire carries the cache fields here, not
+            // only in message_delta (adversarial pass 1, F4): capture
+            // both; message_delta wins if it re-states them.
+            if (usage?.cache_read_input_tokens !== undefined) cacheReadTokens = usage.cache_read_input_tokens;
+            if (usage?.cache_creation_input_tokens !== undefined) cacheCreationTokens = usage.cache_creation_input_tokens;
           } else if (type === "content_block_start") {
             const block = payload["content_block"] as { type?: string } | undefined;
             const idx = Number(payload["index"] ?? 0);
@@ -410,12 +415,18 @@ export class AnthropicCompatProvider implements LLMProvider {
             if (usage?.cache_creation_input_tokens !== undefined) cacheCreationTokens = usage.cache_creation_input_tokens;
           } else if (type === "message_stop") {
             sawMessageStop = true;
+            // The message is complete: stop reading now - a gateway that
+            // holds the connection open after message_stop must not
+            // convert a complete answer into a stall timeout (adversarial
+            // pass 1, F3).
+            break;
           } else if (type === "error") {
             const err = payload["error"] as { type?: string; message?: string } | undefined;
             throw new LLMError(LLM_PROVIDER_FAILURE, `provider stream error: ${err?.message ?? JSON.stringify(payload)}${err?.type ? ` (type: ${err.type})` : ""}`);
           }
           // ping and unknown keepalives: ignored
         }
+        if (sawMessageStop) break;
       }
       const text = [...textParts.entries()].sort((a, b) => a[0] - b[0]).map(([, t]) => t).join("\n");
       if (text.trim() === "") {

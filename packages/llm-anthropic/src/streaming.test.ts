@@ -135,6 +135,33 @@ describe("ST-002: stall timeout, not total wall", () => {
   });
 });
 
+describe("ST-002b: total duration is unbounded while chunks flow (adversarial F1 leg)", () => {
+  it("a generation longer than timeoutMs with steady deltas completes - only a STALL aborts", { timeout: 15_000 }, async () => {
+    // timeoutMs 400; the stream delivers events across ~1.4s with gaps
+    // well under 400ms. A total-wall implementation aborts at 400ms;
+    // the stall implementation completes.
+    const events = happyEvents();
+    // Interleave a keepalive between halves so chunks keep flowing.
+    const slowStream = new ReadableStream({
+      async start(controller) {
+        const enc = new TextEncoder();
+        const emit = async (e: SSEEvent) => {
+          controller.enqueue(enc.encode(`event: ${e.event}\ndata: ${JSON.stringify(e.data)}\n\n`));
+          await new Promise((r) => setTimeout(r, 180));
+        };
+        for (const e of events.slice(0, 3)) await emit(e);
+        await emit({ event: "ping", data: { type: "ping" } });
+        for (const e of events.slice(3)) await emit(e);
+        controller.close();
+      },
+    });
+    const { p } = streamProvider([new Response(slowStream, { status: 200, headers: { "content-type": "text/event-stream" } })], 400);
+    const res = await p.generateStructured(req());
+    expect(res.value).toEqual({ answer: "streamed" });
+    expect(res.usage.outputTokens).toBe(42);
+  });
+});
+
 describe("ST-003: mid-stream death discards, never parses", () => {
   it("transport death after several deltas throws LLM_STREAM_ABORTED with diagnostics and no value", { timeout: 10_000 }, async () => {
     const enc = new TextEncoder();
@@ -160,6 +187,50 @@ describe("ST-003: mid-stream death discards, never parses", () => {
     const e = await errOf(() => p.generateStructured(req()));
     expect(e.code).toBe(LLM_PROVIDER_FAILURE);
     expect(e.message).toMatch(/Overloaded/);
+  });
+});
+
+describe("ST-001b: chunk boundaries and multi-block reassembly (adversarial F2 leg)", () => {
+  it("events packed several-per-read and split mid-event reassemble identically; two text blocks join with a newline", async () => {
+    const ev = happyEvents();
+    // Two text blocks: split TEXT across block 0 and block 1 (halves),
+    // non-streaming parity reference joins block texts with "\n".
+    const a = TEXT.slice(0, Math.floor(TEXT.length / 2));
+    const b = TEXT.slice(Math.floor(TEXT.length / 2));
+    const events: SSEEvent[] = [
+      ev[0]!,
+      { event: "content_block_start", data: { type: "content_block_start", index: 0, content_block: { type: "text" } } },
+      { event: "content_block_start", data: { type: "content_block_start", index: 1, content_block: { type: "text" } } },
+      { event: "content_block_delta", data: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: a } } },
+      { event: "content_block_delta", data: { type: "content_block_delta", index: 1, delta: { type: "text_delta", text: b } } },
+      { event: "content_block_stop", data: { type: "content_block_stop", index: 0 } },
+      { event: "content_block_stop", data: { type: "content_block_stop", index: 1 } },
+      ev[5]!,
+      ev[6]!,
+    ];
+    const enc = new TextEncoder();
+    // One raw string of all events; cut it at awkward byte boundaries:
+    // [0..40%], [40%..41%], [41%..100%] - multi-event reads AND a
+    // mid-event split.
+    const raw = events.map((e) => `event: ${e.event}\ndata: ${JSON.stringify(e.data)}\n\n`).join("");
+    const cut1 = Math.floor(raw.length * 0.4);
+    const cut2 = Math.floor(raw.length * 0.41);
+    const pieces = [raw.slice(0, cut1), raw.slice(cut1, cut2), raw.slice(cut2)];
+    let i = 0;
+    const chunked = new ReadableStream({
+      pull(controller) {
+        if (i >= pieces.length) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(enc.encode(pieces[i++]!));
+      },
+    });
+    const { p } = streamProvider([new Response(chunked, { status: 200, headers: { "content-type": "text/event-stream" } })]);
+    const res = await p.generateStructured(req());
+    // Parity: the non-streaming path joins two text blocks with "\n";
+    // a + "\n" + b equals TEXT.
+    expect(res.value).toEqual({ answer: "streamed" });
   });
 });
 
