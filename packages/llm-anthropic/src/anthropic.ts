@@ -235,8 +235,12 @@ export class AnthropicCompatProvider implements LLMProvider {
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     // Race-hardened: even a fetch implementation that ignores the
     // AbortSignal still produces LLM_TIMEOUT when the window closes.
+    // specs/timer-hygiene: the race's own timer is cleared on every
+    // exit too - a completed call leaves no timers behind (a pending
+    // one kept the process alive for the full timeoutMs).
+    let raceTimer: ReturnType<typeof setTimeout> | undefined;
     const timeoutRace = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new LLMError(LLM_TIMEOUT, `provider request timed out after ${this.timeoutMs}ms`)), this.timeoutMs);
+      raceTimer = setTimeout(() => reject(new LLMError(LLM_TIMEOUT, `provider request timed out after ${this.timeoutMs}ms`)), this.timeoutMs);
     });
     let res: Response;
     try {
@@ -260,6 +264,7 @@ export class AnthropicCompatProvider implements LLMProvider {
       throw new LLMError(LLM_PROVIDER_FAILURE, `provider request failed: ${(e as Error).message}`);
     } finally {
       clearTimeout(timer);
+      if (raceTimer !== undefined) clearTimeout(raceTimer);
     }
 
     await assertProviderHttp(res);
