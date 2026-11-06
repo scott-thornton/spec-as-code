@@ -5,6 +5,7 @@ import {
   LLM_EMPTY_COMPLETION,
   LLM_PROVIDER_FAILURE,
   LLM_RATE_LIMITED,
+  LLM_STREAM_ABORTED,
   LLM_TIMEOUT,
   LLM_TRUNCATED_OUTPUT,
 } from "@spc/llm";
@@ -41,6 +42,12 @@ export interface AnthropicProviderOptions {
    *  cache_read_input_tokens on a markered run means the endpoint
    *  ignored the markers). */
   cacheControl?: boolean;
+  /** Opt-in streaming transport (specs/adapter-streaming): stream:true on
+   *  the wire, SSE reassembly into the same structured-output contract.
+   *  The timeout becomes a stall timer (no chunks for timeoutMs) - total
+   *  stream duration is unbounded while data flows. Off: byte-identical
+   *  wire and handling. */
+  stream?: boolean;
   fetchImpl?: FetchLike;
 }
 
@@ -57,6 +64,25 @@ interface MessagesResponse {
 }
 
 const EFFORT_NOT_ON_WIRE: ReadonlySet<ReasoningEffort> = new Set(["none", "minimal"]);
+
+/** Shared pre-body failure mapping (specs/adapter-streaming ST-004:
+ *  parity across the transport - both modes map identically). */
+async function assertProviderHttp(res: Response): Promise<void> {
+  if (res.status === 401 || res.status === 403) {
+    throw new LLMError(LLM_PROVIDER_FAILURE, `provider rejected credentials (HTTP ${res.status})`);
+  }
+  if (res.status === 429) {
+    throw new LLMError(LLM_RATE_LIMITED, "provider rate limited the request");
+  }
+  if (res.status === 400 && /context|token|too long/i.test(await res.clone().text().catch(() => ""))) {
+    throw new LLMError(LLM_CONTEXT_EXHAUSTED, "provider rejected the request as too large");
+  }
+  if (!res.ok) {
+    // A reasoning parameter the MODEL does not support is its own
+    // failure class: keep the provider's body so it is diagnosable.
+    throw new LLMError(LLM_PROVIDER_FAILURE, `provider returned HTTP ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
+  }
+}
 
 function validate(opts: AnthropicProviderOptions): string[] {
   const problems: string[] = [];
@@ -105,6 +131,7 @@ export class AnthropicCompatProvider implements LLMProvider {
   private readonly thinkingBudgetTokens?: number;
   private readonly sendTemperature?: boolean;
   private readonly cacheControl?: boolean;
+  private readonly stream: boolean;
   private readonly fetchImpl: FetchLike;
 
   constructor(opts: AnthropicProviderOptions) {
@@ -121,6 +148,7 @@ export class AnthropicCompatProvider implements LLMProvider {
     this.thinkingBudgetTokens = opts.thinkingBudgetTokens;
     this.sendTemperature = opts.sendTemperature;
     this.cacheControl = opts.cacheControl;
+    this.stream = opts.stream === true;
     this.fetchImpl = opts.fetchImpl ?? ((url, init) => fetch(url, init));
   }
 
@@ -178,6 +206,11 @@ export class AnthropicCompatProvider implements LLMProvider {
       body["thinking"] = { type: "enabled", budget_tokens: this.thinkingBudgetTokens };
     }
     if (this.sendTemperature === true) body["temperature"] = 0;
+    if (this.stream) body["stream"] = true;
+
+    if (this.stream) {
+      return this.generateStructuredStreaming<T>(request, body, effectiveMax, reasoningDesc, remediation, started);
+    }
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -210,20 +243,7 @@ export class AnthropicCompatProvider implements LLMProvider {
       clearTimeout(timer);
     }
 
-    if (res.status === 401 || res.status === 403) {
-      throw new LLMError(LLM_PROVIDER_FAILURE, `provider rejected credentials (HTTP ${res.status})`);
-    }
-    if (res.status === 429) {
-      throw new LLMError(LLM_RATE_LIMITED, "provider rate limited the request");
-    }
-    if (res.status === 400 && /context|token|too long/i.test(await res.clone().text().catch(() => ""))) {
-      throw new LLMError(LLM_CONTEXT_EXHAUSTED, "provider rejected the request as too large");
-    }
-    if (!res.ok) {
-      // A reasoning parameter the MODEL does not support is its own
-      // failure class: keep the provider's body so it is diagnosable.
-      throw new LLMError(LLM_PROVIDER_FAILURE, `provider returned HTTP ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
-    }
+    await assertProviderHttp(res);
 
     const json = (await res.json().catch(() => null)) as MessagesResponse | null;
     const text = (json?.content ?? [])
@@ -252,5 +272,182 @@ export class AnthropicCompatProvider implements LLMProvider {
       ...(json?.usage?.cache_creation_input_tokens !== undefined ? { cacheCreationTokens: json.usage.cache_creation_input_tokens } : {}),
     };
     return { value, usage };
+  }
+
+  /**
+   * Streaming transport (specs/adapter-streaming): the line stays open
+   * while data flows - the timeout measures the longest gap between
+   * chunks (a stall), never total duration. SSE events reassemble into
+   * the same text-based contract; thinking blocks are skipped exactly
+   * as the non-streaming path filters them; a stream that dies
+   * mid-answer discards its partials, named - never parsed.
+   */
+  private async generateStructuredStreaming<T>(
+    request: StructuredRequest<T>,
+    body: Record<string, unknown>,
+    effectiveMax: number,
+    reasoningDesc: string,
+    remediation: string,
+    started: number,
+  ): Promise<StructuredResponse<T>> {
+    const controller = new AbortController();
+    let chunks = 0;
+    let bytes = 0;
+    let lastEvent = "(none)";
+    let stallTimer: ReturnType<typeof setTimeout> | undefined;
+    let armStall: () => void = () => {};
+    const stallPromise = new Promise<never>((_, reject) => {
+      armStall = () => {
+        if (stallTimer !== undefined) clearTimeout(stallTimer);
+        stallTimer = setTimeout(
+          () => reject(new LLMError(LLM_TIMEOUT, `provider stream stalled: no chunks for ${this.timeoutMs}ms (${chunks} chunks received; last event ${lastEvent})`)),
+          this.timeoutMs,
+        );
+      };
+      armStall();
+    });
+    const readAll = (async (): Promise<StructuredResponse<T>> => {
+      let res: Response;
+      try {
+        res = await this.fetchImpl(`${this.baseURL}/v1/messages`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-api-key": this.apiKey,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+      } catch (e) {
+        if (controller.signal.aborted) {
+          throw new LLMError(LLM_TIMEOUT, `provider request timed out after ${this.timeoutMs}ms`);
+        }
+        throw new LLMError(LLM_PROVIDER_FAILURE, `provider request failed: ${(e as Error).message}`);
+      }
+      await assertProviderHttp(res);
+      if (res.body === null) {
+        throw new LLMError(LLM_STREAM_ABORTED, "provider stream ended without a body (0 chunks received) - partial output discarded, never parsed");
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let inputTokens: number | undefined;
+      let outputTokens: number | undefined;
+      let cacheReadTokens: number | undefined;
+      let cacheCreationTokens: number | undefined;
+      let stopReason: string | undefined;
+      let sawMessageStop = false;
+      const textParts = new Map<number, string>();
+      const blockTypes = new Map<number, string>();
+      for (;;) {
+        let read: Awaited<ReturnType<typeof reader.read>>;
+        try {
+          read = await reader.read();
+        } catch (e) {
+          throw new LLMError(
+            LLM_STREAM_ABORTED,
+            `provider stream transport error: ${(e as Error).message} (${chunks} chunks, ${bytes} bytes received; last event ${lastEvent}) - partial output discarded, never parsed`,
+          );
+        }
+        const { done, value } = read;
+        if (done) {
+          if (!sawMessageStop) {
+            throw new LLMError(
+              LLM_STREAM_ABORTED,
+              `provider stream closed before message_stop (${chunks} chunks, ${bytes} bytes received; last event ${lastEvent}) - partial output discarded, never parsed`,
+            );
+          }
+          break;
+        }
+        chunks += 1;
+        bytes += value.byteLength;
+        armStall();
+        buffer += decoder.decode(value, { stream: true });
+        let sep: number;
+        while ((sep = buffer.indexOf("\n\n")) !== -1) {
+          const rawEvent = buffer.slice(0, sep);
+          buffer = buffer.slice(sep + 2);
+          let eventName = "";
+          const dataLines: string[] = [];
+          for (const line of rawEvent.split("\n")) {
+            if (line.startsWith("event: ")) eventName = line.slice(7).trim();
+            else if (line.startsWith("data: ")) dataLines.push(line.slice(6));
+          }
+          if (eventName === "" && dataLines.length === 0) continue;
+          lastEvent = eventName || "data";
+          let payload: Record<string, unknown> = {};
+          if (dataLines.length > 0) {
+            try {
+              payload = JSON.parse(dataLines.join("\n")) as Record<string, unknown>;
+            } catch {
+              continue; // non-JSON keepalive data; ignore
+            }
+          }
+          const type = (payload["type"] as string) ?? eventName;
+          if (type === "message_start") {
+            const usage = ((payload["message"] as Record<string, unknown>) ?? {})["usage"] as Record<string, number | undefined> | undefined;
+            inputTokens = usage?.input_tokens;
+          } else if (type === "content_block_start") {
+            const block = payload["content_block"] as { type?: string } | undefined;
+            const idx = Number(payload["index"] ?? 0);
+            blockTypes.set(idx, block?.type ?? "text");
+            if (block?.type === "text") textParts.set(idx, "");
+          } else if (type === "content_block_delta") {
+            const idx = Number(payload["index"] ?? 0);
+            const delta = payload["delta"] as { type?: string; text?: string } | undefined;
+            if (delta?.type === "text_delta" && typeof delta.text === "string" && blockTypes.get(idx) === "text") {
+              textParts.set(idx, (textParts.get(idx) ?? "") + delta.text);
+            }
+            // thinking_delta and friends: skipped, like the
+            // non-streaming path filters thinking blocks.
+          } else if (type === "message_delta") {
+            const delta = payload["delta"] as { stop_reason?: string } | undefined;
+            stopReason = delta?.stop_reason ?? stopReason;
+            const usage = payload["usage"] as Record<string, number | undefined> | undefined;
+            if (usage?.output_tokens !== undefined) outputTokens = usage.output_tokens;
+            if (usage?.cache_read_input_tokens !== undefined) cacheReadTokens = usage.cache_read_input_tokens;
+            if (usage?.cache_creation_input_tokens !== undefined) cacheCreationTokens = usage.cache_creation_input_tokens;
+          } else if (type === "message_stop") {
+            sawMessageStop = true;
+          } else if (type === "error") {
+            const err = payload["error"] as { type?: string; message?: string } | undefined;
+            throw new LLMError(LLM_PROVIDER_FAILURE, `provider stream error: ${err?.message ?? JSON.stringify(payload)}${err?.type ? ` (type: ${err.type})` : ""}`);
+          }
+          // ping and unknown keepalives: ignored
+        }
+      }
+      const text = [...textParts.entries()].sort((a, b) => a[0] - b[0]).map(([, t]) => t).join("\n");
+      if (text.trim() === "") {
+        throw new LLMError(
+          LLM_EMPTY_COMPLETION,
+          `provider response contained no text blocks (stop_reason: ${stopReason ?? "unknown"}; output_tokens: ${outputTokens ?? "?"} of max_tokens ${effectiveMax}; configured: ${reasoningDesc}); ${remediation}`,
+        );
+      }
+      if (stopReason === "max_tokens") {
+        throw new LLMError(
+          LLM_TRUNCATED_OUTPUT,
+          `output terminated at the token limit (stop_reason: max_tokens; output_tokens: ${outputTokens ?? "?"} of ${effectiveMax}; configured: ${reasoningDesc}); ${remediation}`,
+        );
+      }
+      const value = parseStructured(request.schema, text);
+      const usage: Usage = {
+        model: this.model,
+        durationMs: Date.now() - started,
+        inputTokens,
+        outputTokens,
+        ...(cacheReadTokens !== undefined ? { cacheReadTokens } : {}),
+        ...(cacheCreationTokens !== undefined ? { cacheCreationTokens } : {}),
+      };
+      return { value, usage };
+    })();
+    try {
+      return await Promise.race([readAll, stallPromise]);
+    } catch (e) {
+      controller.abort();
+      throw e;
+    } finally {
+      if (stallTimer !== undefined) clearTimeout(stallTimer);
+    }
   }
 }
