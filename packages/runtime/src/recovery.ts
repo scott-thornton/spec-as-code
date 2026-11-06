@@ -107,6 +107,7 @@ function deriveTerminalOutcome(cause: ExecutionIntent["cause"]): "cancelled" | "
 
 function verifyWorkers(repoRoot: string, record: ExecutionIntent): { ok: boolean; detail?: string; unverified: number[] } {
   const unverified: number[] = [];
+  const reasons: string[] = [];
   for (const worker of record.workers) {
     // Check if the worker is still alive
     try {
@@ -124,6 +125,7 @@ function verifyWorkers(repoRoot: string, record: ExecutionIntent): { ok: boolean
       try {
         process.kill(worker.pid, 0);
         unverified.push(worker.pid);
+        reasons.push(`worker pid ${worker.pid} on ${worker.host} could not be terminated`);
         continue;
       } catch { /* dead */ }
     } catch {
@@ -133,12 +135,13 @@ function verifyWorkers(repoRoot: string, record: ExecutionIntent): { ok: boolean
     // Host mismatch check: a different host is NOT proof of stopped
     if (worker.host !== os.hostname()) {
       unverified.push(worker.pid);
+      reasons.push(`worker pid ${worker.pid} recorded on host ${worker.host} (different from current host - cannot verify from here)`);
     }
   }
   if (unverified.length > 0) {
     return {
       ok: false,
-      detail: `worker${unverified.length === 1 ? "" : "s"} ${unverified.join(", ")} could not be verified stopped`,
+      detail: reasons.join("; "),
       unverified,
     };
   }

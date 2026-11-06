@@ -45,7 +45,7 @@ function fixture(name: string, workerPid: number): string {
     JSON.stringify({
       cause: "NONE",
       coordinator: { pid: 1, processStartTime: "2026-11-06T00:00:00.000Z", host: "fixture" },
-      workers: [{ pid: workerPid, processStartTime: "2026-11-06T00:00:00.000Z", host: "fixture", startedAt: "2026-11-06T00:00:00.000Z" }],
+      workers: [{ pid: workerPid, processStartTime: "2026-11-06T00:00:00.000Z", host: require("node:os").hostname(), startedAt: "2026-11-06T00:00:00.000Z" }],
       startedAt: "2026-11-06T00:00:00.000Z",
       runId: "run-fixture-1",
       planId: "plan-fixture-1",
@@ -57,6 +57,15 @@ function fixture(name: string, workerPid: number): string {
 }
 
 describe("REC-001: --confirm proceeds past unverifiable workers, recorded", () => {
+  it("confirmed with all workers verifiably dead: recovered, NO confirmation marker, detail says all verified stopped", { timeout: 60_000 }, () => {
+    const repo = fixture("confirmed-clean", 999_999_999); // nonexistent pid: ESRCH = verified dead
+    const r = runRecovery(repo, { confirmed: true });
+    expect(r.status).toBe("recovered");
+    expect(r.detail).toMatch(/all verified stopped/);
+    const events = readFileSync(path.join(repo, ".spc", "runs", "run-fixture-1", "events.jsonl"), "utf8");
+    expect(events).not.toMatch(/recoveryConfirmed/);
+  });
+
   it("without confirmation: incomplete, the unverified pid named, intent preserved", { timeout: 60_000 }, () => {
     const pid = plantWedgedWorker();
     const repo = fixture("no-confirm", pid);
