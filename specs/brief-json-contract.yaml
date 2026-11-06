@@ -1,0 +1,57 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: brief-json-contract
+  title: brief --format json is a machine contract - pinned field names, additive-only evolution
+goal: >
+  Field ask (har, 2026-11-06): harness session startup calls spc brief
+  for reorientation and parses the human text loosely - when the format
+  changes, orientation breaks silently. brief --format json already
+  exists and emits a useful shape; what it lacks is CONTRACT status:
+  nothing pins the field names, and the summary conveniences a machine
+  consumer wants (spec count, unresolved blocker count, an always-
+  present chain depth) are absent or conditional. This spec makes the
+  json surface a pinned contract: every field named below is stable -
+  additions are allowed (new optional fields), renames and removals are
+  breaks requiring a superseding spec - and the shape gains the summary
+  fields and the always-present chainDepth so consumers index, not
+  guess. The text format is untouched.
+requirements:
+  - id: BJ-001
+    statement: >
+      spc brief --format json emits the pinned shape: top-level
+      {specs: [...], specCount: number, unresolvedCount: number
+      (total open blocking followups across specs), pendingHarness:
+      number, unmergedRunBranches: string[], strayWorktrees: string[]};
+      per-spec {id: string, lastRun: {id: string, status: string} |
+      null, configChanged: boolean, openBlockingFollowups: string[],
+      chainDepth: number (ALWAYS present - 0 when the spec has no run
+      chain)}. Additive evolution only. The oracle runs the real CLI on
+      a fixture repo (two specs, one with a run carrying an open
+      blocking followup) and asserts every pinned field name and type,
+      the counts, and chainDepth's unconditional presence on a spec
+      with no runs.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: BJ-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/brief-json-contract.test.ts
+        discriminating: true
+  - id: BJ-002
+    statement: >
+      Regression guard: the text format is byte-identical to today
+      (the json additions touch only the json branch); the cli battery
+      stays green (CI-owned).
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: BJ-002-A
+        type: suite
+        ref: cli-battery
+outOfScope:
+  - any change to the text format or its wording
+  - versioning the json payload (a schemaVersion field can ride a later spec if consumers demand migration signaling; additive-only is the contract for now)
+  - enriching per-spec data beyond the pinned fields (lastRun detail, chain lineage, queue state - ask with evidence)
