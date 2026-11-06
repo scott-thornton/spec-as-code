@@ -30,7 +30,7 @@ import { tryExclusiveLock, lockHeld } from "./platform-lock.js";
  * already has one.
  */
 
-export function runRecovery(repoRoot: string): { status: "recovered" | "incomplete" | "no-block" | "lock-held"; detail: string } {
+export function runRecovery(repoRoot: string, options: { confirmed?: boolean } = {}): { status: "recovered" | "incomplete" | "no-block" | "lock-held"; detail: string } {
   const lockPath = path.join(repoRoot, ".spc", "apply.lock");
 
   // Step 0: acquire the kernel lock (recovery is serialized by the lock)
@@ -49,15 +49,19 @@ export function runRecovery(repoRoot: string): { status: "recovered" | "incomple
 
     const { intent: record } = intent;
 
-    // Step (a): verify/terminate surviving workers
+    // Step (a): verify/terminate surviving workers. specs/recover-
+    // confirm: a caller attestation (spc apply recover --confirm)
+    // proceeds past unverifiable workers - the identities ride forward,
+    // NAMED in the terminal event and the detail, never silently.
     const workerResult = verifyWorkers(repoRoot, record);
-    if (!workerResult.ok) {
+    const unverifiedWorkers = workerResult.ok ? [] : workerResult.unverified;
+    if (!workerResult.ok && !options.confirmed) {
       return { status: "incomplete", detail: `worker verification incomplete: ${workerResult.detail}` };
     }
 
     // Step (b): write exactly one cause-derived terminal event
     const terminalOutcome = deriveTerminalOutcome(record.cause);
-    const eventResult = writeTerminalEvent(repoRoot, record, terminalOutcome);
+    const eventResult = writeTerminalEvent(repoRoot, record, terminalOutcome, unverifiedWorkers);
     if (!eventResult.ok) {
       return { status: "incomplete", detail: `terminal event incomplete: ${eventResult.detail}` };
     }
@@ -85,7 +89,7 @@ export function runRecovery(repoRoot: string): { status: "recovered" | "incomple
 
     return {
       status: "recovered",
-      detail: `run ${record.runId} recovered (outcome: ${terminalOutcome}; ${record.workers.length} worker(s) verified stopped; branch restored; workspace verified)`,
+      detail: `run ${record.runId} recovered (outcome: ${terminalOutcome}; ${record.workers.length} worker(s) registered${unverifiedWorkers.length > 0 ? `; ${unverifiedWorkers.length} unverified worker(s) confirmed by caller: ${unverifiedWorkers.join(", ")}` : " - all verified stopped"}; branch restored; workspace verified)`,
     };
   } finally {
     lock.release();
@@ -101,7 +105,8 @@ function deriveTerminalOutcome(cause: ExecutionIntent["cause"]): "cancelled" | "
   }
 }
 
-function verifyWorkers(repoRoot: string, record: ExecutionIntent): { ok: boolean; detail?: string } {
+function verifyWorkers(repoRoot: string, record: ExecutionIntent): { ok: boolean; detail?: string; unverified: number[] } {
+  const unverified: number[] = [];
   for (const worker of record.workers) {
     // Check if the worker is still alive
     try {
@@ -118,7 +123,8 @@ function verifyWorkers(repoRoot: string, record: ExecutionIntent): { ok: boolean
       // Recheck
       try {
         process.kill(worker.pid, 0);
-        return { ok: false, detail: `worker pid ${worker.pid} on ${worker.host} could not be terminated` };
+        unverified.push(worker.pid);
+        continue;
       } catch { /* dead */ }
     } catch {
       // Worker is dead (ESRCH) — verified stopped
@@ -126,16 +132,24 @@ function verifyWorkers(repoRoot: string, record: ExecutionIntent): { ok: boolean
 
     // Host mismatch check: a different host is NOT proof of stopped
     if (worker.host !== os.hostname()) {
-      return { ok: false, detail: `worker pid ${worker.pid} recorded on host ${worker.host} (different from current host — cannot verify from here)` };
+      unverified.push(worker.pid);
     }
   }
-  return { ok: true };
+  if (unverified.length > 0) {
+    return {
+      ok: false,
+      detail: `worker${unverified.length === 1 ? "" : "s"} ${unverified.join(", ")} could not be verified stopped`,
+      unverified,
+    };
+  }
+  return { ok: true, unverified: [] };
 }
 
 function writeTerminalEvent(
   repoRoot: string,
   record: ExecutionIntent,
   outcome: string,
+  unverifiedWorkers: readonly number[] = [],
 ): { ok: boolean; detail?: string } {
   const paths = spcPaths(repoRoot);
   const runDir = paths.runDir(record.runId);
@@ -161,6 +175,7 @@ function writeTerminalEvent(
     status: outcome as "cancelled" | "succeeded" | "failed" | "partially_satisfied",
     reason: `recovered by spc apply recover (cause: ${record.cause})`,
     tasks: {},
+    ...(unverifiedWorkers.length > 0 ? { recoveryConfirmed: true, unverifiedWorkers: [...unverifiedWorkers] } : {}),
   });
 
   // Update the run state

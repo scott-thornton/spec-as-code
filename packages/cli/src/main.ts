@@ -169,8 +169,9 @@ applyCmd
   .command("recover")
   .description("recover an interrupted apply: verify workers stopped, write terminal event, attest, restore branch, clear safety block (AO-005)")
   .option("--cwd <dir>", "repository directory", process.cwd())
-  .action((opts: { cwd?: string }) => {
-    process.exitCode = runRecoveryCommand(opts.cwd);
+  .option("--confirm", "(specs/recover-confirm) caller attests unverifiable workers are gone by its own checks - proceeds past the cannot-verify gate with every unverified identity recorded in the terminal event, never silently; the kernel lock is never overridable")
+  .action((opts: { cwd?: string; confirm?: boolean }) => {
+    process.exitCode = runRecoveryCommand(opts.cwd, opts.confirm === true);
   });
 
 program

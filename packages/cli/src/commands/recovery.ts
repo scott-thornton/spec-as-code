@@ -2,9 +2,9 @@ import { resolveRepoRoot } from "../context.js";
 import { runRecovery } from "@spc/runtime";
 
 /** `spc apply recover` - the AO-005 recovery command. */
-export function runRecoveryCommand(cwd?: string): number {
+export function runRecoveryCommand(cwd?: string, confirmed?: boolean): number {
   const repoRoot = resolveRepoRoot(cwd);
-  const result = runRecovery(repoRoot);
+  const result = runRecovery(repoRoot, confirmed ? { confirmed: true } : {});
   switch (result.status) {
     case "recovered":
       console.log(`Recovered: ${result.detail}`);
