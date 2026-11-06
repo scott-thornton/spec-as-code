@@ -373,6 +373,12 @@ function submissionGuardRefusal(repoRoot: string, id: string): { code: string; m
     } catch {
       // unreadable run record: no skew evidence, ordinary naming
     }
+    let protectedPatterns: readonly string[] = [];
+    try {
+      protectedPatterns = loadRepoConfig(repoRoot).verification?.protectedPaths ?? [];
+    } catch {
+      // unreadable config: no carve-out - today's behavior
+    }
     const check = evaluateSubmission({
       worktreeRoot: repoRoot,
       baselineRevision: meta.baseRevision,
@@ -381,6 +387,7 @@ function submissionGuardRefusal(repoRoot: string, id: string): { code: string; m
       attribution: { writes },
       attributionStoreExists,
       priorRecordedWork,
+      protectedPatterns,
     });
     if (check.decision === "refuse") {
       return { code: check.code ?? "UNMEDIATED_CHANGES", message: check.message ?? "unmediated changes under write targets", paths: check.unattributed };

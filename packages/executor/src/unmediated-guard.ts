@@ -53,6 +53,12 @@ export interface SubmissionCheckInput {
    *  without a store is a signature no current-binary run can produce. */
   attributionStoreExists?: boolean;
   priorRecordedWork?: boolean;
+  /** specs/skew-carveout: author territory. When non-empty, a
+   *  baseline..HEAD delta whose changed paths ALL match these patterns
+   *  does not fire the committed bypass - protected paths are the
+   *  author's, no run task may write them by construction. Absent or
+   *  empty: today's behavior (any HEAD movement refuses). */
+  protectedPatterns?: readonly string[];
 }
 
 export interface SubmissionCheck {
@@ -74,12 +80,35 @@ export function evaluateSubmission(input: SubmissionCheckInput): SubmissionCheck
   // refusal here is exact rather than conservative.
   const head = git(worktreeRoot, ["rev-parse", "HEAD"]);
   if (head.ok && head.stdout.trim() !== baselineRevision) {
-    return {
-      decision: "refuse",
-      code: "UNMEDIATED_CHANGES",
-      unattributed: [],
-      message: `HEAD ${head.stdout.trim().slice(0, 12)} diverged from the dispatch baseline ${baselineRevision.slice(0, 12)} - committed edits are unmediated changes; ${RECOVERY}`,
-    };
+    // specs/skew-carveout: refuse WHAT changed, not that anything
+    // changed. A delta confined to protected paths is author territory
+    // (the legitimate mid-run oracle amendment) - the bypass does not
+    // fire. Any non-protected path is task territory: refuse, named.
+    const patterns = input.protectedPatterns ?? [];
+    if (patterns.length > 0) {
+      const delta = git(worktreeRoot, ["diff", "--name-only", baselineRevision, "HEAD"]);
+      if (delta.ok) {
+        const changed = delta.stdout.split("\n").map((l) => l.trim().split(path.sep).join("/")).filter(Boolean);
+        if (changed.length > 0 && changed.every((p) => globMatchAny(patterns, p) || globMatchAny(patterns, p.split("/").join(path.sep)))) {
+          // author-only delta: fall through to the working-tree checks
+        } else {
+          const offenders = changed.filter((p) => !(globMatchAny(patterns, p) || globMatchAny(patterns, p.split("/").join(path.sep)))).slice(0, 5);
+          return {
+            decision: "refuse",
+            code: "UNMEDIATED_CHANGES",
+            unattributed: offenders,
+            message: `HEAD ${head.stdout.trim().slice(0, 12)} diverged from the dispatch baseline ${baselineRevision.slice(0, 12)} - committed edits are unmediated changes${offenders.length > 0 ? ` (non-protected paths: ${offenders.join(", ")})` : ""}; ${RECOVERY}`,
+          };
+        }
+      }
+    } else {
+      return {
+        decision: "refuse",
+        code: "UNMEDIATED_CHANGES",
+        unattributed: [],
+        message: `HEAD ${head.stdout.trim().slice(0, 12)} diverged from the dispatch baseline ${baselineRevision.slice(0, 12)} - committed edits are unmediated changes; ${RECOVERY}`,
+      };
+    }
   }
 
   // Working-tree dirt under the task's own write targets (untracked
