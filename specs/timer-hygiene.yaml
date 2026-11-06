@@ -1,0 +1,57 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: timer-hygiene
+  title: A completed call leaves no timers behind - the non-streaming race timer is cleared
+goal: >
+  Found by the adapter-streaming adversarial pass (finding F6,
+  2026-11-06, empirically measured: a 5s-timeout probe process lived
+  5.5s after a successful call): the non-streaming path of the
+  anthropic-compatible adapter arms TWO timers - the AbortController
+  timer (cleared in the finally) and the timeoutRace promise's inner
+  setTimeout (NEVER cleared). A successful call leaves the race timer
+  pending for the full timeoutMs (default 180s): the Node process
+  cannot exit until it fires. Harmless for CLI one-shots; wasteful for
+  any long-lived process holding the provider, and a hygiene trap for
+  every future caller. The fix is the obvious one: the race timer is
+  cleared on every exit path, exactly like its sibling. A completed
+  call leaves no timers behind.
+requirements:
+  - id: NT-001
+    statement: >
+      packages/llm-anthropic's non-streaming path clears the
+      timeoutRace timer on every exit: the inner setTimeout is stored
+      and cleared in the same finally that clears the abort timer. The
+      observable contract: after a SUCCESSFUL non-streaming call, no
+      provider-armed timer keeps the process alive - a child process
+      that completes a call with a large timeoutMs exits promptly
+      (well before the timer's horizon) instead of lingering for
+      timeoutMs. The oracle spawns a real child against the built
+      provider: fast success under timeoutMs 8000 - the child exits
+      within ~2s before the fix would have allowed, and the call's
+      result is correct.
+    priority: must
+    scope:
+      include: [packages/llm-anthropic/src/**]
+    acceptance:
+      - id: NT-001-A
+        type: command
+        command: pnpm --filter @spc/llm-anthropic... build > /dev/null && pnpm --filter @spc/llm-anthropic exec vitest run src/timer-hygiene.test.ts
+        discriminating: true
+  - id: NT-002
+    statement: >
+      Regression guard: the full llm-anthropic suite stays green -
+      timeout behavior is unchanged (a genuinely slow call still races
+      to LLM_TIMEOUT at timeoutMs; only the post-completion lingering
+      timer is removed) - validated in CI (the cli-battery covers the
+      package via workspace deps).
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: NT-002-A
+        type: suite
+        ref: cli-battery
+outOfScope:
+  - the streaming path's stall timer (already cleared on all exits - exonerated by the same adversarial pass)
+  - any change to timeout semantics or the race's failure behavior
