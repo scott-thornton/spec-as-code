@@ -88,7 +88,7 @@ export function evaluateSubmission(input: SubmissionCheckInput): SubmissionCheck
     const refuseBypass = (offenders: readonly string[]): SubmissionCheck => ({
       decision: "refuse",
       code: "UNMEDIATED_CHANGES",
-      unattributed: offenders,
+      unattributed: [...offenders],
       message: `HEAD ${head.stdout.trim().slice(0, 12)} diverged from the dispatch baseline ${baselineRevision.slice(0, 12)} - committed edits are unmediated changes${offenders.length > 0 ? ` (non-protected paths: ${offenders.join(", ")})` : ""}; ${RECOVERY}`,
     });
     if (patterns.length === 0) {
