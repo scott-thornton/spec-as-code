@@ -32,7 +32,7 @@ function fixture(name: string, workerPid: number): string {
   writeFileSync(path.join(repo, ".gitignore"), ".spc/\n", "utf8");
   writeFileSync(
     path.join(repo, ".spc", "runs", "run-fixture-1", "events.jsonl"),
-    JSON.stringify({ seq: 1, type: "RUN_CREATED", runId: "run-fixture-1", timestamp: new Date().toISOString(), payload: { dirty: false } }) + "\n",
+    JSON.stringify({ seq: 1, id: "fix-0001", type: "RUN_CREATED", runId: "run-fixture-1", timestamp: new Date().toISOString(), payload: { dirty: false }, chain: "sha256:" + "0".repeat(64) }) + "\n",
     "utf8",
   );
   writeFileSync(
