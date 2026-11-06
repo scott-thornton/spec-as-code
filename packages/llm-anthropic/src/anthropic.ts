@@ -184,7 +184,7 @@ export class AnthropicCompatProvider implements LLMProvider {
           ? `request thinkingBudgetTokens ${requestThinking}`
           : `thinkingBudgetTokens ${effectiveThinking}`
         : "no reasoning control configured";
-    const remediation = `raise provider.maxTokens, lower provider.thinkingBudgetTokens, or lower provider.reasoningEffort (${reasoningDesc})`;
+    const remediation = `raise provider.maxTokens, lower provider.thinkingBudgetTokens, or lower provider.reasoningEffort (${reasoningDesc}${requestThinking !== undefined ? "; this call's budget came from the REQUEST - lower request thinkingBudgetTokens or raise request maxTokens" : ""})`;
 
     const ephemeral = { type: "ephemeral" } as const;
     const body: Record<string, unknown> = this.cacheControl
