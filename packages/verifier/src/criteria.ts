@@ -249,6 +249,42 @@ async function verifyCommand(
       });
     }
   }
+  // specs/timeout-reclassification (supersedes FC-003's timeout
+  // clause): a command-budget timeout is the environment speaking -
+  // within a vitest criterion a BEHAVIORAL hang dies at the per-test
+  // timeout and arrives as an assertion failure; run.timedOut fires
+  // only when the runner itself wedges. One recorded fresh retry is
+  // the discriminator: transient environment timeouts pass; a
+  // persistent wedge records honest inconclusive, never a false red.
+  let retriedAfterTimeout = false;
+  if (run.timedOut && !run.deniedReason) {
+    const retry = await runCommand(criterion.command, {
+      cwd: ctx.cwd,
+      timeoutMs,
+      maxOutputBytes: ctx.config.execution.maxOutputBytes,
+      commandsConfig: {
+        ...ctx.config.commands,
+        ...(decision.policy === "approval" ? { [decision.category]: "allow" } : {}),
+      } as Config["commands"],
+    });
+    retriedAfterTimeout = true;
+    run = retry;
+    // The memo and persisted cache carry the FINAL attempt.
+    if (ctx.commandRuns) {
+      const entry: SharedCommandRun = { executionId: randomUUID(), result: run, originRunId: ctx.runId };
+      ctx.commandRuns.set(runKey, entry);
+      execution = { executionId: entry.executionId, reused: false, originRunId: ctx.runId };
+    }
+    if (ctx.commandCache && run.exitCode === expected && !run.deniedReason && !run.timedOut) {
+      ctx.commandCache.record(criterion.command, {
+        executionId: execution?.executionId ?? randomUUID(),
+        exitCode: run.exitCode,
+        stdout: run.stdout,
+        stderr: run.stderr,
+        timedOut: run.timedOut,
+      });
+    }
+  }
   const outcome: EvidenceOutcome = run.deniedReason
     ? "inconclusive"
     : run.exitCode === expected
@@ -277,8 +313,9 @@ async function verifyCommand(
     outcome === "contradicts" &&
     !run.timedOut &&
     INFRA_DEATH_SIGNATURES.some((re) => re.test(output));
+  const budgetTimeout = outcome === "contradicts" && run.timedOut;
   const evidenceOutcome: EvidenceOutcome =
-    outcome === "contradicts" && infraDeath ? "inconclusive" : outcome;
+    outcome === "contradicts" && (infraDeath || budgetTimeout) ? "inconclusive" : outcome;
   const evidence = makeEvidence(
     {
       id: "pending",
@@ -302,6 +339,8 @@ async function verifyCommand(
         stderr: run.stderr,
         ...(suiteNeverRan ? { failureShape: "suite-did-not-run" } : {}),
         ...(infraDeath ? { failureShape: "environment-death" } : {}),
+        ...(budgetTimeout ? { failureShape: "budget-timeout" } : {}),
+        ...(retriedAfterTimeout ? { attempts: 2, firstAttemptTimedOut: true } : {}),
         ...(run.signal ? { signal: run.signal } : {}),
         ...(
           outcome === "contradicts" && classifyOracleValidity(criterion.command, output).invalid
