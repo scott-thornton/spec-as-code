@@ -18,7 +18,11 @@ goal: >
   behavioral); genuine assertion failures remain contradicted; and a
   captured termination signal is structured diagnostic context that
   never classifies anything by itself - a signal is evidence of HOW a
-  process died, not WHY (review ruling, 2026-10-24).
+  process died, not WHY (review ruling, 2026-10-24). The timeout clause
+  is superseded by specs/timeout-reclassification.yaml (2026-11-07): a
+  command-budget timeout is environment class with one recorded retry -
+  four field exhibits of false-red machine deaths overturned the old
+  ruling.
 requirements:
   - id: FC-001
     statement: >

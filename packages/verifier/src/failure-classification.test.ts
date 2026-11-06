@@ -62,11 +62,16 @@ describe("failure classification (failure-classification)", () => {
     expect(r.payload.failureShape).toBe("suite-did-not-run");
   });
 
-  it("a timeout stays contradicted and takes precedence (FC-003)", async () => {
-    writeFileSync(path.join(root, "hang.cjs"), "setTimeout(() => {}, 10000);\n", "utf8");
+  it("a timeout is environment class - one recorded retry, then inconclusive (FC-003 timeout clause superseded by specs/timeout-reclassification, 2026-11-07)", { timeout: 30_000 }, async () => {
+    writeFileSync(path.join(root, "hang.cjs"), "setTimeout(() => {}, 30000);\n", "utf8");
     const r = await run("node hang.cjs", 1000);
     expect(r.payload.timedOut).toBe(true);
-    expect(r.outcome).toBe("contradicts");
+    // Persistent wedge: both attempts time out -> inconclusive with the
+    // budget-timeout shape, never contradicted (four field exhibits of
+    // false-red machine deaths superseded the old ruling).
+    expect(r.outcome).toBe("inconclusive");
+    expect(r.payload.failureShape).toBe("budget-timeout");
+    expect(r.payload.attempts).toBe(2);
   });
 
   it("a genuine assertion failure stays contradicted - the negative fixture (FC-003)", async () => {

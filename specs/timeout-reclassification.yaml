@@ -1,0 +1,78 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: timeout-reclassification
+  title: A budget timeout is the environment speaking - one recorded retry, then honest inconclusive
+goal: >
+  Supersedes failure-classification FC-003's timeout clause ("a timed-
+  out command remains contradicted - a hang is potentially behavioral").
+  Four field exhibits since that ruling (2026-11-03..06) are all
+  command-budget timeouts that were environment, not behavior: the
+  git-test 5s flakes under machine load (twice), the in-run battery
+  failing with the old adapter's signature while every standalone run
+  passed, and har's port-busy Playwright flakes. The old ruling guarded
+  a hypothetical (a behavioral hang oracle) against a demonstrated
+  false-red machine. The distinction the old rule missed: within a
+  vitest criterion, a BEHAVIORAL hang dies at the per-test timeout and
+  arrives as an assertion failure with output - only when the runner
+  ITSELF wedges past the command budget does run.timedOut fire, and
+  that is nearly always infrastructure. The retry is the discriminator:
+  a transient environment timeout passes on the second attempt; a
+  persistent wedge records inconclusive (budget-timeout), never
+  contradicted. Red-phase honesty is preserved both ways: timeout
+  evidence never establishes red (a timeout at base proves nothing
+  about the flip - the no_red_evidence path) and never certifies
+  green. suite-did-not-run keeps its FC-002 redness, untouched.
+requirements:
+  - id: TC-001
+    statement: >
+      A command criterion whose execution times out at its budget
+      (run.timedOut) is environment class with exactly one recorded
+      retry: the command re-executes once (a fresh execution - never a
+      memo or cache replay of the timed-out attempt). Retry passes
+      (expected exit, no timeout) -> outcome supports, the evidence
+      payload records attempts: 2 and firstAttemptTimedOut: true.
+      Retry also times out -> outcome inconclusive with failureShape
+      budget-timeout (never contradicted), payload records attempts: 2.
+      An assertion failure (non-timeout, unexpected exit) is unchanged:
+      contradicted, single attempt, no retry. The oracle drives the
+      real criteria executor in-process: (a) a marker-script command
+      whose first invocation outlives a short criterion timeoutMs and
+      whose second exits 0 -> supports, attempts 2; (b) a persistent
+      wedge -> inconclusive, budget-timeout, attempts 2; (c) a fast
+      exit-1 command -> contradicted, no retry.
+    priority: must
+    scope:
+      include: [packages/verifier/src/**]
+    acceptance:
+      - id: TC-001-A
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/verifier exec vitest run src/timeout-reclassification.test.ts
+        discriminating: true
+  - id: TC-002
+    statement: >
+      Shared-path honesty: the retry and classification apply
+      identically in the red phase and every verify sweep (the criteria
+      executor is one path); timeout evidence never counts as red
+      evidence for a flip (a red-phase timeout records inconclusive/
+      supports-per-retry, never a establishing contradicted red);
+      suite-did-not-run stays contradicted per FC-002 (this spec
+      touches only the timeout clause). failure-classification's
+      oracle, amended pre-run to the superseded contract, stays green;
+      the full battery stays green (CI-owned).
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: TC-002-A
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/verifier exec vitest run src/failure-classification.test.ts src/timeout-reclassification.test.ts
+        discriminating: true
+      - id: TC-002-B
+        type: suite
+        ref: cli-battery
+outOfScope:
+  - FC-002's suite-did-not-run redness (load failures stay red-capable by design - the rehearsal finding stands)
+  - retrying assertion failures or infra-death envelopes (one retry, environment-timeout class only)
+  - a retry budget knob (exactly one retry; a second timeout is honest inconclusive)
+  - the Unsatisfied terminal block's presentation (it prints the reason text, which now carries budget-timeout - no renderer change needed)
