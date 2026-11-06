@@ -257,7 +257,9 @@ async function verifyCommand(
   // the discriminator: transient environment timeouts pass; a
   // persistent wedge records honest inconclusive, never a false red.
   let retriedAfterTimeout = false;
+  let firstAttemptDurationMs: number | undefined;
   if (run.timedOut && !run.deniedReason) {
+    firstAttemptDurationMs = run.durationMs;
     const retry = await runCommand(criterion.command, {
       cwd: ctx.cwd,
       timeoutMs,
@@ -304,11 +306,13 @@ async function verifyCommand(
       /failed to load/i.test(output) ||
       /must contain at least one test/i.test(output));
   // Runner infrastructure deaths are the one honest exception: the
-  // machine died, not the assertion. Timeouts keep precedence and stay
-  // contradicted (a hang is potentially behavioral); load failures
-  // (suite-did-not-run) stay red-capable BY DESIGN - a suite that
-  // cannot load because the implementation is absent at base IS the
-  // red state module-import oracles depend on. Signals are context only.
+  // machine died, not the assertion. Budget timeouts classify
+  // environment too (specs/timeout-reclassification, superseding
+  // FC-003's old ruling - four field exhibits of false-red machine
+  // deaths); load failures (suite-did-not-run) stay red-capable BY
+  // DESIGN - a suite that cannot load because the implementation is
+  // absent at base IS the red state module-import oracles depend on.
+  // Signals are context only.
   const infraDeath =
     outcome === "contradicts" &&
     !run.timedOut &&
@@ -340,7 +344,7 @@ async function verifyCommand(
         ...(suiteNeverRan ? { failureShape: "suite-did-not-run" } : {}),
         ...(infraDeath ? { failureShape: "environment-death" } : {}),
         ...(budgetTimeout ? { failureShape: "budget-timeout" } : {}),
-        ...(retriedAfterTimeout ? { attempts: 2, firstAttemptTimedOut: true } : {}),
+        ...(retriedAfterTimeout ? { attempts: 2, firstAttemptTimedOut: true, ...(firstAttemptDurationMs !== undefined ? { firstAttemptDurationMs } : {}) } : {}),
         ...(run.signal ? { signal: run.signal } : {}),
         ...(
           outcome === "contradicts" && classifyOracleValidity(criterion.command, output).invalid

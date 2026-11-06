@@ -63,12 +63,15 @@ requirements:
         discriminating: true
   - id: FC-003
     statement: >
-      The strictness contract: a timed-out command remains contradicted
-      (timedOut takes precedence over envelope classification); a
-      genuine assertion failure remains contradicted (the negative
-      fixture); and a termination signal captured from the child is
-      recorded in the evidence payload as diagnostic context and never
-      classifies an outcome by itself.
+      The strictness contract: a timed-out command is environment
+      class - one recorded retry, then inconclusive budget-timeout
+      (SUPERSeded by specs/timeout-reclassification.yaml, 2026-11-07 -
+      the original "remains contradicted" ruling fell to four field
+      exhibits of false-red machine deaths); a genuine assertion
+      failure remains contradicted (the negative fixture); and a
+      termination signal captured from the child is recorded in the
+      evidence payload as diagnostic context and never classifies an
+      outcome by itself.
     priority: must
     scope:
       include: [packages/executor/src/**, packages/verifier/src/**]
