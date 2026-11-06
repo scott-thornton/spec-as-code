@@ -1,0 +1,67 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: recover-confirm
+  title: The driver's attestation - recover --confirm proceeds past unverifiable workers, recorded, never silently
+goal: >
+  Field ask (har, 2026-11-06): cooperative cancellation on darwin
+  cannot do identity-bound termination, so when an apply child survives
+  cancellation (multiple incidents), the workspace lands in the safety
+  block and needs spc apply recover - correct, but the DRIVER cannot
+  call it automatically: worker verification may fail (the wedged child
+  ignores SIGTERM; darwin cannot force-kill by identity), recovery
+  returns incomplete, and every zombie incident costs a human. The
+  driver CAN verify the workspace safe by its own checks (it owns the
+  process tree it spawned); what it lacks is a sanctioned way to SAY
+  so. This spec adds that: spc apply recover --confirm is a caller
+  attestation that proceeds past the cannot-verify-workers gate - with
+  every unverified worker NAMED in the recovery record and the
+  confirmation stamped into the terminal event, never silently. What
+  --confirm never overrides: the kernel lock (a live coordinator means
+  recovery is not ours to run - refused as today), and every other
+  recovery step (terminal event, attestation, branch restoration,
+  workspace verification, intent clear - all unchanged).
+requirements:
+  - id: REC-001
+    statement: >
+      runRecovery accepts a confirmation option; the CLI exposes it as
+      spc apply recover --confirm. When worker verification fails
+      (workers that cannot be verified dead) AND the caller confirmed,
+      recovery proceeds through all five steps and the record is
+      explicit: the RUN_COMPLETED terminal event's payload carries the
+      confirmation (recoveryConfirmed: true) and the unverified worker
+      identities (unverifiedWorkers: [pid...]), and the returned detail
+      names them. Without the confirmation, a verification failure
+      returns incomplete exactly as today. A held kernel lock is never
+      overridable - lock-held refuses identically with or without
+      --confirm. The oracle drives the real recovery against a fixture
+      with a SIGTERM-trapping live process planted as a registered
+      worker: (a) no confirm -> incomplete, the pid named, intent
+      preserved; (b) --confirm -> recovered, the terminal event carries
+      the confirmation and the pid, intent cleared, the planted process
+      untouched by the assertion and cleaned by the fixture.
+    priority: must
+    scope:
+      include: [packages/runtime/src/**, packages/cli/src/**]
+    acceptance:
+      - id: REC-001-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/recover-confirm.test.ts
+        discriminating: true
+  - id: REC-002
+    statement: >
+      Without --confirm, behavior is byte-identical to today: the CLI
+      flag is optional, runRecovery without the option takes every path
+      it takes today with identical results and messages. The full
+      runtime suite and cli battery stay green (CI-owned battery).
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: REC-002-A
+        type: suite
+        ref: cli-battery
+outOfScope:
+  - identity-bound termination on darwin (ADR-003's platform matrix stands; --confirm is the caller-side answer, not a kernel feature)
+  - overriding the kernel lock (a live coordinator is never recoverable-around)
+  - auto-invoking recovery from cancellation (the cancellation INCOMPLETE report already names spc apply recover; WHO runs it stays a decision - human or driver with its own checks)
