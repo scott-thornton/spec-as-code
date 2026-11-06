@@ -77,6 +77,26 @@ describe("SC-001: the committed bypass refuses what changed, not that anything c
     expect(check.code).toBe("UNMEDIATED_CHANGES");
   });
 
+  it("a delta that cannot be computed refuses - fail closed, never silently allow (adversarial F-01 leg)", () => {
+    const f = fixture("unresolvable");
+    writeFileSync(path.join(f.root, "tests", "a.test.ts"), "test amended\n", "utf8");
+    git(f.root, ["-c", "user.name=t", "-c", "user.email=t@t", "add", "-A"]);
+    git(f.root, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "oracle fix"]);
+    const bogus = "0".repeat(40);
+    const check = evaluateSubmission({ ...INPUT(f.root, bogus), protectedPatterns: [PROTECTED_PATTERN] });
+    expect(check.decision).toBe("refuse");
+    expect(check.code).toBe("UNMEDIATED_CHANGES");
+  });
+
+  it("a rename into protected territory names BOTH sides - the task-territory deletion refuses (adversarial F-02 leg)", () => {
+    const f = fixture("rename-launder");
+    git(f.root, ["-c", "user.name=t", "-c", "user.email=t@t", "mv", "src/a.ts", "tests/moved.test.ts"]);
+    git(f.root, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "move"]);
+    const check = evaluateSubmission({ ...INPUT(f.root, f.baseline), protectedPatterns: [PROTECTED_PATTERN] });
+    expect(check.decision).toBe("refuse");
+    expect(check.message).toMatch(/src\/a\.ts/);
+  });
+
   it("HEAD unchanged: allow, as today (regression shape)", () => {
     const f = fixture("clean");
     const check = evaluateSubmission({ ...INPUT(f.root, f.baseline), protectedPatterns: [PROTECTED_PATTERN] });

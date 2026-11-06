@@ -85,29 +85,32 @@ export function evaluateSubmission(input: SubmissionCheckInput): SubmissionCheck
     // (the legitimate mid-run oracle amendment) - the bypass does not
     // fire. Any non-protected path is task territory: refuse, named.
     const patterns = input.protectedPatterns ?? [];
-    if (patterns.length > 0) {
-      const delta = git(worktreeRoot, ["diff", "--name-only", baselineRevision, "HEAD"]);
-      if (delta.ok) {
-        const changed = delta.stdout.split("\n").map((l) => l.trim().split(path.sep).join("/")).filter(Boolean);
-        if (changed.length > 0 && changed.every((p) => globMatchAny(patterns, p) || globMatchAny(patterns, p.split("/").join(path.sep)))) {
-          // author-only delta: fall through to the working-tree checks
-        } else {
-          const offenders = changed.filter((p) => !(globMatchAny(patterns, p) || globMatchAny(patterns, p.split("/").join(path.sep)))).slice(0, 5);
-          return {
-            decision: "refuse",
-            code: "UNMEDIATED_CHANGES",
-            unattributed: offenders,
-            message: `HEAD ${head.stdout.trim().slice(0, 12)} diverged from the dispatch baseline ${baselineRevision.slice(0, 12)} - committed edits are unmediated changes${offenders.length > 0 ? ` (non-protected paths: ${offenders.join(", ")})` : ""}; ${RECOVERY}`,
-          };
-        }
-      }
+    const refuseBypass = (offenders: readonly string[]): SubmissionCheck => ({
+      decision: "refuse",
+      code: "UNMEDIATED_CHANGES",
+      unattributed: offenders,
+      message: `HEAD ${head.stdout.trim().slice(0, 12)} diverged from the dispatch baseline ${baselineRevision.slice(0, 12)} - committed edits are unmediated changes${offenders.length > 0 ? ` (non-protected paths: ${offenders.join(", ")})` : ""}; ${RECOVERY}`,
+    });
+    if (patterns.length === 0) {
+      return refuseBypass([]);
+    }
+    // -z emits raw NUL-separated paths (no C-quoting, no trimming) and
+    // --no-renames names BOTH sides of a rename, so a protected-
+    // destination move cannot launder a task-territory deletion
+    // (adversarial pass 1, F-02/F-03/F-04).
+    const delta = git(worktreeRoot, ["diff", "--name-only", "-z", "--no-renames", baselineRevision, "HEAD"]);
+    // Fail closed (F-01): a delta that cannot be computed is movement
+    // that cannot be attributed - refuse exactly as the unthreaded
+    // path, never silently allow.
+    if (!delta.ok) {
+      return refuseBypass([]);
+    }
+    const changed = delta.stdout.split("\0").filter(Boolean).map((p) => p.split(path.sep).join("/"));
+    const isProtected = (p: string): boolean => globMatchAny(patterns, p);
+    if (changed.length > 0 && changed.every(isProtected)) {
+      // author-only delta: fall through to the working-tree checks
     } else {
-      return {
-        decision: "refuse",
-        code: "UNMEDIATED_CHANGES",
-        unattributed: [],
-        message: `HEAD ${head.stdout.trim().slice(0, 12)} diverged from the dispatch baseline ${baselineRevision.slice(0, 12)} - committed edits are unmediated changes; ${RECOVERY}`,
-      };
+      return refuseBypass(changed.filter((p) => !isProtected(p)).slice(0, 5));
     }
   }
 
