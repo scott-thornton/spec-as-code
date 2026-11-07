@@ -1,0 +1,65 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: submission-contract-wording
+  title: One word for the mechanism, another for the op - the submission contract stops saying "patch operations"
+goal: >
+  Found in the end-of-session intent audit (2026-11-07): the
+  SUBMISSION_CONTRACT every executor request carries says "You PROPOSE
+  changes as patch operations in the changes array" - while
+  executor-prompt-update-op teaches the update op for wholesale
+  rewrites. "Patch" is doing double duty: the contract means the
+  PROPOSAL workflow (mediated changes, never direct edits), but a
+  model can read it as the patch OP specifically - two prompt blocks
+  in tension, exactly the ambiguity class that kept har's take seven
+  cycling on composition. The contract's actual invariants are
+  unchanged: propose in the changes array, never edit directly,
+  direct edits are refused (UNMEDIATED_CHANGES), recover through the
+  patch WORKFLOW (the tooling whose names legitimately contain
+  "patch": spc patch build, spc patch verify). The fix is the one
+  binding phrase: changes are proposed in the changes array - patch,
+  update, create, delete as the schema accepts - and the word
+  "patch" survives only where it names the workflow tools.
+requirements:
+  - id: SCW-001
+    statement: >
+      The SUBMISSION_CONTRACT constant (packages/llm-harness/src/
+      harness.ts) states the proposal invariant without binding to the
+      patch op: changes are proposed IN THE CHANGES ARRAY (the schema
+      accepts patch, update, create, and delete ops), never by direct
+      edit; direct edits under write targets are refused
+      (UNMEDIATED_CHANGES) with the recovery path through the patch
+      workflow tooling (spc patch build chains, spc patch verify,
+      spc agent dry-run, spc agent submit - tool names unchanged).
+      The double-duty phrase "as patch operations in the changes
+      array" is gone. Constant text, no braces, prefix-stable (the
+      prompt-stability oracle governs). The oracle asserts the
+      contract via source-check (the OCT precedent): the binding
+      phrase absent, the changes-array proposal present, the
+      UNMEDIATED_CHANGES refusal and the patch-workflow tool names
+      retained.
+    priority: must
+    scope:
+      include: [packages/llm-harness/src/**]
+    acceptance:
+      - id: SCW-001-A
+        type: command
+        command: pnpm --filter @spc/llm-harness... build > /dev/null && pnpm --filter @spc/llm-harness exec vitest run src/submission-contract-wording.test.ts
+        discriminating: true
+  - id: SCW-002
+    statement: >
+      Regression guard: the llm-harness suite (prompt-stability,
+      stage-headers, composition-hardening) and the cli battery stay
+      green - one constant-text line changes; no mechanism, schema,
+      or guard semantics touched. CI-owned battery.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: SCW-002-A
+        type: suite
+        ref: cli-battery
+outOfScope:
+  - any change to the update-op teaching (executor-prompt-update-op owns that surface; this spec only removes its contradiction)
+  - the patch workflow tool names (spc patch build/verify - "patch" names the tools, unambiguous)
+  - the guard or applicator (unchanged throughout)
