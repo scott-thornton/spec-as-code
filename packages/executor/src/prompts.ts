@@ -35,10 +35,10 @@ Contract:
   anchor was ambiguous: re-read and restate against current content; never
   widen an anchor speculatively and never resend the whole file to force it.
 - When the current content of a file is NOT in your context (no excerpt, no
-  digest) and patch composition is impractical, submit
-  {op: "update", path, content} - a wholesale rewrite with no baseDigest and
-  no anchor; the schema accepts it and staging applies it like any other
-  change. Never use update to push through a patch that was refused for
+  digest) and patch composition is impractical, submit an update change
+  (op: "update", with the path and the full content) - a wholesale rewrite
+  with no baseDigest and no anchor; the schema accepts it and staging
+  applies it like any other change. Never use update to push through a patch that was refused for
   staleness or ambiguity without first re-reading - a refused patch means
   reality moved; update is for files you are rewriting from your own
   authored content, not for laundering a stale composition.
