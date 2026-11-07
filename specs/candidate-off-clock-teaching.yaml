@@ -1,0 +1,60 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: candidate-off-clock-teaching
+  title: The window measures answering, not composing - the off-the-clock pattern taught up front, where the pressure is
+goal: >
+  Field evidence (har succession takes five and seven, 2026-11-02..07):
+  the answering agent PRE-DRAFTED answers to beat the 15-minute harness
+  window and lost at least one to expiry - while the save-candidate
+  flow (compose off the clock, claim when ready) existed the entire
+  time. The request surfaces teach it only conditionally ("if the
+  window runs out mid-rehearsal" - executor stage header) or after the
+  death (REQUEST_WINDOW_ELAPSED's remedy line). Nothing tells the
+  agent, AT the moment of window pressure, that composition never needs
+  to race: the window measures answering, not composing. This is the
+  refusals-teach doctrine applied before the refusal - the same family
+  as executor-prompt-update-op: the mechanism exists, the surface does
+  not say so. The executor stage header - the incident surface, the
+  one place every answering agent looks first - joins the
+  candidate-guidance vocabulary ("off the clock", CG-002's own phrase)
+  so the skill and the request say the same thing.
+requirements:
+  - id: OCT-001
+    statement: >
+      The executor stage header (packages/llm-harness/src/harness.ts,
+      STAGE_HEADERS.executor) teaches the off-the-clock pattern up
+      front: compose the answer calmly (scratch, validate, dry-run,
+      respond); if it is not ready in time, spc agent save-candidate
+      keeps the composed work claimable - the window measures
+      answering, not composing; never a rushed submit. The teaching is
+      constant text in the stable prefix (prompt-stability: no braces,
+      no per-request data - the existing prompt-stability oracle
+      governs). The oracle asserts the header carries the off-the-clock
+      phrase, the save-candidate command, and the
+      window-measures-answering framing.
+    priority: must
+    scope:
+      include: [packages/llm-harness/src/**]
+    acceptance:
+      - id: OCT-001-A
+        type: command
+        command: pnpm --filter @spc/llm-harness... build > /dev/null && pnpm --filter @spc/llm-harness exec vitest run src/candidate-off-clock-teaching.test.ts
+        discriminating: true
+  - id: OCT-002
+    statement: >
+      Regression guard: the full llm-harness suite (prompt-stability,
+      stage-headers, window-defaults) and the cli battery stay green -
+      the change is constant teaching text in one stage header; prefix
+      stability preserved. CI-owned battery.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: OCT-002-A
+        type: suite
+        ref: cli-battery
+outOfScope:
+  - changing window mechanics or the candidate flow itself (window-recalibration and portable-candidates own those contracts)
+  - the expiry remedy line in REQUEST_WINDOW_ELAPSED (correct as-is - the after-death teaching stays)
+  - other role headers (planner/verifier windows are not the incident shape; join them when evidence demands)
