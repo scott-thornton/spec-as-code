@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
@@ -44,10 +44,11 @@ git(["-c", "user.name=t", "-c", "user.email=t@t", "add", "-A"]);
 git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base"]);
 const BASE = git(["rev-parse", "HEAD"]).trim();
 
-function commitTouch(pkg: string): void {
-  writeFileSync(path.join(root, pkg, "touched.txt"), "t\n", "utf8");
+function commitTouch(rel: string): void {
+  const file = path.join(root, rel);
+  writeFileSync(file, (existsSync(file) ? readFileSync(file, "utf8") : "") + "t\n", "utf8");
   git(["-c", "user.name=t", "-c", "user.email=t@t", "add", "-A"]);
-  git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", `touch ${pkg}`]);
+  git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", `touch ${rel}`]);
 }
 
 function runsCount(): number {
@@ -57,7 +58,7 @@ function runsCount(): number {
 
 describe("DSV-001: derived-disjointness skipping", () => {
   it("a diff touching only pkg-a: file + unscoped evaluate, the pkg-b command skips with its scope named", { timeout: 60_000 }, () => {
-    commitTouch("pkg-a");
+    commitTouch("pkg-a/x.txt");
     const r = sh(["verify", "--scoped-to-diff", BASE, "specs/dsv.yaml"]);
     expect(r.status).toBe(0);
     // The partial banner with the honest counts (2 of 3, 1 skipped).
@@ -68,8 +69,9 @@ describe("DSV-001: derived-disjointness skipping", () => {
     expect(r.stdout).toMatch(/disjoint/i);
   });
 
-  it("a diff touching pkg-b: nothing skips among the three", { timeout: 60_000 }, () => {
-    commitTouch("pkg-b");
+  it("a diff touching the criterion's path AND the scoped package: nothing skips among the three", { timeout: 60_000 }, () => {
+    commitTouch("pkg-b/touched.txt");
+    commitTouch("pkg-a/x.txt");
     const r = sh(["verify", "--scoped-to-diff", BASE, "specs/dsv.yaml"]);
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/partial verification: 3 of 3 criteria evaluated, 0 skipped/i);
