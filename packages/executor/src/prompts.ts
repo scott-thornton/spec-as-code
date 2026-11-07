@@ -34,6 +34,14 @@ Contract:
   patch (stale digest, absent or non-unique anchor) means reality moved or the
   anchor was ambiguous: re-read and restate against current content; never
   widen an anchor speculatively and never resend the whole file to force it.
+- When the current content of a file is NOT in your context (no excerpt, no
+  digest) and patch composition is impractical, submit
+  {op: "update", path, content} - a wholesale rewrite with no baseDigest and
+  no anchor; the schema accepts it and staging applies it like any other
+  change. Never use update to push through a patch that was refused for
+  staleness or ambiguity without first re-reading - a refused patch means
+  reality moved; update is for files you are rewriting from your own
+  authored content, not for laundering a stale composition.
 
 Respond with a single JSON object matching the provided schema.`;
 
