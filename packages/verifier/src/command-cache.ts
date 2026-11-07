@@ -168,7 +168,7 @@ function digestOfContent(content: string): string {
 }
 
 /** Tracked files under the scope dirs (git ls-files), sorted, excluding node_modules and dist. */
-function trackedFiles(root: string, dirs: string[]): string[] {
+export function trackedFiles(root: string, dirs: string[]): string[] {
   if (dirs.length === 0) return [];
   const r = git(root, ["ls-files"]);
   if (!r.ok) return [];

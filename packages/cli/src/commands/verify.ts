@@ -1,9 +1,12 @@
 import path from "node:path";
-import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { appendFileSync, existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { gitOk, statusPorcelain } from "@spc/repo";
 import { renderGithubAnnotations, renderGithubSummary } from "@spc/renderer";
 import { createVerifyRun, freshnessCheck, inPlaceHandoffWarning, prepareDisposableWorktree, verifyBundle } from "@spc/runtime";
-import { CommandCache, type SharedCommandRun } from "@spc/verifier";
+import { CommandCache, parseFilterScope, resolveScopeDirs, trackedFiles, type SharedCommandRun } from "@spc/verifier";
+import { verifyProperties, EventStore, EvidenceStore, FollowupStore } from "@spc/runtime";
+import { git } from "@spc/repo";
 import { createProvider, loadRepoConfig, resolveAllSpecs, resolveRepoRoot } from "../context.js";
 import { loadSuiteRegistry, type SuiteDefinition } from "@spc/repo";
 import type { DesiredProperty } from "@spc/schema";
@@ -49,6 +52,7 @@ export async function runVerify(
   bundleDir?: string,
   runId?: string,
   forceAll?: boolean,
+  scopedDiffBase?: string,
 ): Promise<number> {
   // Bundle mode: verify an exported run's integrity and derivation
   // WITHOUT the repository. Cannot re-execute commands (threat model).
@@ -206,6 +210,12 @@ export async function runVerify(
   } catch {
     // best-effort cache dir creation; verification proceeds without it
   }
+  // specs/diff-scoped-verify: partial mode is a REPORT, not evidence -
+  // derived-disjointness skipping, honest partial banner, NO run
+  // records, no freshness anchor. The default path below is untouched.
+  if (scopedDiffBase !== undefined) {
+    return runScopedDiffVerify(specs, repoRoot, scopedDiffBase, format, config, provider, suites);
+  }
   for (const { ir } of specs) {
     const handoff = inPlaceHandoffWarning(path.join(repoRoot, ".spc", "runs"), ir.spec.metadata.id, repoRoot);
     if (handoff && format === "text") console.log(handoff);
@@ -322,6 +332,144 @@ export async function runVerify(
     commandCache.persist();
   } catch {
     // best-effort persistence; the next invocation re-runs what it must
+  }
+  return worst;
+}
+
+/**
+ * specs/diff-scoped-verify: partial verification by DERIVED
+ * disjointness - a report, never evidence. Changed paths come from
+ * git diff --name-only -z --no-renames (the skew-carveout
+ * discipline); a file criterion skips on an untouched path; a
+ * command/suite criterion skips only when its DECLARED filter scope's
+ * tracked files are disjoint from the diff (unscoped commands declare
+ * the whole workspace and never skip). No run records are written -
+ * nothing anchors freshness, nothing can be mistaken for proof. The
+ * claim shrinks honestly: the partial banner, never green-as-full.
+ */
+interface ScopedSkip {
+  id: string;
+  reason: string;
+}
+
+async function runScopedDiffVerify(
+  specs: { ir: ReturnType<typeof resolveAllSpecs>[number]["ir"] }[],
+  repoRoot: string,
+  baseRev: string,
+  format: "text" | "github" | "json",
+  config: ReturnType<typeof loadRepoConfig>,
+  provider: unknown,
+  suites: Map<string, SuiteDefinition> | null,
+): Promise<number> {
+  const changed = git(repoRoot, ["diff", "--name-only", "-z", "--no-renames", baseRev, "HEAD"])
+    .stdout.split("\0")
+    .filter(Boolean)
+    .map((p) => p.split(path.sep).join("/"));
+  const changedSet = new Set(changed);
+
+  const allCriteria: { specId: string; propertyId: string; criterionId: string; criterion: { id: string; type: string; path?: string; command?: string } }[] = [];
+  for (const { ir } of specs) {
+    for (const property of ir.properties) {
+      for (const criterion of property.acceptance as { id: string; type: string; path?: string; command?: string }[]) {
+        allCriteria.push({ specId: ir.spec.metadata.id, propertyId: property.id, criterionId: criterion.id, criterion });
+      }
+    }
+  }
+
+  const skips: ScopedSkip[] = [];
+  const skipIds = new Set<string>();
+  for (const entry of allCriteria) {
+    const c = entry.criterion;
+    if (c.type === "file" && c.path !== undefined) {
+      const p = c.path.split(path.sep).join("/");
+      if (!changedSet.has(p)) {
+        skipIds.add(c.id);
+        skips.push({ id: c.id, reason: `untouched path: ${p} not in ${baseRev.slice(0, 8)}..HEAD` });
+      }
+      continue;
+    }
+    if (c.type === "command" || c.type === "suite") {
+      const command = c.type === "suite" && suites?.get(c.command ?? "") ? (suites.get(c.command ?? "") as unknown as { command: string }).command : c.command ?? "";
+      if (command === "") continue; // nothing to derive from: evaluate
+      const scope = parseFilterScope(command);
+      if (scope === null) continue; // unscoped declares the workspace: never skip
+      const dirs = resolveScopeDirs(repoRoot, scope);
+      const scopeFiles = trackedFiles(repoRoot, dirs).map((f) => f.split(path.sep).join("/"));
+      const disjoint = scopeFiles.every((f) => !changedSet.has(f));
+      if (scopeFiles.length > 0 && disjoint) {
+        skipIds.add(c.id);
+        const pkgNames = dirs.map((d) => path.relative(repoRoot, d) || ".").join(", ");
+        skips.push({ id: c.id, reason: `scope disjoint: ${pkgNames} untouched by ${baseRev.slice(0, 8)}..HEAD` });
+      }
+    }
+    // human criteria and everything else: evaluate
+  }
+
+  // Evaluate the non-skipped criteria WITHOUT run records: strip the
+  // skipped criteria from each property, then verifyProperties with a
+  // synthetic runId that never touches .spc/runs.
+  let worst = 0;
+  const jsonReports: unknown[] = [];
+  const failures: { spec: string; requirement: string; reason: string }[] = [];
+  const memo = new Map<string, SharedCommandRun>();
+  // Real stores at throwaway paths: the sweep needs them; nothing lands
+  // under .spc (specs/diff-scoped-verify DSV-003 - no evidence
+  // footprint).
+  const scratch = mkdtempSync(path.join(tmpdir(), "spc-scoped-diff-"));
+  const now = () => new Date().toISOString();
+  const events = new EventStore(path.join(scratch, "events.jsonl"), "scoped-diff-report", now);
+  const evidence = new EvidenceStore(path.join(scratch, "evidence.jsonl"));
+  const followups = new FollowupStore(path.join(scratch, "followups.json"));
+  for (const { ir } of specs) {
+    const properties = ir.properties.map((property) => ({
+      ...property,
+      acceptance: (property.acceptance as unknown[]).filter((c) => !skipIds.has((c as { id: string }).id)),
+    }));
+    const result = await verifyProperties({
+      properties: properties as never,
+      runId: "scoped-diff-report",
+      cwd: repoRoot,
+      revision: "HEAD",
+      config,
+      provider: provider as never,
+      commandRuns: memo,
+      events,
+      evidence,
+      followups,
+      ...(suites !== null ? { suites: suites as unknown as import("@spc/verifier").SuiteRegistry } : {}),
+    });
+    for (const state of result.states) {
+      if (state.status !== "satisfied" && state.status !== "waived") {
+        worst = 1;
+        failures.push({ spec: ir.spec.metadata.id, requirement: state.propertyId, reason: state.reason ?? state.status });
+      }
+    }
+    if (format === "json") {
+      jsonReports.push({
+        spec: ir.spec.metadata.id,
+        properties: result.states.map((s) => ({ id: s.propertyId, status: s.status, ...(s.reason ? { reason: s.reason } : {}) })),
+      });
+    } else if (format === "text") {
+      console.log(`Spec: ${ir.spec.metadata.id} (partial)`);
+      for (const s of result.states) console.log(`  ${s.status.padEnd(12)} ${s.propertyId}${s.reason ? ` - ${s.reason}` : ""}`);
+      console.log("");
+    }
+  }
+
+  const total = allCriteria.length;
+  const evaluated = total - skips.length;
+  const banner = `partial verification: ${evaluated} of ${total} criteria evaluated, ${skips.length} skipped (proven disjoint)`;
+  if (format === "json") {
+    // House shape: single spec prints one object, multi prints the
+    // array with the summary as its tail entry (the executions
+    // convention).
+    const summary = { partial: true, evaluated, skipped: skips.length, skippedCriteria: skips };
+    const output = specs.length > 1 ? [...jsonReports, summary] : { ...(jsonReports[0] as Record<string, unknown>), ...summary };
+    console.log(JSON.stringify(output, null, 2));
+  } else {
+    for (const s of skips) console.log(`SKIP(proven) ${s.id} - ${s.reason}`);
+    console.log("");
+    console.log(banner);
   }
   return worst;
 }
