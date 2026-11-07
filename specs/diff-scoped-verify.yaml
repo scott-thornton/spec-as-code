@@ -1,0 +1,111 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: diff-scoped-verify
+  title: Proof priced to the change - partial verification by derived disjointness, claimed honestly, recorded nowhere
+goal: >
+  Field evidence (slerp consumer letter, 2026-11-05): a behavioral
+  ruling the spec didn't pin still cost a full 30-minute verify - 21
+  command executions to prove 8/8 on criteria indifferent to the
+  change. Ceremony priced above the change size does not protect the
+  evidence chain; it endangers it, by driving iteration around the
+  tool. The fix follows the command cache's own epistemology - scope
+  is DERIVED from declared structure, never guessed: a file criterion
+  names its path; a command criterion names its filter scope (the
+  command-cache parser); a diff names its touched paths. When the
+  derivation PROVES disjointness, the criterion is skipped with its
+  reason shown - and the claim shrinks honestly: "partial
+  verification: N of M evaluated, K skipped (proven disjoint)", never
+  green-as-full. Partial mode is a REPORT, not evidence: it writes no
+  run record, anchors no freshness, and records nothing a later full
+  verify could mistake for proof. The line this spec will not cross:
+  no heuristic relatedness, no path-pattern guessing for commands, no
+  skipping unscoped commands (they read the whole workspace by their
+  own declaration), and the default verify is untouched in every way.
+requirements:
+  - id: DSV-001
+    statement: >
+      spc verify --scoped-to-diff <baseRev> evaluates each spec's
+      criteria with derivation-based skipping: the changed paths of
+      baseRev..HEAD computed with git diff --name-only -z --no-renames
+      (the skew-carveout discipline). A FILE criterion is skipped
+      when its path is untouched by the diff (exact). A COMMAND or
+      SUITE criterion is skipped only when its command's filter scope
+      (the command-cache scope parser: pnpm --filter names; unscoped
+      commands are NEVER skippable - they declare the whole workspace)
+      resolves to packages whose tracked files are disjoint from the
+      diff's touched paths. HUMAN criteria always evaluate. Every
+      skipped criterion is named in the output with its reason
+      (untouched path / scope disjoint, naming the scope). The oracle
+      drives the real CLI on a fixture workspace (two packages, three
+      criteria: a file criterion on pkg-a, a command scoped to pkg-b
+      by filter, an unscoped command): a diff touching only pkg-a
+      evaluates the file and unscoped criteria, skips the pkg-b
+      command with its scope named; a diff touching pkg-b skips
+      nothing among the three; an unscoped command never skips under
+      any diff.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: DSV-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/diff-scoped-verify.test.ts
+        discriminating: true
+  - id: DSV-002
+    statement: >
+      The claim matches the proof: partial output carries a prominent
+      banner - "partial verification: N of M criteria evaluated, K
+      skipped (proven disjoint)" - and never presents as a full
+      verification; --format json gains { partial: true, evaluated: N,
+      skipped: K, skippedCriteria: [{id, reason}] }. Exit 0 only when
+      every EVALUATED criterion is satisfied; any evaluated failure
+      exits exactly as a full verify would (with the partial banner
+      still present). When nothing is skipped the flag still reports
+      the banner with K=0 (the operator asked for a scoped claim; they
+      get its shape).
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: DSV-002-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/diff-scoped-verify.test.ts
+        discriminating: true
+  - id: DSV-003
+    statement: >
+      No evidence footprint: --scoped-to-diff writes NO run record -
+      no .spc/runs entry is created for the invocation, so nothing
+      anchors freshness and no later full verify can mistake the
+      partial pass for proof (freshnessCheck reads run records;
+      none exist to read). The default verify (with and without --all)
+      is unchanged in every way - same records, same freshness, same
+      output. The oracle asserts the .spc/runs directory is unchanged
+      by a partial invocation while a default verify creates its
+      record.
+    priority: must
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: DSV-003-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/diff-scoped-verify.test.ts
+        discriminating: true
+  - id: DSV-004
+    statement: >
+      Regression guard: the default verify paths, the freshness cache,
+      and the cli battery stay green - partial mode is additive CLI
+      surface; the verifier package is untouched (the scope parser is
+      consumed, not modified). CI-owned battery.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: DSV-004-A
+        type: suite
+        ref: cli-battery
+outOfScope:
+  - heuristic relatedness or path-pattern guessing for command criteria (declared filter scopes only; anything else is the line this spec will not cross)
+  - skipping unscoped commands (they declare the whole workspace)
+  - evidence records, run state, or freshness anchoring for partial invocations (a partial pass is a report, not proof)
+  - changing the default verify in any way
