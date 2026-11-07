@@ -1,6 +1,6 @@
 import path from "node:path";
 import { tmpdir } from "node:os";
-import { appendFileSync, existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { gitOk, statusPorcelain } from "@spc/repo";
 import { renderGithubAnnotations, renderGithubSummary } from "@spc/renderer";
 import { createVerifyRun, freshnessCheck, inPlaceHandoffWarning, prepareDisposableWorktree, verifyBundle } from "@spc/runtime";
@@ -361,8 +361,16 @@ async function runScopedDiffVerify(
   provider: unknown,
   suites: Map<string, SuiteDefinition> | null,
 ): Promise<number> {
-  const changed = git(repoRoot, ["diff", "--name-only", "-z", "--no-renames", baseRev, "HEAD"])
-    .stdout.split("\0")
+  // Adversarial F1: a diff that cannot be computed must REFUSE, never
+  // produce an empty changed set - empty means everything looks
+  // disjoint and the report lies with a vacuous green.
+  const diffRun = git(repoRoot, ["diff", "--name-only", "-z", "--no-renames", baseRev, "HEAD"]);
+  if (!diffRun.ok) {
+    console.error(`--scoped-to-diff: cannot compute ${baseRev.slice(0, 12)}..HEAD: ${diffRun.stderr.trim() || diffRun.stdout.trim() || "git diff failed"} - refusing rather than report a vacuous partial verification`);
+    return 2;
+  }
+  const changed = diffRun.stdout
+    .split("\0")
     .filter(Boolean)
     .map((p) => p.split(path.sep).join("/"));
   const changedSet = new Set(changed);
@@ -389,7 +397,12 @@ async function runScopedDiffVerify(
       continue;
     }
     if (c.type === "command" || c.type === "suite") {
-      const command = c.type === "suite" && suites?.get(c.command ?? "") ? (suites.get(c.command ?? "") as unknown as { command: string }).command : c.command ?? "";
+      // Adversarial F2: suite criteria carry ref (the schema's field),
+      // not command - the original branch read the wrong field and no
+      // suite ever skipped.
+      const command = c.type === "suite"
+        ? ((suites?.get((c as { ref?: string }).ref ?? "")) as unknown as { command?: string } | undefined)?.command ?? ""
+        : c.command ?? "";
       if (command === "") continue; // nothing to derive from: evaluate
       const scope = parseFilterScope(command);
       if (scope === null) continue; // unscoped declares the workspace: never skip
@@ -458,18 +471,28 @@ async function runScopedDiffVerify(
 
   const total = allCriteria.length;
   const evaluated = total - skips.length;
+  // Adversarial F3: the scratch stores (with full command output in
+  // evidence payloads) are removed - "throwaway paths" meant it.
+  rmSync(scratch, { recursive: true, force: true });
   const banner = `partial verification: ${evaluated} of ${total} criteria evaluated, ${skips.length} skipped (proven disjoint)`;
   if (format === "json") {
     // House shape: single spec prints one object, multi prints the
     // array with the summary as its tail entry (the executions
     // convention).
-    const summary = { partial: true, evaluated, skipped: skips.length, skippedCriteria: skips };
+    const summary = { partial: true, evaluated, skipped: skips.length, skippedCriteria: skips, failures };
     const output = specs.length > 1 ? [...jsonReports, summary] : { ...(jsonReports[0] as Record<string, unknown>), ...summary };
     console.log(JSON.stringify(output, null, 2));
   } else {
     for (const s of skips) console.log(`SKIP(proven) ${s.id} - ${s.reason}`);
     console.log("");
     console.log(banner);
+    // Adversarial F4: evaluated failures keep the terminal-fact
+    // convention (specs/verify-failure-visibility VF-001 shape).
+    if (failures.length > 0) {
+      console.log("");
+      console.log(`Unsatisfied (${failures.length}):`);
+      for (const f of failures) console.log(`  ${f.spec}  ${f.requirement} - ${f.reason}`);
+    }
   }
   return worst;
 }

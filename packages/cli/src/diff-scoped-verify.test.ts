@@ -87,6 +87,15 @@ describe("DSV-001: derived-disjointness skipping", () => {
   });
 });
 
+describe("DSV-001 (adversarial F1): an uncomputable diff refuses, never a vacuous green", () => {
+  it("a bogus base revision exits 2 with the git error surfaced - no empty-changed-set report", { timeout: 60_000 }, () => {
+    const r = sh(["verify", "--scoped-to-diff", "0".repeat(40), "specs/dsv.yaml"]);
+    expect(r.status).toBe(2);
+    expect(r.stdout).toMatch(/--scoped-to-diff: cannot compute/i);
+    expect(r.stdout).not.toMatch(/partial verification: 0 of 3/i);
+  });
+});
+
 describe("DSV-003: no evidence footprint", () => {
   it("a partial invocation creates no run record; a default verify creates one", { timeout: 120_000 }, () => {
     const before = runsCount();
