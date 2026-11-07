@@ -118,6 +118,12 @@ export const INFRA_DEATH_SIGNATURES: RegExp[] = [
   /vitest[^\n]*process[^\n]*(crashed|exited unexpectedly)/i,
   /worker process [^\n]* (terminated|exited unexpectedly)/i,
   /test runner crashed/i,
+  // specs/port-contention-envelope: a suite-spawned server that cannot
+  // bind is runner-environment contention (slerp's stacked-Playwright
+  // false reds), not an assertion failure. Node's listen-error envelope
+  // format only - the word "port" in prose stays an assertion.
+  /Error: listen EADDRINUSE[^\n]*/i,
+  /listen EACCES[^\n]*/i,
 ];
 
 export function makeEvidence(
