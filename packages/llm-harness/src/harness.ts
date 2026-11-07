@@ -42,7 +42,7 @@ const STAGE_HEADERS: Record<string, string> = {
   planner:
     "stage: plan (3 of 7) - compose the transition plan; cover every requirement; the pipeline map is one command away (follow: spc use-skill pipeline).",
   executor:
-    "stage: answer discipline (4 of 7) - draft in a scratch file, then spc agent validate, then spc agent dry-run --gates, then spc agent respond; if the window runs out mid-rehearsal, spc agent save-candidate - never a rushed submit (follow: spc use-skill rehearse).",
+    "stage: answer discipline (4 of 7) - compose off the clock: draft in a scratch file, then spc agent validate, then spc agent dry-run --gates, then spc agent respond; the window measures answering, not composing - if the answer is not ready in time, spc agent save-candidate keeps the composed work claimable; never a rushed submit (follow: spc use-skill rehearse).",
   replanner:
     "stage: replan (within the run) - read the request's lastError for why the prior answer or plan was rejected and amend within the declared scopes (follow: spc use-skill pipeline).",
   verifier:
