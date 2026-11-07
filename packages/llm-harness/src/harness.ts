@@ -26,7 +26,7 @@ const HARNESS_INSTRUCTIONS = `You are the model backend for an spc run. Read the
 // The submission-boundary contract (specs/unmediated-change-guard),
 // stated where every dispatched backend reads it: mutations to task
 // targets are proposed, never performed directly.
-const SUBMISSION_CONTRACT = `You PROPOSE changes as patch operations in the changes array - you never edit files directly. Direct edits under the task's write targets are detected at submission and refused (UNMEDIATED_CHANGES): recover by reverting them and proposing through the patch workflow (spc patch build chains, spc patch verify, spc agent dry-run, spc agent submit).`;
+const SUBMISSION_CONTRACT = `You PROPOSE changes in the changes array (the schema accepts patch, update, create, and delete ops) - you never edit files directly. Direct edits under the task's write targets are detected at submission and refused (UNMEDIATED_CHANGES): recover by reverting them and proposing through the patch workflow (spc patch build chains, spc patch verify, spc agent dry-run, spc agent submit).`;
 
 /** The per-request tail: id first mention and the respond command. */
 const requestTail = (id: string): string =>
