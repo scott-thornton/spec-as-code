@@ -1,0 +1,70 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: executor-prompt-update-op
+  title: Teach the op the schema already accepts - update for wholesale rewrites when composition is impractical
+goal: >
+  har succession take seven (2026-11-07) narrowed the last blocker to
+  one line: the executor system prompt teaches ONLY the patch-op
+  protocol, while the answer schema (result.ts's discriminated union)
+  has accepted the update op - full-content replacement, no baseDigest,
+  no anchor - all along. The converging model fixed its schema errors,
+  then its anchor errors, then cycled on PATCH_BASE_MISMATCH: without
+  current file state in context it cannot compose valid patches, and it
+  does not know update exists. The prompt's own discipline line
+  ("never resend the whole file to force it") - written to prevent
+  laundering a refused patch - reads to the model as patch-only, full
+  stop. The convergence channel feeds it "re-read and restate" with
+  nothing to re-read against. This is the known family: the mechanism
+  exists, the teaching does not (save-candidate, isCancelled,
+  lastError). The fix teaches the sanctioned alternative precisely:
+  patch remains preferred when a digest is in the excerpts; update is
+  the honest wholesale-rewrite path when the model lacks current state
+  and composition is impractical; update is never a device to push
+  through a patch that was refused for staleness without re-reading.
+requirements:
+  - id: EPO-001
+    statement: >
+      The executor system prompt (packages/executor/src/prompts.ts)
+      teaches the update op alongside the patch protocol: when a
+      repositoryExcerpts entry carries a digest, patch ops remain
+      preferred; when the current file state is NOT in context and
+      patch composition is impractical, the model may submit
+      {op: "update", path, content} - a wholesale rewrite with no
+      baseDigest and no anchor; the existing laundering clause is
+      restated with its counterweight (never use update to force a
+      patch that was refused for staleness or ambiguity without first
+      re-reading - a refused patch means reality moved). The oracle
+      asserts the built system prompt names the update op with its
+      exact shape and both the preference and the counter-laundering
+      clauses, and that the ExecutorResult schema accepts an update-op
+      change entry (the discriminated union already does - the oracle
+      pins the contract so the prompt and schema cannot drift apart
+      again).
+    priority: must
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: EPO-001-A
+        type: command
+        command: pnpm --filter @spc/executor... build > /dev/null && pnpm --filter @spc/executor exec vitest run src/executor-prompt-update-op.test.ts
+        discriminating: true
+  - id: EPO-002
+    statement: >
+      Regression guard: the existing executor suite and the cli battery
+      stay green - the change is additive teaching text in the system
+      prompt; no schema, applicator, or submission-boundary semantics
+      change (stageChanges has handled update ops throughout; the
+      unmediated-change guard and write-scope enforcement apply to
+      update identically). CI-owned battery.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: EPO-002-A
+        type: suite
+        ref: cli-battery
+outOfScope:
+  - changing the ExecutorResult schema or the applicator (update is already first-class in both)
+  - including current file digests or full content in every request (context cost; the excerpts already carry state for declared read paths - the model's gap is files it never read)
+  - any change to the laundering discipline for refused patches
