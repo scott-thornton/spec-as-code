@@ -1,0 +1,63 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: port-contention-envelope
+  title: The port was busy, not the code wrong - listen-failure envelopes join the environment-death set
+goal: >
+  Field evidence (slerp consumer letter, 2026-11-05): REGRESS-001-B and
+  PRICE-001-B contradicted on stacked Playwright runs - dev-server
+  contention, clean on rerun, manual explanation in the log every time.
+  The letter's own framing is the invariant: "the verify tool doesn't
+  distinguish 'the code is broken' from 'the port was busy'." A
+  dev-server that cannot bind (EADDRINUSE - another suite's server
+  holds the port under parallel execution) is runner-environment
+  contention in exactly the failure-classification family's sense: the
+  machine's parallelism killed the observation, not the assertion. The
+  envelope set's strictness contract holds: fixture-backed child-runner
+  envelope patterns only, classifying nothing a test could emit as an
+  ordinary assertion string - an EADDRINUSE listen error arrives from
+  suite-spawned server infrastructure (the envelope: Node's exact
+  listen-error format), and a test that deliberately asserts
+  port-conflict behavior contrives the same string, the same trade the
+  existing signatures already make (a test can print "test runner
+  crashed" too). One envelope family, one more honest inconclusive.
+requirements:
+  - id: PCE-001
+    statement: >
+      INFRA_DEATH_SIGNATURES gains listen-failure envelopes: Node's
+      EADDRINUSE listen-error format (Error: listen EADDRINUSE,
+      optionally with the address/port tail - fixture-backed against
+      real Node output). A contradicted, non-timeout run whose output
+      matches classifies inconclusive with failureShape
+      environment-death exactly as the existing envelopes do. The
+      oracle: a fixture command emitting Node's genuine listen error
+      (a real child attempting to bind an occupied port) records
+      inconclusive environment-death; the strictness controls stay -
+      an assertion failure mentioning a port in prose (not the listen
+      envelope) remains contradicted, and a timed-out run keeps the
+      budget-timeout precedence.
+    priority: must
+    scope:
+      include: [packages/verifier/src/**]
+    acceptance:
+      - id: PCE-001-A
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/verifier exec vitest run src/port-contention-envelope.test.ts
+        discriminating: true
+  - id: PCE-002
+    statement: >
+      Regression guard: the full failure-classification,
+      timeout-reclassification, and verifier suites stay green (the
+      envelope set is additive; the existing signatures, precedence,
+      and strictness contract untouched) - CI-owned battery.
+    priority: must
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: PCE-002-A
+        type: suite
+        ref: cli-battery
+outOfScope:
+  - retry for envelope-class failures (the one-retry contract is timeout-class only, specs/timeout-reclassification; envelope inconclusives rerun at the operator's discretion)
+  - detecting WHICH process held the port (diagnosis beyond classification)
+  - port-assignment tooling for suites (slerp's fixture design, not the verifier's contract)
