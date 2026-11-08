@@ -27,7 +27,9 @@ export async function runChallengeCommand(fixtureRef: string, cwd?: string): Pro
   console.log(`  criterion: ${JSON.stringify(result.record["criterion"])}`);
   console.log(`  baseline:  ${result.baseline.outcome}${result.baseline.shape ? ` (${result.baseline.shape})` : ""}`);
   console.log(`  mutation:  ${result.mutation.outcome}${result.mutation.shape ? ` (${result.mutation.shape})` : ""}`);
-  console.log(`  signature: ${result.record["signaturePresent"] ? "detected" : "absent"}`);
+  console.log(`  signature: ${result.record["signaturePresent"] ? `detected (${result.record["expectedSignature"]})` : "absent"}`);
+  const sigLine = result.record["signatureLine"];
+  if (typeof sigLine === "string" && sigLine !== "") console.log(`    ${sigLine.trim().slice(0, 160)}`);
   if (p && (p.introduced || p.caught)) {
     console.log(`  provenance: introduced ${p.introduced || "?"} - caught ${p.caught || "?"} (${p.diagnostic || "archived defect"})`);
   }

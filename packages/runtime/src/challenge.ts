@@ -285,6 +285,10 @@ export async function runChallenge(repoRoot: string, name: string): Promise<Chal
       baseline: { outcome: baseline.outcome, revision: baseline.revision, ...(baseline.shape ? { failureShape: baseline.shape } : {}) },
       mutation: { outcome: mutation.outcome, revision: mutation.revision, ...(mutation.shape ? { failureShape: mutation.shape } : {}) },
       signaturePresent,
+      expectedSignature: fixture.expectedSignature,
+      ...(signaturePresent
+        ? { signatureLine: mutation.output.split("\n").find((l) => l.includes(fixture.expectedSignature)) ?? "" }
+        : {}),
       provenance: fixture.provenance,
       timestamp: new Date().toISOString(),
     };

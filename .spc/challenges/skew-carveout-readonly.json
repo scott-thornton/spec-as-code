@@ -8,17 +8,19 @@
   "outcome": "discriminating",
   "baseline": {
     "outcome": "supports",
-    "revision": "feecad74733073242768aa82346f329ef3c2f53d"
+    "revision": "814ab2d436767ab306ba64583681160a418eee19"
   },
   "mutation": {
     "outcome": "contradicts",
-    "revision": "feecad74733073242768aa82346f329ef3c2f53d"
+    "revision": "814ab2d436767ab306ba64583681160a418eee19"
   },
   "signaturePresent": true,
+  "expectedSignature": "TS4104",
+  "signatureLine": "packages/executor build: src/unmediated-guard.ts(91,7): error TS4104: The type 'readonly string[]' is 'readonly' and cannot be assigned to the mutable type 'string[]'.",
   "provenance": {
     "introduced": "728f805",
     "caught": "3924025",
     "diagnostic": "readonly string[] assigned to the mutable unattributed field"
   },
-  "timestamp": "2026-11-08T16:10:38.668Z"
+  "timestamp": "2026-11-08T16:42:30.514Z"
 }
