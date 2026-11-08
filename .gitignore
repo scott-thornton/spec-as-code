@@ -20,3 +20,4 @@ IDEAS.md
 /.spc/execution-intent.lock
 /.spc/execution-intent.json
 /.spc/patch-log.jsonl
+/.spc/challenges/
