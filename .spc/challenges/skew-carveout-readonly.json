@@ -1,0 +1,24 @@
+{
+  "fixture": "skew-carveout-readonly",
+  "fixtureDigest": "sha256:35b5fcc52dccb71fde45e611171429fa7682d6be3e767c0669356ff9edacb8c2",
+  "criterion": {
+    "spec": "skew-carveout",
+    "criterionId": "SC-001-A"
+  },
+  "outcome": "discriminating",
+  "baseline": {
+    "outcome": "supports",
+    "revision": "feecad74733073242768aa82346f329ef3c2f53d"
+  },
+  "mutation": {
+    "outcome": "contradicts",
+    "revision": "feecad74733073242768aa82346f329ef3c2f53d"
+  },
+  "signaturePresent": true,
+  "provenance": {
+    "introduced": "728f805",
+    "caught": "3924025",
+    "diagnostic": "readonly string[] assigned to the mutable unattributed field"
+  },
+  "timestamp": "2026-11-08T16:10:38.668Z"
+}
