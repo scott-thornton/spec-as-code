@@ -15,7 +15,7 @@ const CLI = new URL("../dist/main.js", import.meta.url).pathname;
 const REPO = path.resolve(import.meta.dirname, "../../..");
 
 describe("CHAL-004: the archived skew-carveout challenge", () => {
-  it("the committed fixture reconstructs the historical defect and the challenge detects it (discriminating)", { timeout: 600_000 }, () => {
+  it("the committed fixture reconstructs the historical defect and the challenge detects it (discriminating)", () => {
     const r = spawnSync(process.execPath, [CLI, "challenge", "challenges/skew-carveout-readonly.yaml"], {
       cwd: REPO, encoding: "utf8", timeout: 590_000,
     });
