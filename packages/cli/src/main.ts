@@ -24,6 +24,7 @@ import { runUsage } from "./commands/usage.js";
 import { runSpecLint } from "./commands/lint.js";
 import { runApplyOwner } from "./commands/owner.js";
 import { runRecoveryCommand } from "./commands/recovery.js";
+import { runChallengeCommand } from "./commands/challenge.js";
 
 const program = new Command();
 
@@ -172,6 +173,14 @@ applyCmd
   .option("--confirm", "(specs/recover-confirm) caller attests unverifiable workers are gone by its own checks - proceeds past the cannot-verify gate with every unverified identity recorded in the terminal event, never silently; the kernel lock is never overridable")
   .action((opts: { cwd?: string; confirm?: boolean }) => {
     process.exitCode = runRecoveryCommand(opts.cwd, opts.confirm === true);
+  });
+
+program
+  .command("challenge <fixture>")
+  .description("falsify an acceptance criterion with a committed negative fixture (specs/criterion-challenge): baseline + mutated pipelines in disposable worktrees, attributable failure classification - discriminating / non-discriminating / invalid-baseline / inconclusive; no confidence metric")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action(async (fixtureRef: string, opts: { cwd?: string }) => {
+    process.exitCode = await runChallengeCommand(fixtureRef, opts.cwd);
   });
 
 program

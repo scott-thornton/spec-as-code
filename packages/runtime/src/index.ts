@@ -3,6 +3,7 @@ export * from "./events.js";
 export * from "./stores.js";
 export * from "./lock.js";
 export * from "./platform-lock.js";
+export * from "./challenge.js";
 export * from "./execution-intent.js";
 export * from "./prepare.js";
 export * from "./guard.js";
