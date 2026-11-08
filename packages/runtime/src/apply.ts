@@ -42,6 +42,7 @@ import { appendUsageRecord, EvidenceStore, FollowupStore, ObservationStore } fro
 import { acquireExecutionLock, releaseExecutionLock, RUN_LOCK_HELD } from "./lock.js";
 import { verifyProperties } from "./verify.js";
 import { isEligibleRed } from "@spc/verifier";
+import { ancestorFlipSources, computeChainFlipMemory, criterionDigestOf } from "./chain-memory.js";
 import { runContaminationGuard } from "./guard.js";
 import { loadSuiteRegistry } from "@spc/repo";
 import type { SuiteRegistry } from "@spc/verifier";
@@ -571,6 +572,10 @@ async function runRedPhaseSweep(ctx: RunContext): Promise<void> {
  * the ancestor's evidence inherits its flip - unless that red is
  * oracle-invalid (stamped, or derived from the recorded diagnostics at
  * consumption: legacy and cached reds cannot bypass the semantics).
+ *
+ * The fork-crossing memory (specs/chain-memory, computeChainFlipMemory)
+ * composes these same semantics across digests and across runs; this
+ * function remains the same-run primitive and keeps its oracle.
  */
 export function adoptAncestorFlips(
   records: readonly { criterionId?: string; outcome?: string; phase?: string; payload?: Record<string, unknown> }[],
@@ -1028,32 +1033,27 @@ async function finishRun(
     ctx.log(`budget signal: ${signal.kind} ${signal.actual} ${signal.unit} > ${signal.budget}`);
   }
 
-  // Criterion-level chain flips (LIST-001 field case): a criterion that
-  // merely passes at this base counts as flipped when a digest-bound
-  // ancestor's evidence records the red -> green transition for THAT
-  // criterion - properties whose criteria flip in different chain runs
-  // aggregate to satisfied instead of hanging indeterminate.
-  const inheritedFlips = new Map<string, string>();
-  const ancestorIds: string[] = [];
-  {
-    const visited = new Set<string>([ctx.meta.runId]);
-    let cursor: string | undefined = ctx.meta.parentRunId;
-    while (cursor && !visited.has(cursor)) {
-      visited.add(cursor);
-      ancestorIds.push(cursor);
-      cursor = loadRunMeta(ctx.paths.runsDir, cursor)?.parentRunId;
+  // Chain flip memory (specs/chain-memory): lineage stays same-digest
+  // (a chain is one contract's history) but MEMORY crosses forks - a
+  // criterion that passes at this base keeps an established red ->
+  // green flip from any prior apply run of this spec under ANY digest,
+  // gated on the criterion's compiled definition being byte-identical
+  // to the one at that run's base revision (read from git and compiled
+  // there), git-ancestry enforced, red strictly preceding green
+  // (synthesis across runs names both runs in the provenance).
+  // Same-run adoption (the LIST-001 case) is subsumed with unchanged
+  // eligibility semantics; adoptAncestorFlips remains the documented
+  // same-run primitive and keeps its oracle.
+  const currentCriterionDigests = new Map<string, string>();
+  for (const property of ctx.specIr.properties) {
+    for (const criterion of property.acceptance) {
+      currentCriterionDigests.set(criterion.id, criterionDigestOf(criterion));
     }
   }
-  for (const priorId of ancestorIds) {
-    const evidenceFile = path.join(ctx.paths.runsDir, priorId, "evidence.jsonl");
-    if (!existsSync(evidenceFile)) continue;
-    try {
-      const lines = readFileSync(evidenceFile, "utf8").split("\n").filter(Boolean);
-      adoptAncestorFlips(lines.map((l) => JSON.parse(l)), priorId, inheritedFlips);
-    } catch {
-      // unreadable ancestor evidence: not a source of flips
-    }
-  }
+  const inheritedFlips = computeChainFlipMemory(
+    ancestorFlipSources(ctx.paths.repoRoot, ctx.paths.runsDir, ctx.meta.specId, ctx.meta.runId, ctx.meta.baseRevision),
+    currentCriterionDigests,
+  );
 
   // Final verification sweep over every property, in the worktree.
   const sweep = await verifyProperties({
