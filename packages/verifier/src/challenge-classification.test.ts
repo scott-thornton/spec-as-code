@@ -40,4 +40,32 @@ describe("CHAL-002/CHAL-003: challenge outcome classification", () => {
   it("inconclusive: an inconclusive baseline (admission/infra) proves nothing either way", () => {
     expect(classifyChallenge({ baseline: "inconclusive", mutation: "contradicts", signaturePresent: true })).toBe("inconclusive");
   });
+
+  // Rectification oracle (adversarial pass, 2026-11-08): CHAL-003
+  // enumerates suite-did-not-run in the inconclusive family, and the
+  // criteria executor keeps that shape red-capable BY DESIGN in
+  // ordinary verification (criteria.ts - a suite that cannot load
+  // because the implementation is absent IS the red state). The
+  // challenge classifier must override that for detection-power
+  // claims: a CONTRADICTED leg carrying the shape means the suite
+  // never ran, and a signature matched against prepare build noise
+  // (the module-import deletion scenario) must not count as
+  // discrimination. Today the classifier accepts it - this is red.
+  it("inconclusive: a CONTRADICTED mutation leg shaped suite-did-not-run never discriminates, even with the signature present (CHAL-003)", () => {
+    const r = classifyChallenge({
+      baseline: "supports",
+      mutation: "contradicts",
+      mutationShape: "suite-did-not-run",
+      signaturePresent: true,
+    });
+    expect(r).toBe("inconclusive");
+  });
+
+  it("pins: contradicted legs carrying the OTHER infra shapes stay inconclusive (the gate is shape-based, not outcome-based)", () => {
+    expect(classifyChallenge({ baseline: "supports", mutation: "contradicts", mutationShape: "budget-timeout", signaturePresent: true })).toBe("inconclusive");
+    expect(classifyChallenge({ baseline: "supports", mutation: "contradicts", mutationShape: "environment-death", signaturePresent: true })).toBe("inconclusive");
+    expect(classifyChallenge({ baseline: "supports", mutation: "contradicts", mutationShape: "admission-refused", signaturePresent: true })).toBe("inconclusive");
+    expect(classifyChallenge({ baseline: "supports", mutation: "contradicts", mutationShape: "admission-deferred", signaturePresent: true })).toBe("inconclusive");
+    expect(classifyChallenge({ baseline: "contradicts", baselineShape: "suite-did-not-run", mutation: "contradicts", signaturePresent: true })).toBe("inconclusive");
+  });
 });
