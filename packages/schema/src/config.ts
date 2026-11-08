@@ -42,6 +42,15 @@ export const executionConfigSchema = z.strictObject({
   /** Max concurrently executing tasks (§78). 1 keeps sequential semantics. */
   parallelism: z.number().int().positive().default(1),
   /**
+   * Verification battery placement (specs/host-battery-admission):
+   * "local" executes command/suite criteria here (under the host
+   * admission lock); "ci" DEFERS them locally as inconclusive
+   * admission-deferred evidence - a deferred criterion never satisfies
+   * a must; file criteria still evaluate. The CI environment flag is
+   * a routing signal, never authenticated provenance.
+   */
+  verificationPlacement: z.enum(["local", "ci"]).default("local"),
+  /**
    * Demote blocking spec_clarification follow-ups to non-blocking and
    * proceed (§31 medium-risk tier; benchmark-driven iteration). The
    * follow-up is still recorded and visible after the run.

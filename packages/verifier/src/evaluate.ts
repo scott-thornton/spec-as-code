@@ -103,12 +103,18 @@ export function evaluateProperty(
         deterministic: isDeterministicCriterion(criterion),
       };
     } else {
+      // specs/host-battery-admission: an inconclusive observation names
+      // its cause when the evidence carries one (admission-refused,
+      // admission-deferred, budget-timeout, environment-death) - the
+      // report says WHY the observation could not be made.
+      const shape = (e.payload as { failureShape?: string } | null)?.failureShape;
+      const reason = (e.payload as { reason?: string } | null)?.reason;
       verdict = {
         criterionId: criterion.id,
         type: criterion.type,
         status: "indeterminate",
         evidenceId: e.id,
-        detail: `${e.kind} evidence inconclusive`,
+        detail: `${e.kind} evidence inconclusive${shape ? ` (${shape}${reason ? `: ${reason}` : ""})` : ""}`,
         deterministic: isDeterministicCriterion(criterion),
       };
     }

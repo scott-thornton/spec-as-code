@@ -15,6 +15,7 @@ import type { LLMProvider, UsageRecord } from "@spc/llm";
 import { makeUsageRecord } from "@spc/llm";
 import { z } from "zod";
 import { classifyCommand, evaluateCommandPolicy, runCommand, type CommandRunResult } from "@spc/executor";
+import { acquireHostAdmission } from "./admission.js";
 import { classifyOracleValidity } from "./oracle-validity.js";
 import { isSafeRelativePath } from "@spc/core";
 import type { SuiteProvenance } from "./suites.js";
@@ -227,6 +228,60 @@ async function verifyCommand(
     // events and evidence (reusedFrom: "cache").
     execution = { executionId: cacheHit.executionId, reused: true, originRunId: "cache" };
   } else {
+    // specs/host-battery-admission: placement and admission gate the
+    // FRESH execution. ci placement defers (the observation belongs to
+    // CI; file criteria still evaluate); a held host lock refuses -
+    // inconclusive, never contradicted, never a launched subprocess.
+    if (ctx.config.execution.verificationPlacement === "ci") {
+      return {
+        evidence: makeEvidence(
+          {
+            id: "pending",
+            runId: ctx.runId,
+            ...(ctx.taskId ? { taskId: ctx.taskId } : {}),
+            criterionId: criterion.id,
+            propertyRefs: [property.id],
+            kind: "command",
+            outcome: "inconclusive",
+            producer: { type: "runtime" },
+            timestamp: (ctx.now ?? (() => new Date().toISOString()))(),
+            repositoryRevision: ctx.repositoryRevision,
+            payload: {
+              command: criterion.command,
+              reason: "deferred to CI placement (execution.verificationPlacement=ci); command not executed locally - a deferred criterion never satisfies a must",
+              failureShape: "admission-deferred",
+            },
+          },
+          ctx.now,
+        ),
+      };
+    }
+    const admission = acquireHostAdmission();
+    if (!admission) {
+      return {
+        evidence: makeEvidence(
+          {
+            id: "pending",
+            runId: ctx.runId,
+            ...(ctx.taskId ? { taskId: ctx.taskId } : {}),
+            criterionId: criterion.id,
+            propertyRefs: [property.id],
+            kind: "command",
+            outcome: "inconclusive",
+            producer: { type: "runtime" },
+            timestamp: (ctx.now ?? (() => new Date().toISOString()))(),
+            repositoryRevision: ctx.repositoryRevision,
+            payload: {
+              command: criterion.command,
+              reason: "host admission refused: another fresh verification subprocess holds this host's admission lock; the observation could not be made - not a behavioral contradiction",
+              failureShape: "admission-refused",
+            },
+          },
+          ctx.now,
+        ),
+      };
+    }
+    try {
     run = await runCommand(criterion.command, {
       cwd: ctx.cwd,
       timeoutMs,
@@ -254,6 +309,9 @@ async function verifyCommand(
         timedOut: run.timedOut,
       });
     }
+    } finally {
+      admission.release();
+    }
   }
   // specs/timeout-reclassification (supersedes FC-003's timeout
   // clause): a command-budget timeout is the environment speaking -
@@ -266,7 +324,41 @@ async function verifyCommand(
   let firstAttemptDurationMs: number | undefined;
   if (run.timedOut && !run.deniedReason) {
     firstAttemptDurationMs = run.durationMs;
-    const retry = await runCommand(criterion.command, {
+    // specs/host-battery-admission: the retry is a fresh subprocess -
+    // it acquires admission independently. A refused retry is honest
+    // admission-refused inconclusive (the first attempt's timeout is
+    // named), never a false red.
+    const retryAdmission = acquireHostAdmission();
+    if (!retryAdmission) {
+      return {
+        evidence: makeEvidence(
+          {
+            id: "pending",
+            runId: ctx.runId,
+            ...(ctx.taskId ? { taskId: ctx.taskId } : {}),
+            criterionId: criterion.id,
+            propertyRefs: [property.id],
+            kind: "command",
+            outcome: "inconclusive",
+            producer: { type: "runtime" },
+            timestamp: (ctx.now ?? (() => new Date().toISOString()))(),
+            repositoryRevision: ctx.repositoryRevision,
+            payload: {
+              command: criterion.command,
+              reason: `host admission refused for the retry (first attempt timed out after ${firstAttemptDurationMs}ms); the observation could not be made - not a behavioral contradiction`,
+              failureShape: "admission-refused",
+              attempts: 2,
+              firstAttemptTimedOut: true,
+              ...(firstAttemptDurationMs !== undefined ? { firstAttemptDurationMs } : {}),
+            },
+          },
+          ctx.now,
+        ),
+      };
+    }
+    let retry: CommandRunResult;
+    try {
+    retry = await runCommand(criterion.command, {
       cwd: ctx.cwd,
       timeoutMs,
       maxOutputBytes: ctx.config.execution.maxOutputBytes,
@@ -275,6 +367,9 @@ async function verifyCommand(
         ...(decision.policy === "approval" ? { [decision.category]: "allow" } : {}),
       } as Config["commands"],
     });
+    } finally {
+      retryAdmission.release();
+    }
     retriedAfterTimeout = true;
     run = retry;
     // The memo and persisted cache carry the FINAL attempt.
