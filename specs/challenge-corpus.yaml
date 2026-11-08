@@ -1,0 +1,83 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: challenge-corpus
+  title: Archived negative fixtures - the challenge corpus
+  description: Order 1's payoff; each fixture replays a real archived defect against the criterion that caught it.
+goal: >
+  One replayed defect is an anecdote; a corpus is evidence. The
+  inaugural fixture (skew-carveout-readonly, spec criterion-challenge)
+  proved the mechanism; this corpus multiplies it with three more
+  archived defects from this repository's own history, each
+  reconstructed as a deterministic minimal mutation against the
+  criterion that caught it, each signature disjoint by construction
+  (failure-diff text a passing baseline never prints). The corpus
+  exercises everything criterion-challenge shipped - admitted cold
+  prepare, honest environment classification, disjointness, chained
+  ops - as its first real customers. Challenge evidence describes the
+  VERIFIER, never the artifact: no criterion is required to carry a
+  passing challenge, and the fixtures are the versioned artifacts
+  (results are local observations). Deliberately NOT replayable, said
+  plainly: the false-red-under-load family (load-dependent, not
+  deterministic) and har's vacuous scroll oracle (external project).
+requirements:
+  - id: CORPUS-001
+    statement: >
+      The excerpt-crowding defect (introduced 1c946f7, caught ec13550 -
+      har's field report: sorted glob matches claimed the excerpt
+      budget before explicit declarations) replays as a committed
+      fixture challenging excerpt-priority EXB-001-A: the mutation
+      restores glob-first budgeting in buildDispatchExcerpts, and the
+      challenge comes back discriminating with the crowded-out
+      explicit oracle file named in the attributed signature.
+    priority: must
+    category: behavioral
+    scope:
+      include: [challenges/**, packages/cli/src/**]
+    acceptance:
+      - id: CORPUS-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/challenge-corpus.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: CORPUS-002
+    statement: >
+      The executor prompt update-op gap (introduced 1c946f7, caught
+      6a11435 - har's take-seven report: the schema accepted an update
+      op the prompt never taught) replays as a committed fixture
+      challenging executor-prompt-update-op EPO-001-A: the mutation
+      removes the update-op teaching from the system prompt, and the
+      challenge comes back discriminating with the missing op named in
+      the attributed signature.
+    priority: must
+    category: behavioral
+    scope:
+      include: [challenges/**, packages/cli/src/**]
+    acceptance:
+      - id: CORPUS-002-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/challenge-corpus.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: CORPUS-003
+    statement: >
+      The non-streaming race-timer leak (introduced 62954d0, caught
+      54876bb - adapter-streaming F6, empirically measured) replays as
+      a committed fixture challenging timer-hygiene NT-001-A: the
+      mutation removes the raceTimer clearTimeout from the finally,
+      and the challenge comes back discriminating with the child's
+      lingering lifetime named in the attributed signature.
+    priority: must
+    category: behavioral
+    scope:
+      include: [challenges/**, packages/cli/src/**]
+    acceptance:
+      - id: CORPUS-003-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/challenge-corpus.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+outOfScope:
+  - Automatic mutation generation (human-authored fixtures first).
+  - Mandatory passing challenges for criteria (the perverse incentive the contract refuses).
+  - The false-red-under-load family and external-project defects (not deterministically replayable here).
