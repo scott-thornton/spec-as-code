@@ -1,0 +1,159 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: host-battery-admission
+  title: Host-level verification battery admission and placement
+  description: Order 0; prerequisite for heavy-criterion challenge and every later execution-heavy feature (challenge, reproduce, candidates).
+goal: >
+  Field evidence (2026-11-06..07, this operator's host): three crashes,
+  each under concurrent verification execution - an in-run battery
+  alongside a manual suite, suites stacked during a live run, and a
+  crash mid-delivery that interrupted a submission. On a
+  memory-constrained host this is not a usability problem but an
+  epistemic one: resource exhaustion corrupts the observations the
+  control plane decides on (the false-red classes the classification
+  work already labels honestly). A local spc run therefore cannot
+  overlap another fresh verification subprocess on the same host, and
+  can defer command verification to CI without claiming a pass. The
+  evidence identifies what ran, where, and what did not run. The v1
+  governor is deliberately coarse - one admission lock per fresh
+  criterion subprocess - because scope-width does not predict resource
+  weight (a single-package filter is a multi-GB battery), and any
+  "heavy command classifier" would be the speculative kind this
+  codebase refuses. Exclusion is per-subprocess: concurrent sweeps
+  interleave rather than queue (fairness and sweep-level serialization
+  are explicitly out of scope).
+requirements:
+  - id: HBA-001
+    statement: >
+      Every FRESH command or suite-resolved criterion execution acquires
+      one shared, nonblocking host admission lock before spawning its
+      subprocess. The seam is criteria verification ONLY: the
+      criteria-executor path (including the budget-timeout retry - each
+      subprocess start acquires independently); task-execution commands
+      and dry-run gates are NOT guarded (AO-004 cross-worktree apply
+      concurrency is preserved). The lock lives OUTSIDE every
+      repository (.spc is worktree-local by construction): one stable
+      per-user, per-host path, so processes in DIFFERENT repositories
+      contend on the same lock. The oracle proves cross-repo exclusion:
+      a holder process in fixture repo A holding admission, then a
+      criterion execution in fixture repo B refusing - and a control
+      run in B succeeding once A releases.
+    priority: must
+    category: operational
+    scope:
+      include: [packages/verifier/src/**, packages/runtime/src/**]
+    acceptance:
+      - id: HBA-001-A
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/verifier exec vitest run src/battery-admission.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: HBA-002
+    statement: >
+      A held lock causes a prompt, observable admission refusal - never
+      a queue, a launched subprocess, a behavioral contradiction, or an
+      invented success. A refused criterion records outcome inconclusive
+      with a named admission refusal (failureShape admission-refused,
+      naming the holder's identity where available); it never records
+      contradicted. Lock ownership ends on normal exit, process death,
+      or cancellation by kernel semantics (the flock contract:
+      release-on-death, no stale-PID recovery, no unlink-while-held,
+      no descriptor inheritance by spawned workers). The oracle
+      includes the death leg: a SIGKILLed holder releases immediately
+      and the next acquisition succeeds (the AO-002 oracle shape, one
+      level up).
+    priority: must
+    category: operational
+    dependsOn: [HBA-001]
+    scope:
+      include: [packages/verifier/src/**]
+    acceptance:
+      - id: HBA-002-A
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/verifier exec vitest run src/battery-admission-process.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: HBA-003
+    statement: >
+      execution.verificationPlacement accepts local or ci, defaulting
+      to local (schema-validated enum). Under ci placement, a local
+      apply/verify defers every command and suite criterion as
+      inconclusive with an admission-deferred reason (the existing
+      environment-not-prepared early-return shape), while file
+      assertions still run; a deferred criterion cannot make a must
+      requirement satisfied or a run succeeded (the existing
+      indeterminate semantics - deferral is not evidence).
+    priority: must
+    category: behavioral
+    scope:
+      include: [packages/schema/src/**, packages/verifier/src/**]
+    acceptance:
+      - id: HBA-003-A
+        type: command
+        command: pnpm --filter @spc/schema... build > /dev/null && pnpm --filter @spc/schema exec vitest run src/verification-placement.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+      - id: HBA-003-B
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/verifier exec vitest run src/battery-placement.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: HBA-004
+    statement: >
+      A CI invocation can re-execute deferred criteria against the
+      recorded result revision through the EXISTING verify --run
+      machinery, emitting normal revision-bound evidence; a CI
+      environment flag selects placement only and is never represented
+      as authenticated provenance (a routing signal, not trust). No new
+      CI-side machinery: the spc-verify job's verify --all already
+      re-executes criteria; this requirement's surface is the deferral
+      linkage - deferred evidence names its reason, and the revision-
+      bound re-execution path exists unchanged.
+    priority: must
+    category: operational
+    dependsOn: [HBA-003]
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: HBA-004-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/battery-placement.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+constraints:
+  - id: HBA-C01
+    statement: >
+      Cached command results require no lock because no subprocess
+      starts; any fresh command execution - including a suite resolved
+      to a command and the budget-timeout retry - uses the same
+      admission seam and preserves the existing evidence shape (the
+      refusal classification extends the failureShape family; nothing
+      about passing executions changes).
+    priority: must
+    acceptance:
+      - id: HBA-C01-A
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/verifier exec vitest run src/battery-admission.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: HBA-C02
+    statement: >
+      Admission reuses the existing kernel-backed flock primitive
+      (platform-lock.ts): no stale-PID recovery, no unlink-while-held,
+      no silent fallback on unsupported filesystems, no descriptor
+      inheritance by spawned workers. The lock FILE is never removed
+      while held; its home directory is created on first use.
+    priority: must
+    acceptance:
+      - id: HBA-C02-A
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/verifier exec vitest run src/battery-admission-process.test.ts
+        expect: {exitCode: 0}
+outOfScope:
+  - Distributed scheduling, queues, daemons, machine resource prediction, and memory telemetry.
+  - Sweep-level serialization or fairness (exclusion is per-subprocess; concurrent sweeps interleave).
+  - Changing agent parallelism or guarding task-execution commands and dry-run gates (AO-004 cross-worktree concurrency is preserved; only criteria verification admits).
+  - Cross-user or cross-host mutual exclusion; the initial boundary is one operator on one host.
+  - Trusting CI=true as proof that a command came from a trusted CI provider.
+  - Automatically merging CI verify-only evidence into an earlier apply run's verdict.

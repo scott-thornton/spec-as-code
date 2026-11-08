@@ -510,6 +510,9 @@ importers:
       '@spc/schema':
         specifier: workspace:*
         version: link:../schema
+      fs-ext:
+        specifier: 2.1.1
+        version: 2.1.1
       yaml:
         specifier: ^2.8.0
         version: 2.9.1
