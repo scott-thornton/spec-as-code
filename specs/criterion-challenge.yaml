@@ -90,10 +90,12 @@ requirements:
       infrastructure death (the existing envelope signatures), budget
       timeout (failureShape budget-timeout), suite-did-not-run, an
       unrelated failure whose output does not match the expected
-      signature, and a mutation that no longer applies (stale anchor)
-      all produce inconclusive - the classification family applies to
-      the mutated run's result exactly as it applies to ordinary
-      verification.
+      signature, an expected signature that also appears in the
+      baseline pipeline (a token present in both worlds attributes
+      nothing - it distinguishes nothing), and a mutation that no
+      longer applies (stale anchor) all produce inconclusive - the
+      classification family applies to the mutated run's result
+      exactly as it applies to ordinary verification.
     priority: must
     category: operational
     dependsOn: [CHAL-002]
