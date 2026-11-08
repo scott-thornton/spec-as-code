@@ -152,6 +152,7 @@ constraints:
         expect: {exitCode: 0}
 outOfScope:
   - Distributed scheduling, queues, daemons, machine resource prediction, and memory telemetry.
+  - Deadlock avoidance for nested verification (adversarial F3 ruling) - admission never waits - a criterion command that itself executes criteria acquires independently and REFUSES rather than hangs; unit tests of the executor are not host batteries and pin SPC_ADMISSION_LOCK to per-suite paths. SPC_ADMISSION_LOCK is the declared test/routing seam (adversarial F4) - honored unconditionally - its effect limited to excluding the operator's own processes from each other.
   - Sweep-level serialization or fairness (exclusion is per-subprocess; concurrent sweeps interleave).
   - Changing agent parallelism or guarding task-execution commands and dry-run gates (AO-004 cross-worktree concurrency is preserved; only criteria verification admits).
   - Cross-user or cross-host mutual exclusion; the initial boundary is one operator on one host.

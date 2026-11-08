@@ -4,6 +4,7 @@ import type { Config, SpecIR } from "@spc/schema";
 import { compileSpecFile } from "@spc/repo";
 import { gitOk } from "@spc/repo";
 import { runCommand } from "@spc/executor";
+import { acquireHostAdmission } from "@spc/verifier";
 import { globMatchAny } from "@spc/core";
 import { loadRepoConfig, resolveRepoRoot } from "../context.js";
 
@@ -353,12 +354,26 @@ export async function runSpecLint(specFile: string | undefined, cwd?: string, pr
         criterion.timeoutMs ?? config.execution.commandTimeoutMs,
         60_000,
       );
-      const run = await runCommand(criterion.command, {
-        cwd: worktree,
-        timeoutMs: lintTimeoutMs,
-        maxOutputBytes: config.execution.maxOutputBytes,
-        commandsConfig: config.commands,
-      });
+      // specs/host-battery-admission (adversarial F1): lint's probe
+      // is a FRESH criteria execution - it admits on the host lock
+      // like any other; a held lock skips the probe honestly
+      // (not-executable, never a fabricated pass).
+      const admission = acquireHostAdmission();
+      if (!admission) {
+        notExecutable.push(`${criterion.id} (host admission refused)`);
+        continue;
+      }
+      let run;
+      try {
+        run = await runCommand(criterion.command, {
+          cwd: worktree,
+          timeoutMs: lintTimeoutMs,
+          maxOutputBytes: config.execution.maxOutputBytes,
+          commandsConfig: config.commands,
+        });
+      } finally {
+        admission.release();
+      }
       if (!run.allowed) {
         notExecutable.push(`${criterion.id} (${run.deniedReason ?? "denied by command policy"})`);
         continue;
