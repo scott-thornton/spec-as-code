@@ -3,6 +3,17 @@ import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+
+// specs/host-battery-admission test isolation: these suites execute
+// command criteria through the real executor, which now acquires the
+// HOST admission lock. Unit tests are not host batteries - pin a
+// per-suite lock path so (a) sibling vitest files running concurrently
+// never contend on the default host lock, and (b) a parent criterion
+// process holding the host lock (self-referential criteria commands)
+// never refuses these suites' inner executions.
+const SPC_ADMISSION_TEST_LOCK = mkdtempSync(path.join(tmpdir(), "spc-adm-")) + "/admission.lock";
+process.env.SPC_ADMISSION_LOCK = SPC_ADMISSION_TEST_LOCK;
+afterAll(() => { delete process.env.SPC_ADMISSION_LOCK; rmSync(SPC_ADMISSION_TEST_LOCK, { force: true }); });
 import { DEFAULT_CONFIG } from "@spc/schema";
 import { verifyCriterion } from "./criteria.js";
 
