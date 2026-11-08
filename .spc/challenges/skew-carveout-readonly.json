@@ -8,11 +8,19 @@
   "outcome": "discriminating",
   "baseline": {
     "outcome": "supports",
-    "revision": "814ab2d436767ab306ba64583681160a418eee19"
+    "revision": "e17762eb0a11e8047f1e62ea6e4f9ea3948d0580",
+    "executionIds": [
+      "081ba2f3-f478-4614-843a-f80735b9a7e1"
+    ],
+    "criterionDigest": "sha256:1b42201d0ce4ba009cdc5a7e06cc022ca8b61eec5be13b4dc86df9d3f4cf7060"
   },
   "mutation": {
     "outcome": "contradicts",
-    "revision": "814ab2d436767ab306ba64583681160a418eee19"
+    "revision": "e17762eb0a11e8047f1e62ea6e4f9ea3948d0580",
+    "executionIds": [
+      "2f651b95-7106-4677-bd45-8e1819ca7e97"
+    ],
+    "criterionDigest": "sha256:1b42201d0ce4ba009cdc5a7e06cc022ca8b61eec5be13b4dc86df9d3f4cf7060"
   },
   "signaturePresent": true,
   "expectedSignature": "TS4104",
@@ -22,5 +30,5 @@
     "caught": "3924025",
     "diagnostic": "readonly string[] assigned to the mutable unattributed field"
   },
-  "timestamp": "2026-11-08T16:42:30.514Z"
+  "timestamp": "2026-11-08T18:49:50.877Z"
 }
