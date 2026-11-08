@@ -167,6 +167,12 @@ export function coldPrepare(worktree: string): PrepareResult {
   if (!existsSync(path.join(worktree, "package.json"))) {
     return { output: "(no package root - prepare skipped)", refused: false, ok: true, buildFailed: false };
   }
+  // NOTE: when a challenge executes INSIDE a criteria command (the
+  // CHAL-004-A oracle runs `spc challenge` under the executor, which
+  // holds the host admission for the whole command), this inner
+  // acquire avoids self-refusal only because the test setups pin
+  // SPC_ADMISSION_LOCK per worker and the spawned CLI inherits it -
+  // removing that pin flips the inaugural oracle red (delta review).
   const admission = acquireHostAdmission();
   if (!admission) {
     return {
@@ -196,7 +202,12 @@ export function coldPrepare(worktree: string): PrepareResult {
     invalidate(worktree);
     const build = sh(worktree, "pnpm", ["-r", "run", "build"]);
     out += build.output;
-    if (build.error) {
+    // A killed build is an environment failure, not the designed
+    // detection surface: r.error covers spawn failure and the 300s
+    // timeout, but an EXTERNAL signal kill (host OOM) leaves status
+    // null with no error - only a clean nonzero EXIT with captured
+    // diagnostics counts as buildFailed (adversarial delta review).
+    if (build.error || build.status === null) {
       return { output: out, refused: false, ok: false, buildFailed: false, failureStage: "build" };
     }
     return { output: out, refused: false, ok: true, buildFailed: build.status !== 0 };
