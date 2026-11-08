@@ -39,7 +39,11 @@ import { spcPaths } from "./paths.js";
  * to the file as the previous ops left it). expectedSignature must
  * be attributable to the injected defect: absent from the baseline
  * pipeline's output - a token present in both worlds attributes
- * nothing (CHAL-003).
+ * nothing (CHAL-003). Disjointness is measured over the ENTIRE
+ * baseline pipeline output - command echoes ("$ pnpm ...") and the
+ * prepare-skip line included - so a signature containing tokens
+ * like "install" or "build" is in-baseline by construction; choose
+ * signatures the baseline cannot produce.
  */
 
 export interface ChallengeFixture {
