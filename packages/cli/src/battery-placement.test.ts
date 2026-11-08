@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
@@ -47,8 +47,14 @@ describe("HBA-004: the CLI surface of ci placement", () => {
     expect(r.status).not.toBe(0);
     // The deferral is named, not silent.
     expect(r.stdout).toMatch(/admission-deferred|deferred/i);
-    // The file criterion ran and passed (visible in the report).
-    expect(r.stdout).toMatch(/satisfied\s+PLACE-001|PLACE-001-B/i);
+    // The file criterion ran and passed - proven from the run's
+    // EVIDENCE (the text report is property-granular; per-criterion
+    // satisfaction lives in the run records).
+    const runsDir = path.join(root, ".spc", "runs");
+    const latest = spawnSync("ls", ["-t", runsDir], { encoding: "utf8" }).stdout.trim().split("\n")[0]!;
+    const evidence = readFileSync(path.join(runsDir, latest, "evidence.jsonl"), "utf8");
+    const fileCriterion = evidence.split("\n").filter(Boolean).map((l) => JSON.parse(l) as { criterionId?: string; outcome?: string }).find((e) => e.criterionId === "PLACE-001-B");
+    expect(fileCriterion?.outcome).toBe("supports");
   });
 
   it("verify --run remains the revision-bound re-execution path (exists unchanged)", { timeout: 30_000 }, () => {
