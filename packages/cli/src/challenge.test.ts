@@ -34,7 +34,7 @@ spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "add", "-A"], { c
 spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base"], { cwd: root });
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-function sh(args:[]): { status: number; stdout: string } {
+function sh(args: string[]): { status: number; stdout: string } {
   const r = spawnSync(process.execPath, [CLI, ...args], { cwd: root, encoding: "utf8" });
   return { status: r.status ?? -1, stdout: (r.stdout ?? "") + (r.stderr ?? "") };
 }
