@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeChainFlipMemory, criterionDigestOf } from "./chain-memory.js";
+import { computeChainFlipMemory, criterionDigestOf, selectFlipSourceMetas } from "./chain-memory.js";
 
 // Oracle for specs/chain-memory.yaml (red, committed pre-run): the
 // flip memory that crosses digest forks. Field evidence: the probe on
@@ -159,5 +159,48 @@ describe("CHMEM-003: refusals - absence of memory never fabricates", () => {
   it("criterionDigestOf: identical definitions digest identically; any change differs", () => {
     expect(criterionDigestOf(criterion("pnpm test"))).toBe(criterionDigestOf(criterion("pnpm test")));
     expect(criterionDigestOf(criterion("pnpm test"))).not.toBe(criterionDigestOf(criterion("pnpm other")));
+  });
+});
+
+// Rectification oracles (adversarial pass on run-mw8eh0db, F1/F2):
+// source selection must honor the system's OWN older contracts.
+// Today selectFlipSourceMetas does not exist - these are red.
+describe("rectification: source selection honors supersession and chronology", () => {
+  const opts = { specId: "s", currentRunId: "run-now", baseRevision: "r4", isAncestor: () => true };
+
+  it("a SUPERSEDED run provides no memory - spc run supersede promises no ancestry and no evidence inheritance", () => {
+    const metas = [
+      { runId: "run-red", specId: "s", kind: "apply", baseRevision: "r1", createdAt: "2026-11-08T01:00:00Z" },
+      { runId: "run-green", specId: "s", kind: "apply", baseRevision: "r2", createdAt: "2026-11-08T02:00:00Z" },
+      { runId: "run-replacement", specId: "s", kind: "apply", baseRevision: "r3", createdAt: "2026-11-08T03:00:00Z", supersedesRunId: "run-red" },
+    ];
+    const selected = selectFlipSourceMetas(metas, opts);
+    expect(selected.map((m) => m.runId)).toEqual(["run-green", "run-replacement"]);
+  });
+
+  it("a source without createdAt is skipped - a string fallback could invert red and green chronology", () => {
+    const metas = [
+      { runId: "run-a", specId: "s", kind: "apply", baseRevision: "r1", createdAt: "2026-11-08T01:00:00Z" },
+      { runId: "run-legacy", specId: "s", kind: "apply", baseRevision: "r0" },
+    ];
+    const selected = selectFlipSourceMetas(metas, opts);
+    expect(selected.map((m) => m.runId)).toEqual(["run-a"]);
+  });
+
+  it("kind gates: verify runs are never sources, whatever their directory prefix", () => {
+    const metas = [{ runId: "run-lookalike", specId: "s", kind: "verify", baseRevision: "r1", createdAt: "2026-11-08T01:00:00Z" }];
+    expect(selectFlipSourceMetas(metas, opts)).toEqual([]);
+  });
+
+  it("createdAt orders the sources; the current run and non-ancestors are excluded", () => {
+    const metas = [
+      { runId: "run-late", specId: "s", kind: "apply", baseRevision: "r2", createdAt: "2026-11-08T02:00:00Z" },
+      { runId: "run-early", specId: "s", kind: "apply", baseRevision: "r1", createdAt: "2026-11-08T01:00:00Z" },
+      { runId: "run-now", specId: "s", kind: "apply", baseRevision: "r3", createdAt: "2026-11-08T03:00:00Z" },
+      { runId: "run-unrelated", specId: "other", kind: "apply", baseRevision: "r1", createdAt: "2026-11-08T00:30:00Z" },
+    ];
+    const isAncestor = (rev: string) => rev !== "r9";
+    const selected = selectFlipSourceMetas(metas, { ...opts, isAncestor });
+    expect(selected.map((m) => m.runId)).toEqual(["run-early", "run-late"]);
   });
 });
