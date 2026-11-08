@@ -120,12 +120,7 @@ requirements:
       TS4104 diagnostic in the captured output, and the criterion contradicts
       downstream). The fixture pins the two historical commits, its
       mutation digest, the criterion identity, and the TS4104
-      readonly diagnostic as the expected signature. This criterion
-      discriminated the run that built the capability (its base to
-      head flip, run run-mw81uztk); for every run thereafter it is a
-      REGRESSION GUARD - the archived challenge must keep replaying
-      discriminating - so its acceptance carries no discriminating
-      flag. The runner's
+      readonly diagnostic as the expected signature. The runner's
       cold prepare (incremental state invalidated in BOTH worktrees)
       is the condition without which the inaugural challenge could
       repeat the original false green; a non-applicable mutation or
@@ -140,6 +135,7 @@ requirements:
         type: command
         command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/challenge-skew-carveout.test.ts
         expect: {exitCode: 0}
+        discriminating: true
   - id: CHAL-005
     statement: >
       Every challenge result records both worktree revisions, the
