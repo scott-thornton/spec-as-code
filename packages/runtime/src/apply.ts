@@ -1050,10 +1050,12 @@ async function finishRun(
       currentCriterionDigests.set(criterion.id, criterionDigestOf(criterion));
     }
   }
-  const inheritedFlips = computeChainFlipMemory(
-    ancestorFlipSources(ctx.paths.repoRoot, ctx.paths.runsDir, ctx.meta.specId, ctx.meta.runId, ctx.meta.baseRevision),
-    currentCriterionDigests,
-  );
+  const inheritedFlips = ctx.meta.baseRevision
+    ? computeChainFlipMemory(
+        ancestorFlipSources(ctx.paths.repoRoot, ctx.paths.runsDir, ctx.meta.specId, ctx.meta.runId, ctx.meta.baseRevision),
+        currentCriterionDigests,
+      )
+    : new Map<string, string>();
 
   // Final verification sweep over every property, in the worktree.
   const sweep = await verifyProperties({
