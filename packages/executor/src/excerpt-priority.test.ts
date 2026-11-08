@@ -65,6 +65,23 @@ describe("EXB-002: an explicit write target is never crowded out", () => {
   });
 });
 
+describe("XP-F2 rectification: over-cap explicit declarations", () => {
+  it("more than cap explicit paths: sorted, first cap win; globs get nothing", () => {
+    for (let i = 1; i <= 10; i++) writeFileSync(path.join(root, "src", `x${String(i).padStart(2, "0")}.ts`), "extra\n", "utf8");
+    const ten: string[] = [];
+    for (let i = 1; i <= 10; i++) ten.push(`src/x${String(i).padStart(2, "0")}.ts`);
+    const files = buildDispatchExcerpts(root, ten, 8);
+    expect(files.length).toBe(8);
+    expect(files).toEqual([...ten].sort().slice(0, 8));
+  });
+
+  it("a directory declared explicitly is not a file - it claims no slot (XP-F1)", () => {
+    const files = buildDispatchExcerpts(root, ["src", "src/**"], 8);
+    expect(files).not.toContain("src");
+    expect(files.length).toBe(8);
+  });
+});
+
 describe("EXB-C01: determinism (the prompt-stability contract)", () => {
   it("the same tree and plan produce the identical list on every invocation", () => {
     const a = buildDispatchExcerpts(root, ["src/**", "src/oracle.test.ts"], 8);

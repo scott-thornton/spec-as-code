@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { assertNever, globMatchAny, isPhysicallyContained, isSafeRelativePath, SpcError } from "@spc/core";
 import type { AcceptanceCriterion, CommandsConfig, ObservationDraft, RepositorySnapshot, SpecIR, Task } from "@spc/schema";
@@ -120,7 +120,9 @@ const GLOB_META = /[*?\[]/;
  */
 export function buildDispatchExcerpts(worktreeRoot: string, patterns: readonly string[], cap: number): string[] {
   const unique = [...new Set(patterns)];
-  const explicit = unique.filter((p) => !GLOB_META.test(p)).filter((p) => existsSync(path.join(worktreeRoot, p)));
+  // XP-F1: a directory is not an explicit FILE - existsSync alone admits
+  // bare-directory read targets as empty excerpts claiming budget slots.
+  const explicit = unique.filter((p) => !GLOB_META.test(p)).filter((p) => existsSync(path.join(worktreeRoot, p)) && statSync(path.join(worktreeRoot, p)).isFile());
   const globs = unique.filter((p) => GLOB_META.test(p));
   const explicitFiles = explicit.sort().slice(0, cap);
   const remaining = cap - explicitFiles.length;
