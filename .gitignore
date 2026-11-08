@@ -16,4 +16,7 @@ packages/cli/skills/
 IDEAS.md
 /.spc/held/
 /.spc/apply.lease
+/.spc/apply.lock
+/.spc/execution-intent.lock
+/.spc/execution-intent.json
 /.spc/patch-log.jsonl
