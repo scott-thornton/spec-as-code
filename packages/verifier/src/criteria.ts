@@ -78,8 +78,11 @@ export interface CriterionContext {
   /**
    * Chain inheritance (criterion-level): criterionId -> prior runId whose
    * evidence records the red -> green flip, when the criterion merely
-   * passes at this run's base. Digest-bound by construction (computed
-   * from the parentRunId chain only).
+   * passes at this run's base. Definition-bound and fork-crossing
+   * (specs/chain-memory): computed from prior apply runs of this spec
+   * under ANY digest - git-ancestors, criterion-definition digests
+   * read from each source's own base revision - never the
+   * parentRunId chain alone.
    */
   inheritedFlips?: ReadonlyMap<string, string>;
 }

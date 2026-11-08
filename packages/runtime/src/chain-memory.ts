@@ -1,9 +1,8 @@
-import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { compileSpecFile } from "@spc/repo";
+import { compileSpecFile, git } from "@spc/repo";
 import { isEligibleRed } from "@spc/verifier";
 
 /**
@@ -14,13 +13,20 @@ import { isEligibleRed } from "@spc/verifier";
  * prior apply run of the same spec under ANY digest, provided the
  * criterion's compiled DEFINITION is byte-identical to the one whose
  * flip was recorded. The gate's authoritative source is the spec
- * compiled at each ancestor's recorded base revision, read from git -
- * never the current file, which the amendment changed. Chronology is
- * not causality: sources are git-ancestors ordered by creation time,
- * red strictly precedes green, oracle-invalid reds establish nothing
- * (isEligibleRed - the same semantics as same-run adoption), and a
- * green that precedes its red establishes nothing (the regression
- * shape). Absence of memory never fabricates any.
+ * compiled at each ancestor's recorded base revision (CHMEM-001's
+ * letter - the committed tree the run started from, not necessarily
+ * the bytes the run finished with). Chronology is not causality:
+ * sources are git-ancestors ordered by creation time, red strictly
+ * precedes green, oracle-invalid reds establish nothing (isEligibleRed
+ * - the same semantics as same-run adoption), and a green that
+ * precedes its red establishes nothing (the regression shape).
+ * Superseded runs provide no memory (spc run supersede: no ancestry,
+ * no evidence inheritance). Absence of memory never fabricates any.
+ *
+ * Known limitation (adversarial pass on run-mw8eh0db, recorded in the
+ * review log): specs using imports: compile relative to the importing
+ * file, so a spec relocated to the scratch dir fails SPC1007 and its
+ * runs are conservatively skipped as sources.
  */
 
 /** Canonical digest of a compiled acceptance criterion. The memory is
@@ -39,9 +45,9 @@ export interface FlipEvidenceRecord {
 
 export interface AncestorFlipSource {
   runId: string;
-  /** criterionId -> digest of its compiled definition in the spec AS THIS
-   *  RUN RAN IT. Absent (unresolvable revision, uncompilable spec) means
-   *  the source is skipped conservatively. */
+  /** criterionId -> digest of its compiled definition in the spec at
+   *  this run's base revision. Absent (unresolvable revision,
+   *  uncompilable spec) means the source is skipped conservatively. */
   criterionDigests?: Map<string, string>;
   records: readonly FlipEvidenceRecord[];
 }
@@ -76,37 +82,82 @@ export function computeChainFlipMemory(
   return flips;
 }
 
-interface RunMetaLite {
-  runId?: string;
+export interface SourceMetaInput {
+  runId: string;
   specId?: string;
+  kind?: string;
   baseRevision?: string;
   createdAt?: string;
+  /** Set on the SUPERSEDING run: it administratively replaces this id. */
+  supersedesRunId?: string;
 }
 
-/** The criterion-definition digests for the spec AS IT RAN at `revision`:
- *  enumerate the specs/ yaml tree at that revision, git-show and compile
+/** Which prior runs may serve as flip-memory sources, as a pure
+ *  selection so the contract is oracle-pinnable: same spec; apply kind
+ *  (directory-prefix fallback only for legacy metas without kind);
+ *  baseRevision and createdAt both present (chronology that cannot be
+ *  established cannot be trusted - a string fallback could invert red
+ *  and green); baseRevision a git ancestor of the current base;
+ *  NEVER a superseded run (spc run supersede promises no ancestry and
+ *  no evidence inheritance); never the current run. Selected sources
+ *  are ordered by createdAt with runId as the tiebreak. */
+export function selectFlipSourceMetas(
+  metas: readonly SourceMetaInput[],
+  options: { specId: string; currentRunId: string; baseRevision: string; isAncestor: (rev: string) => boolean },
+): SourceMetaInput[] {
+  const superseded = new Set<string>();
+  for (const m of metas) {
+    if (typeof m.supersedesRunId === "string" && m.supersedesRunId !== "") superseded.add(m.supersedesRunId);
+  }
+  const selected: SourceMetaInput[] = [];
+  for (const m of metas) {
+    if (m.runId === options.currentRunId) continue;
+    if (m.kind !== undefined ? m.kind !== "apply" : !m.runId.startsWith("run-")) continue;
+    if (m.specId !== options.specId) continue;
+    if (typeof m.baseRevision !== "string" || m.baseRevision === "") continue;
+    if (typeof m.createdAt !== "string" || m.createdAt === "") continue;
+    if (!options.isAncestor(m.baseRevision)) continue; // chronology is not causality
+    if (superseded.has(m.runId)) continue; // administratively disqualified
+    selected.push(m);
+  }
+  selected.sort((a, b) => {
+    const at = a.createdAt as string;
+    const bt = b.createdAt as string;
+    if (at !== bt) return at < bt ? -1 : 1;
+    return a.runId < b.runId ? -1 : a.runId > b.runId ? 1 : 0;
+  });
+  return selected;
+}
+
+interface RunMetaLite extends SourceMetaInput {
+  runId: string;
+}
+
+/** The criterion-definition digests for the spec at `revision`:
+ *  enumerate the specs/ yaml tree at that revision, read and compile
  *  each candidate until one matches `specId`, digest every acceptance
  *  criterion. Unresolvable or uncompilable => undefined (the caller
- *  skips the source conservatively). */
+ *  skips the source conservatively). All git through the repo's
+ *  hardened adapter (git-deadline SIGKILL budget, 32MB buffer). */
 function criterionDigestsAt(
   repoRoot: string,
   revision: string,
   specId: string,
   scratch: string,
 ): Map<string, string> | undefined {
-  const tree = spawnSync("git", ["ls-tree", "-r", "--name-only", revision, "specs/"], { cwd: repoRoot, encoding: "utf8" });
-  if (tree.status !== 0) return undefined;
-  const candidates = (tree.stdout ?? "")
+  const tree = git(repoRoot, ["ls-tree", "-r", "--name-only", revision, "specs/"]);
+  if (!tree.ok) return undefined;
+  const candidates = tree.stdout
     .split("\n")
     .map((l) => l.trim())
     .filter((f) => f.endsWith(".yaml") || f.endsWith(".yml"))
     .sort();
   for (const file of candidates) {
-    const show = spawnSync("git", ["show", `${revision}:${file}`], { cwd: repoRoot, encoding: "utf8" });
-    if (show.status !== 0) continue;
+    const show = git(repoRoot, ["show", `${revision}:${file}`]);
+    if (!show.ok) continue;
     const tmp = path.join(scratch, `spec-${createHash("sha256").update(file).digest("hex").slice(0, 12)}.yaml`);
     try {
-      writeFileSync(tmp, show.stdout ?? "", "utf8");
+      writeFileSync(tmp, show.stdout, "utf8");
       const compiled = compileSpecFile(tmp);
       if (!compiled.ok || !compiled.ir || compiled.ir.spec.metadata.id !== specId) continue;
       const digests = new Map<string, string>();
@@ -123,12 +174,11 @@ function criterionDigestsAt(
   return undefined;
 }
 
-/** Prior apply runs (runId prefix "run-") of the same specId under ANY
- *  digest whose recorded baseRevision is a git ancestor of the current
- *  base, ordered by createdAt ascending (run id as the tiebreak).
- *  Failed runs are valid sources: the gate is evidence eligibility,
- *  not run status. Verify runs (v- prefix) are excluded
- *  (specs/chain-memory outOfScope). */
+/** Prior apply runs of the same specId under ANY digest, selected and
+ *  ordered by selectFlipSourceMetas (supersession, chronology, kind,
+ *  ancestry), each carrying its evidence records and the criterion
+ *  digests of the spec at its own base revision. Failed runs are valid
+ *  sources: the gate is evidence eligibility, not run status. */
 export function ancestorFlipSources(
   repoRoot: string,
   runsDir: string,
@@ -141,25 +191,26 @@ export function ancestorFlipSources(
   try {
     const metaById = new Map<string, RunMetaLite>();
     for (const entry of readdirSync(runsDir, { withFileTypes: true })) {
-      if (!entry.isDirectory() || entry.name === currentRunId || !entry.name.startsWith("run-")) continue;
+      if (!entry.isDirectory()) continue;
       const metaFile = path.join(runsDir, entry.name, "metadata.json");
       if (!existsSync(metaFile)) continue;
       try {
         const meta = JSON.parse(readFileSync(metaFile, "utf8")) as RunMetaLite;
+        meta.runId = entry.name;
         metaById.set(entry.name, meta);
       } catch {
         // unreadable metadata: not a source
       }
     }
+    const selected = selectFlipSourceMetas([...metaById.values()], {
+      specId,
+      currentRunId,
+      baseRevision,
+      isAncestor: (rev) => git(repoRoot, ["merge-base", "--is-ancestor", rev, baseRevision]).ok,
+    });
     const sources: AncestorFlipSource[] = [];
-    for (const [runId, meta] of metaById) {
-      if (meta.specId !== specId || !meta.baseRevision) continue;
-      const ancestry = spawnSync("git", ["merge-base", "--is-ancestor", meta.baseRevision, baseRevision], {
-        cwd: repoRoot,
-        encoding: "utf8",
-      });
-      if (ancestry.status !== 0) continue; // chronology is not causality
-      const evidenceFile = path.join(runsDir, runId, "evidence.jsonl");
+    for (const meta of selected) {
+      const evidenceFile = path.join(runsDir, meta.runId, "evidence.jsonl");
       let records: FlipEvidenceRecord[] = [];
       if (existsSync(evidenceFile)) {
         try {
@@ -172,16 +223,11 @@ export function ancestorFlipSources(
         }
       }
       sources.push({
-        runId,
-        criterionDigests: criterionDigestsAt(repoRoot, meta.baseRevision, specId, scratch),
+        runId: meta.runId,
+        criterionDigests: criterionDigestsAt(repoRoot, meta.baseRevision as string, specId, scratch),
         records,
       });
     }
-    sources.sort((a, b) => {
-      const at = metaById.get(a.runId)?.createdAt ?? a.runId;
-      const bt = metaById.get(b.runId)?.createdAt ?? b.runId;
-      return at < bt ? -1 : at > bt ? 1 : 0;
-    });
     return sources;
   } finally {
     rmSync(scratch, { recursive: true, force: true });
