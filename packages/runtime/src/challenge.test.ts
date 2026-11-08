@@ -141,6 +141,81 @@ describe("CHAL-C01/CHAL-002: the cold prepare admits and reports honestly", () =
   });
 });
 
+// Rectification oracle (operator-authorized amendment, 2026-11-08):
+// CHAL-003's baseline-disjointness clause - a signature the BASELINE
+// pipeline's own output already contains (here: the criterion's
+// payload echoes the path "fact.txt" on both legs) attributes
+// nothing. The mutation is a real detection (delete the fact), but
+// the loose token cannot carry the attribution. Today the engine
+// reports discriminating - this is red.
+describe("CHAL-003: a loose signature present in both pipelines is inconclusive", () => {
+  const looseRepo = path.join(root, "loose-repo");
+  const looseFixture = "delete-fact-loose";
+  {
+    mkdirSync(path.join(looseRepo, "specs"), { recursive: true });
+    mkdirSync(path.join(looseRepo, "challenges"), { recursive: true });
+    writeFileSync(path.join(looseRepo, "specs", "c.yaml"),
+      'apiVersion: spc.dev/v1alpha1\nkind: Spec\nmetadata:\n  id: chal\n  title: C\ngoal: g\nrequirements:\n  - id: C-001\n    statement: s\n    priority: must\n    acceptance:\n      - id: C-001-A\n        type: file\n        path: fact.txt\n        assert:\n          exists: true\n',
+      "utf8");
+    writeFileSync(path.join(looseRepo, "fact.txt"), "the fact\n", "utf8");
+    writeFileSync(path.join(looseRepo, ".gitignore"), ".spc/\n", "utf8");
+    writeFileSync(path.join(looseRepo, "challenges", `${looseFixture}.yaml`),
+      `apiVersion: spc.dev/v1alpha1\nkind: Challenge\nmetadata:\n  id: ${looseFixture}\n  title: loose signature present in both worlds\ncriterion:\n  spec: chal\n  criterionId: C-001-A\nopsJson: '[{"op":"delete","path":"fact.txt"}]'\nexpectedSignature: 'fact.txt'\nprovenance:\n  introduced: "0000000"\n  caught: "0000000"\n  diagnostic: "real detection, loose token"\n`,
+      "utf8");
+    spawnSync("git", ["init", "-q", "-b", "main"], { cwd: looseRepo });
+    spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "add", "-A"], { cwd: looseRepo });
+    spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base"], { cwd: looseRepo });
+  }
+
+  it("the challenge is inconclusive: the token appears in the baseline pipeline too, so it distinguishes nothing", async () => {
+    const result = await runChallenge(looseRepo, looseFixture);
+    expect(result.baseline.outcome).toBe("supports");
+    expect(result.mutation.outcome).toBe("contradicts");
+    expect(result.outcome).toBe("inconclusive");
+    const record = JSON.parse(readFileSync(challengeRecordPath(looseRepo, looseFixture), "utf8")) as Record<string, unknown>;
+    expect(record["outcome"]).toBe("inconclusive");
+    expect(record["signatureInBaseline"]).toBe(true);
+  }, 120_000);
+});
+
+// Rectification oracle (2026-11-08): CHAL-001 says the mutation is
+// "a change-ops array applied through the applicator's exact
+// semantics" - and the applicator's contract explicitly supports
+// chained ops on one file ("a later patch can anchor on an earlier
+// op's output"). The engine's blanket pre-mutation digest binding
+// defeated exactly that: op 2 on the same path was guaranteed
+// PATCH_BASE_MISMATCH, so any chained fixture was permanently
+// "not applicable" -> inconclusive. This fixture chains two patches
+// (DRAFT -> MID -> FINAL) plus a delete through one ops array. Today
+// it refuses - this is red.
+describe("CHAL-001: a fixture may chain patch ops on one file", () => {
+  const chainRepo = path.join(root, "chain-repo");
+  const chainFixture = "chain-then-delete";
+  {
+    mkdirSync(path.join(chainRepo, "specs"), { recursive: true });
+    mkdirSync(path.join(chainRepo, "challenges"), { recursive: true });
+    writeFileSync(path.join(chainRepo, "specs", "c.yaml"),
+      'apiVersion: spc.dev/v1alpha1\nkind: Spec\nmetadata:\n  id: chal\n  title: C\ngoal: g\nrequirements:\n  - id: C-001\n    statement: s\n    priority: must\n    acceptance:\n      - id: C-001-A\n        type: file\n        path: note.txt\n        assert:\n          exists: true\n',
+      "utf8");
+    writeFileSync(path.join(chainRepo, "note.txt"), "DRAFT line\n", "utf8");
+    writeFileSync(path.join(chainRepo, ".gitignore"), ".spc/\n", "utf8");
+    writeFileSync(path.join(chainRepo, "challenges", `${chainFixture}.yaml`),
+      `apiVersion: spc.dev/v1alpha1\nkind: Challenge\nmetadata:\n  id: ${chainFixture}\n  title: two chained patches then a delete, one file\ncriterion:\n  spec: chal\n  criterionId: C-001-A\nopsJson: '[{"op":"patch","path":"note.txt","anchor":"DRAFT","replacement":"MID"},{"op":"patch","path":"note.txt","anchor":"MID","replacement":"FINAL"},{"op":"delete","path":"note.txt"}]'\nexpectedSignature: '"exists":false'\nprovenance:\n  introduced: "0000000"\n  caught: "0000000"\n  diagnostic: "chained mutation"\n`,
+      "utf8");
+    spawnSync("git", ["init", "-q", "-b", "main"], { cwd: chainRepo });
+    spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "add", "-A"], { cwd: chainRepo });
+    spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base"], { cwd: chainRepo });
+  }
+
+  it("the chain applies (no PATCH_BASE_MISMATCH, no not-applicable) and the challenge detects the deletion", async () => {
+    const result = await runChallenge(chainRepo, chainFixture);
+    expect(result.mutation.output).not.toMatch(/PATCH_BASE_MISMATCH|not applicable/i);
+    expect(result.baseline.outcome).toBe("supports");
+    expect(result.mutation.outcome).toBe("contradicts");
+    expect(result.outcome).toBe("discriminating");
+  }, 120_000);
+});
+
 // Rectification oracle (adversarial pass, 2026-11-08): a repository
 // whose environment cannot prepare must yield an INCONCLUSIVE
 // challenge (CHAL-002: execution uncertainty is never a forced

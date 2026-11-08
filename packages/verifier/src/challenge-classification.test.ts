@@ -68,4 +68,27 @@ describe("CHAL-002/CHAL-003: challenge outcome classification", () => {
     expect(classifyChallenge({ baseline: "supports", mutation: "contradicts", mutationShape: "admission-deferred", signaturePresent: true })).toBe("inconclusive");
     expect(classifyChallenge({ baseline: "contradicts", baselineShape: "suite-did-not-run", mutation: "contradicts", signaturePresent: true })).toBe("inconclusive");
   });
+
+  // Rectification oracle (operator-authorized amendment, 2026-11-08):
+  // CHAL-003's enumeration gains the baseline-disjointness clause - a
+  // token present in BOTH pipelines attributes nothing. The scenario:
+  // a loose signature (a filename, a common diagnostic code) that the
+  // baseline pipeline's own output already contains, matched against
+  // a mutation leg failing for an unrelated reason, must never count
+  // as discriminating. Today the classifier has no such input - this
+  // is red.
+  it("inconclusive: a signature that ALSO appears in the baseline pipeline attributes nothing - present in both worlds, it distinguishes nothing (CHAL-003)", () => {
+    const r = classifyChallenge({
+      baseline: "supports",
+      mutation: "contradicts",
+      signaturePresent: true,
+      signatureInBaseline: true,
+    });
+    expect(r).toBe("inconclusive");
+  });
+
+  it("pins: signatureInBaseline absent (legacy callers) preserves the ordinary discriminating and unrelated-failure outcomes", () => {
+    expect(classifyChallenge({ baseline: "supports", mutation: "contradicts", signaturePresent: true })).toBe("discriminating");
+    expect(classifyChallenge({ baseline: "supports", mutation: "contradicts", signaturePresent: false })).toBe("inconclusive");
+  });
 });
