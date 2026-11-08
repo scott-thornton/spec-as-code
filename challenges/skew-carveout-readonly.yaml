@@ -1,0 +1,14 @@
+apiVersion: spc.dev/v1alpha1
+kind: Challenge
+metadata:
+  id: skew-carveout-readonly
+  title: The archived readonly-to-mutable type error (728f805 -> 3924025)
+criterion:
+  spec: skew-carveout
+  criterionId: SC-001-A
+opsJson: '[{"op":"patch","path":"packages/executor/src/unmediated-guard.ts","anchor":"      unattributed: [...offenders],","replacement":"      unattributed: offenders,"}]'
+expectedSignature: "TS4104"
+provenance:
+  introduced: "728f805"
+  caught: "3924025"
+  diagnostic: "readonly string[] assigned to the mutable unattributed field"

@@ -10,6 +10,7 @@ import { afterAll, describe, expect, it } from "vitest";
 // fixtures by name. Today the command does not exist.
 const CLI = new URL("../dist/main.js", import.meta.url).pathname;
 const root = mkdtempSync(path.join(tmpdir(), "spc-chal-cli-"));
+spawnSync("git", ["init", "-q", "-b", "main"], { cwd: root });
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 function sh(args: string[]): { status: number; stdout: string } {

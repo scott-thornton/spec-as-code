@@ -24,7 +24,7 @@ describe("CHAL-004: the archived skew-carveout challenge", () => {
     expect(out).toMatch(/discriminating/i);
     // The detection is attributed: the TS2345 readonly diagnostic in
     // the mutated pipeline's captured output.
-    expect(out).toMatch(/TS2345/);
+    expect(out).toMatch(/TS4104/);
     expect(out).toMatch(/readonly/i);
     // Provenance pinned in the report.
     expect(out).toMatch(/728f805|3924025/i);

@@ -115,9 +115,9 @@ requirements:
       tree, and the challenged criterion is skew-carveout SC-001-A
       (its command builds the executor and runs the suite - the type
       error fails the pipeline's cold prepare build with the
-      diagnostic in the captured output, and the criterion contradicts
+      TS4104 diagnostic in the captured output, and the criterion contradicts
       downstream). The fixture pins the two historical commits, its
-      mutation digest, the criterion identity, and the TS2345
+      mutation digest, the criterion identity, and the TS4104
       readonly diagnostic as the expected signature. The runner's
       cold prepare (incremental state invalidated in BOTH worktrees)
       is the condition without which the inaugural challenge could

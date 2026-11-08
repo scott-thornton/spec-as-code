@@ -30,7 +30,7 @@ const fixtureName = "delete-fact";
   writeFileSync(path.join(repo, "fact.txt"), "the fact\n", "utf8");
   writeFileSync(path.join(repo, ".gitignore"), ".spc/\n", "utf8");
   writeFileSync(path.join(repo, "challenges", `${fixtureName}.yaml`),
-    `apiVersion: spc.dev/v1alpha1\nkind: Challenge\nmetadata:\n  id: ${fixtureName}\n  title: delete the fact\ncriterion:\n  spec: chal\n  criterionId: C-001-A\nmutation:\n  ops:\n    - op: delete\n      path: fact.txt\nexpectedSignature: "ENOENT"\nprovenance:\n  introduced: "0000000"\n  caught: "0000000"\n  diagnostic: "fact file deleted"\n`,
+    `apiVersion: spc.dev/v1alpha1\nkind: Challenge\nmetadata:\n  id: ${fixtureName}\n  title: delete the fact\ncriterion:\n  spec: chal\n  criterionId: C-001-A\nopsJson: '[{"op":"delete","path":"fact.txt"}]'\nexpectedSignature: '"exists":false'\nprovenance:\n  introduced: "0000000"\n  caught: "0000000"\n  diagnostic: "fact file deleted"\n`,
     "utf8");
   spawnSync("git", ["init", "-q", "-b", "main"], { cwd: repo });
   spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "add", "-A"], { cwd: repo });
@@ -43,7 +43,7 @@ describe("CHAL-001: fixture loading", () => {
     expect(fixture.criterion.spec).toBe("chal");
     expect(fixture.criterion.criterionId).toBe("C-001-A");
     expect(fixture.mutation.ops.length).toBe(1);
-    expect(fixture.expectedSignature).toBe("ENOENT");
+    expect(fixture.expectedSignature).toBe('"exists":false');
   });
 
   it("refuses an unknown criterion or a malformed fixture - named, not fatal-adjacent", () => {
