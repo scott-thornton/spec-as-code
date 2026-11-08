@@ -18,6 +18,12 @@ export interface ChallengeClassificationInput {
   /** The expected failure signature appeared in the mutated
    *  pipeline's captured output. */
   signaturePresent: boolean;
+  /** The expected signature ALSO appeared in the BASELINE pipeline's
+   *  captured output - a token present in both worlds attributes
+   *  nothing; it distinguishes nothing (CHAL-003's enumeration).
+   *  Optional: legacy callers that predate the field keep
+   *  undefined = not-present-in-baseline semantics. */
+  signatureInBaseline?: boolean;
   /** The baseline evidence's failureShape, when it carried one. */
   baselineShape?: string;
   /** The mutation evidence's failureShape, when it carried one. */
@@ -57,5 +63,10 @@ export function classifyChallenge(input: ChallengeClassificationInput): Challeng
 
   // Contradicted: discrimination requires the expected signature -
   // an unrelated failure is inconclusive, never a counted detection.
+  // And the signature must be attributable to the injected defect: a
+  // token the BASELINE pipeline also produced cannot carry the
+  // attribution (a loose filename, a common diagnostic code echoed in
+  // both payloads) - it does not distinguish the worlds.
+  if (input.signatureInBaseline) return "inconclusive";
   return input.signaturePresent ? "discriminating" : "inconclusive";
 }

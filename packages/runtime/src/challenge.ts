@@ -34,7 +34,12 @@ import { spcPaths } from "./paths.js";
  * Fixture format (challenges/<name>.yaml): metadata.id,
  * criterion.{spec,criterionId}, expectedSignature, provenance.*, and
  * opsJson - the mutation as an applicator-native change-ops JSON
- * array (single-quoted) on its own line.
+ * array (single-quoted) on its own line. Chained ops on one file
+ * apply in array order (each patch op's digest binds at apply time
+ * to the file as the previous ops left it). expectedSignature must
+ * be attributable to the injected defect: absent from the baseline
+ * pipeline's output - a token present in both worlds attributes
+ * nothing (CHAL-003).
  */
 
 export interface ChallengeFixture {
@@ -281,32 +286,42 @@ async function runCriterion(worktree: string, specId: string, criterionId: strin
   }
 }
 
-/** Apply mutation ops through the applicator's exact semantics; a non-applying mutation is a named refusal.
- *  Fixture patch ops are anchor-based (replayable across revisions): the
- *  engine binds each op's baseDigest to THIS worktree's file content at
- *  apply time - the applicator's digest validation then holds exactly
- *  (anchor gone or content moved -> not applicable -> inconclusive). */
+/** Apply mutation ops through the applicator's exact semantics; a non-applying op refuses the whole mutation by name.
+ *  Ops stage ONE AT A TIME, each patch op's baseDigest bound to THIS
+ *  worktree's file content as it exists at that moment (read from
+ *  disk after the previous op wrote it) - so a fixture may CHAIN ops
+ *  on one file, the applicator's own contract (a later patch can
+ *  anchor on an earlier op's output); a blanket pre-mutation binding
+ *  made op 2 on the same path guaranteed PATCH_BASE_MISMATCH. The
+ *  worktree is disposable: partial application before a refusal is
+ *  harmless - the leg is inconclusive either way. */
 function applyMutation(worktree: string, rawOps: unknown[]): { ok: boolean; detail: string } {
-  const ops = rawOps.map((o) => {
+  let writes = 0;
+  let deletes = 0;
+  for (const o of rawOps) {
     const op = o as { op?: string; path?: string; baseDigest?: string };
+    let bound: unknown = o;
     if (op && op.op === "patch" && op.path !== undefined && op.baseDigest === undefined) {
       try {
         const content = readFileSync(path.join(worktree, op.path), "utf8");
-        return { ...op, baseDigest: "sha256:" + createHash("sha256").update(content, "utf8").digest("hex") };
+        bound = { ...op, baseDigest: "sha256:" + createHash("sha256").update(content, "utf8").digest("hex") };
       } catch {
-        return o; // unreadable target: the applicator names it
+        bound = o; // unreadable target: the applicator names it
       }
     }
-    return o;
-  });
-  const staged = stageChanges(worktree, ops as never);
-  if (!staged.ok) return { ok: false, detail: `${staged.code}: ${staged.message}` };
-  for (const w of staged.writes) {
-    mkdirSync(path.dirname(path.join(worktree, w.path)), { recursive: true });
-    writeFileSync(path.join(worktree, w.path), w.content, "utf8");
+    const staged = stageChanges(worktree, [bound] as never);
+    if (!staged.ok) return { ok: false, detail: `${staged.code}: ${staged.message}` };
+    for (const w of staged.writes) {
+      mkdirSync(path.dirname(path.join(worktree, w.path)), { recursive: true });
+      writeFileSync(path.join(worktree, w.path), w.content, "utf8");
+      writes++;
+    }
+    for (const d of staged.deletes) {
+      rmSync(path.join(worktree, d), { force: true });
+      deletes++;
+    }
   }
-  for (const d of staged.deletes) rmSync(path.join(worktree, d), { force: true });
-  return { ok: true, detail: `${staged.writes.length} write(s), ${staged.deletes.length} delete(s)` };
+  return { ok: true, detail: `${writes} write(s), ${deletes} delete(s)` };
 }
 
 export async function runChallenge(repoRoot: string, name: string): Promise<ChallengeResult> {
@@ -370,10 +385,14 @@ export async function runChallenge(repoRoot: string, name: string): Promise<Chal
     }
 
     const signaturePresent = mutation.output.includes(fixture.expectedSignature);
+    // CHAL-003: a token the BASELINE pipeline also produced cannot
+    // carry the attribution - it does not distinguish the worlds.
+    const signatureInBaseline = baseline.output.includes(fixture.expectedSignature);
     const outcome = classifyChallenge({
       baseline: baseline.outcome,
       mutation: mutation.outcome,
       signaturePresent,
+      signatureInBaseline,
       baselineShape: baseline.shape,
       mutationShape: mutation.shape,
     });
@@ -398,6 +417,7 @@ export async function runChallenge(repoRoot: string, name: string): Promise<Chal
         ...(mutation.shape ? { failureShape: mutation.shape } : {}),
       },
       signaturePresent,
+      signatureInBaseline,
       expectedSignature: fixture.expectedSignature,
       ...(signaturePresent
         ? { signatureLine: mutation.output.split("\n").find((l) => l.includes(fixture.expectedSignature)) ?? "" }
