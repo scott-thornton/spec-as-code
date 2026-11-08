@@ -1,0 +1,88 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: chain-memory
+  title: Established flips survive spec amendments
+  description: The fork-crossing fix demonstrated by the probe on branch probe/digest-fork-repro (run run-mw8arnxy).
+goal: >
+  Field evidence: an amendment forks the spec digest, the new run links
+  to no same-digest parent, and every criterion that passes at base
+  comes back indeterminate - the probe reproduced it with two text
+  files and zero feature code (run-mw8arnxy: PROBE-B byte-identical,
+  flip recorded one run earlier, indeterminate passed_at_base; PROBE-A
+  indeterminate through its own unchanged pre-amendment criterion).
+  Lineage stays same-digest by design - a chain is one contract's
+  history - but MEMORY must not stop at the fork: a criterion whose
+  compiled definition is byte-identical to the one whose flip was
+  recorded keeps that flip, with provenance naming where it was
+  established. Chronology is not causality: sources are git-ancestors,
+  red precedes green, oracle-invalid reds establish nothing, and a
+  definition that changed adopts nothing.
+requirements:
+  - id: CHMEM-001
+    statement: >
+      A criterion that passes at this run's base inherits an
+      established red-to-green flip from any prior apply run of the
+      same spec under ANY digest when (a) that run's recorded base
+      revision is a git ancestor of this run's base, (b) the
+      criterion's compiled definition (type, command or path,
+      expectations, discriminating flag) is byte-identical to the
+      current one - read from the spec source compiled at that prior
+      run's base revision, never from the current file - and (c) the
+      red half is oracle-eligible. Same-run red-to-green within one
+      ancestor (the LIST-001 case) remains supported unchanged.
+    priority: must
+    category: behavioral
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: CHMEM-001-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/chain-memory.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: CHMEM-002
+    statement: >
+      When the red half is recorded in one prior run and the green
+      half in a later prior run - both gated by CHMEM-001, the red
+      strictly preceding the green in chronological order - the flip
+      is established by synthesis with provenance naming both runs
+      (the red run and the green run); the run table renders it as
+      inherited memory, never as this run's own discrimination.
+    priority: must
+    category: behavioral
+    dependsOn: [CHMEM-001]
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: CHMEM-002-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/chain-memory.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: CHMEM-003
+    statement: >
+      Refusals: a criterion whose compiled definition changed between
+      the source run and now adopts nothing; a green that precedes
+      its red adopts nothing (the regression shape - green, then red,
+      is not a flip); an oracle-invalid red establishes nothing
+      (existing semantics preserved); a source run whose spec cannot
+      be compiled at its base revision, or whose evidence is
+      unreadable, is skipped conservatively - absence of memory never
+      fabricates any.
+    priority: must
+    category: behavioral
+    dependsOn: [CHMEM-001]
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: CHMEM-003-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/chain-memory.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+outOfScope:
+  - parentRunId linkage across digests (lineage stays same-digest; a chain is one contract's history).
+  - Property-statement-level gating (memory is criterion-level, the LIST-001 design).
+  - Verify-run green halves as synthesis sources (apply-run evidence only).
+  - Adoption when the ancestor's base revision is not a git ancestor (chronology is not causality).
