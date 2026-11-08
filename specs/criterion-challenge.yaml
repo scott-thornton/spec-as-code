@@ -1,0 +1,178 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: criterion-challenge
+  title: Falsify acceptance criteria with archived negative fixtures
+  description: Order 1; executes heavyweight fixtures only through host-battery-admission (HBA shipped first).
+goal: >
+  Field evidence (this repository, 2026-11): har's scroll oracle passed
+  vacuously (nothing scrolled; scrollTop === 0 was already true) - a
+  green test whose relationship to its claim had broken. Red-phase
+  discrimination catches this ONCE at introduction; nothing guards the
+  criterion's ongoing power to reject defects. Challenge closes that
+  gap: an operator demonstrates that an unchanged acceptance criterion
+  rejects a known defective artifact - separate baseline and mutation
+  observations, attributable failure classification (a nonzero exit
+  alone proves nothing - the runner may have died), and auditable
+  historical provenance. Challenge evidence describes the VERIFIER,
+  never the artifact: it cannot satisfy requirements, and no criterion
+  is required to carry a passing challenge (farming trivial mutations
+  is the perverse incentive the contract refuses). Execution rides the
+  existing machinery end to end - disposable worktrees, the frozen
+  criteria executor with its failure-shape classification, host
+  admission, and cold-build invalidation - so a challenge inherits
+  every guard the runtime already enforces.
+requirements:
+  - id: CHAL-001
+    statement: >
+      spc challenge <fixture> executes a committed fixture
+      (challenges/<name>.yaml - a new repo registry beside suites/)
+      naming one existing criterion (spec id + criterion id), a
+      replayable mutation (a change-ops array applied through the
+      applicator's exact semantics), and an expected failure signature
+      (a substring that must appear in the mutated pipeline's captured
+      output for the detection to count). Each side runs in a
+      disposable, isolated git worktree cut from the same base
+      revision with one frozen criterion definition and configuration
+      (the existing spec-snapshot machinery), under a PIPELINE the
+      runner owns: a cold prepare (dependency install where needed,
+      forced build with incremental state invalidated - the dry-run
+      discipline; build diagnostics are part of the pipeline's
+      captured output, because existing criteria conventionally
+      redirect their build prefix to /dev/null and tsc diagnostics
+      ride stdout - the signature would be invisible otherwise), then
+      the criterion executed THROUGH the existing criteria executor,
+      inheriting host admission (HBA), timeout classification, and
+      the evidence shape unchanged. The pipeline's output is the
+      concatenation of the prepare output and the criterion run's
+      captured stdout/stderr.
+    priority: must
+    category: behavioral
+    scope:
+      include: [packages/runtime/src/**, packages/cli/src/**]
+    acceptance:
+      - id: CHAL-001-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/challenge.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+      - id: CHAL-001-B
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/challenge.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: CHAL-002
+    statement: >
+      Four outcomes, computed from the two observations:
+      discriminating (valid baseline supports the criterion AND the
+      mutated run fails with the expected signature attributable to
+      the injected defect); non-discriminating (the mutated artifact
+      was accepted - the verifier failed to reject a known defect);
+      invalid-baseline (the pristine artifact did not satisfy the
+      criterion - the challenge proves nothing about a criterion that
+      is already red); inconclusive (execution, attribution, or
+      infrastructure uncertainty - never a forced binary).
+    priority: must
+    category: behavioral
+    dependsOn: [CHAL-001]
+    scope:
+      include: [packages/verifier/src/**]
+    acceptance:
+      - id: CHAL-002-A
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/verifier exec vitest run src/challenge-classification.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: CHAL-003
+    statement: >
+      A nonzero exit alone never counts as discrimination. The
+      expected signature must be attributable to the injected defect:
+      infrastructure death (the existing envelope signatures), budget
+      timeout (failureShape budget-timeout), suite-did-not-run, an
+      unrelated failure whose output does not match the expected
+      signature, and a mutation that no longer applies (stale anchor)
+      all produce inconclusive - the classification family applies to
+      the mutated run's result exactly as it applies to ordinary
+      verification.
+    priority: must
+    category: operational
+    dependsOn: [CHAL-002]
+    scope:
+      include: [packages/verifier/src/**]
+    acceptance:
+      - id: CHAL-003-A
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/verifier exec vitest run src/challenge-classification.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: CHAL-004
+    statement: >
+      The first committed fixture reconstructs the skew-carveout type
+      error (introduced 728f805, caught 3924025 - the original false
+      green was stale tsbuildinfo masking the readonly-to-mutable
+      assignment): the mutation reintroduces the defective assignment
+      in packages/executor/src/unmediated-guard.ts against today's
+      tree, and the challenged criterion is skew-carveout SC-001-A
+      (its command builds the executor and runs the suite - the type
+      error fails the pipeline's cold prepare build with the
+      diagnostic in the captured output, and the criterion contradicts
+      downstream). The fixture pins the two historical commits, its
+      mutation digest, the criterion identity, and the TS2345
+      readonly diagnostic as the expected signature. The runner's
+      cold prepare (incremental state invalidated in BOTH worktrees)
+      is the condition without which the inaugural challenge could
+      repeat the original false green; a non-applicable mutation or
+      stale build is inconclusive, never passed.
+    priority: must
+    category: behavioral
+    dependsOn: [CHAL-003]
+    scope:
+      include: [challenges/**, packages/cli/src/**]
+    acceptance:
+      - id: CHAL-004-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/challenge-skew-carveout.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: CHAL-005
+    statement: >
+      Every challenge result records both worktree revisions, the
+      criterion and fixture digests, the command execution identities,
+      the outcome, and the failure attribution, as a durable record
+      under .spc/challenges/ - separate from requirement satisfaction,
+      never entering the run store, never changing an original run's
+      verdict. The committed fixture (not the result) is the versioned
+      artifact; results are local observations. Both worktrees are
+      cleaned on every exit path, and challenge execution never
+      provides an unguarded battery path - all real commands ride the
+      host admission seam (CHAL-C01).
+    priority: must
+    category: architectural
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: CHAL-005-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/challenge.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+constraints:
+  - id: CHAL-C01
+    statement: >
+      Challenge execution uses the shipped host-battery admission and
+      placement policy for every real command by executing criteria
+      through the criteria executor - no direct unguarded battery
+      path exists, even for the challenge CLI command itself.
+    priority: must
+    acceptance:
+      - id: CHAL-C01-A
+        type: command
+        command: pnpm --filter @spc/verifier... build > /dev/null && pnpm --filter @spc/verifier exec vitest run src/challenge-admission.test.ts
+        expect: {exitCode: 0}
+outOfScope:
+  - Automatic generation of mutations or fixtures with an LLM (human-authored fixtures first; deterministic mutations and model-generated counterexamples are later slices with their own specs).
+  - Mutation scores, confidence scores, or mandatory passing challenges for all criteria.
+  - A new requirement-satisfaction enum or promotion of challenge results to ordinary positive evidence.
+  - Full historical checkout when a minimal isolated mutation reconstructs the defect.
+  - Running any battery unguarded on the operator host.
+  - Treating a warm incremental build as adequate for the archived fixture (cold build or inconclusive).
