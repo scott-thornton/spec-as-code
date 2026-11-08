@@ -26,7 +26,18 @@ export interface ChallengeClassificationInput {
 
 export type ChallengeOutcome = "discriminating" | "non-discriminating" | "invalid-baseline" | "inconclusive";
 
-const INFRA_SHAPES = new Set(["budget-timeout", "environment-death", "admission-refused", "admission-deferred"]);
+const INFRA_SHAPES = new Set([
+  "budget-timeout",
+  "environment-death",
+  "admission-refused",
+  "admission-deferred",
+  // suite-did-not-run rides here as an OVERRIDE: the criteria executor
+  // keeps that shape red-capable BY DESIGN in ordinary verification (a
+  // suite that cannot load because the implementation is absent IS the
+  // red state); a challenge leg carrying it means the suite never ran,
+  // and detection power cannot be claimed over prepare build noise.
+  "suite-did-not-run",
+]);
 
 export function classifyChallenge(input: ChallengeClassificationInput): ChallengeOutcome {
   // Any inconclusive LEG makes the whole challenge inconclusive -

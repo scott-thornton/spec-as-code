@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { compileSpecFile, createWorktree, removeWorktree } from "@spc/repo";
 import { stageChanges } from "@spc/executor";
-import { classifyChallenge, type ChallengeOutcome } from "@spc/verifier";
+import { acquireHostAdmission, classifyChallenge, type ChallengeOutcome } from "@spc/verifier";
 import { verifyProperties } from "./verify.js";
 import { EventStore } from "./events.js";
 import { EvidenceStore, FollowupStore } from "./stores.js";
@@ -24,8 +24,12 @@ import { spcPaths } from "./paths.js";
  * through the criterion command alone), then the criterion through
  * the frozen criteria executor (host admission, timeout
  * classification, evidence shape - inherited by construction). The
- * outcome records to .spc/challenges/ - never the run store - and
- * both worktrees are cleaned on every exit path.
+ * prepare itself rides host admission too (CHAL-C01): it is the
+ * heaviest subprocess a challenge spawns, and a refusal or an
+ * environment failure makes the leg inconclusive - never a wait,
+ * never a laundered criterion verdict. The outcome records to
+ * .spc/challenges/ - never the run store - and both worktrees are
+ * cleaned on every exit path.
  *
  * Fixture format (challenges/<name>.yaml): metadata.id,
  * criterion.{spec,criterionId}, expectedSignature, provenance.*, and
@@ -47,6 +51,10 @@ export interface ChallengeLegResult {
   shape?: string;
   output: string;
   revision: string;
+  /** Command execution identities observed by this leg (empty when the criterion never executed). */
+  executionIds: string[];
+  /** Digest of the compiled criterion this leg actually challenged (present when the criterion executed; per-leg because a mutation may target the spec itself). */
+  criterionDigest?: string;
 }
 
 export interface ChallengeResult {
@@ -54,6 +62,24 @@ export interface ChallengeResult {
   baseline: ChallengeLegResult;
   mutation: ChallengeLegResult;
   record: Record<string, unknown>;
+}
+
+/** The cold prepare outcome. ok=false is an ENVIRONMENT verdict
+ *  (admission refused, install failure, spawn kill) - the leg becomes
+ *  inconclusive, never a criterion verdict. buildFailed=true with
+ *  ok=true is the DESIGNED detection surface: build diagnostics ride
+ *  the pipeline output, and the inaugural fixture's TS4104 fails
+ *  exactly this way. */
+export interface PrepareResult {
+  output: string;
+  /** Host admission refused - another fresh verification subprocess holds the host. */
+  refused: boolean;
+  /** The environment prepared (a nonzero build exit can still be ok - see buildFailed). */
+  ok: boolean;
+  /** The build exited nonzero; its diagnostics are part of the captured output. */
+  buildFailed: boolean;
+  /** Which stage failed when ok is false. */
+  failureStage?: "install" | "build";
 }
 
 
@@ -127,35 +153,64 @@ export function challengeRecordPath(repoRoot: string, name: string): string {
   return path.join(repoRoot, ".spc", "challenges", `${name}.json`);
 }
 
-function sh(cwd: string, cmd: string, args: string[]): string {
+function sh(cwd: string, cmd: string, args: string[]): { output: string; status: number | null; error: boolean } {
   const r = spawnSync(cmd, args, { cwd, encoding: "utf8", timeout: 300_000 });
-  return `$ ${cmd} ${args.join(" ")}\n${r.stdout ?? ""}${r.stderr ?? ""}`;
+  return {
+    output: `$ ${cmd} ${args.join(" ")}\n${r.stdout ?? ""}${r.stderr ?? ""}`,
+    status: r.status,
+    error: Boolean(r.error),
+  };
 }
 
-/** The cold prepare: install (when a package root exists) + forced build with ALL incremental state invalidated. Output captured, never silent. */
-function coldPrepare(worktree: string): string {
-  if (!existsSync(path.join(worktree, "package.json"))) return "(no package root - prepare skipped)";
-  let out = sh(worktree, "pnpm", ["install", "--frozen-lockfile", "--offline"]);
-  // Invalidate ALL incremental build state (the patch-fresh-build
-  // doctrine): stale tsbuildinfo masked the original defect.
-  const invalidate = (dir: string): void => {
-    const skip = new Set(["node_modules", ".git", "dist"]);
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (skip.has(entry.name)) continue;
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) invalidate(full);
-      else if (entry.name.endsWith(".tsbuildinfo")) rmSync(full, { force: true });
+/** The cold prepare: install (when a package root exists) + forced build with ALL incremental state invalidated. Output captured, never silent. Admits on the host lock (CHAL-C01): a refusal is a named inconclusive, never a wait. */
+export function coldPrepare(worktree: string): PrepareResult {
+  if (!existsSync(path.join(worktree, "package.json"))) {
+    return { output: "(no package root - prepare skipped)", refused: false, ok: true, buildFailed: false };
+  }
+  const admission = acquireHostAdmission();
+  if (!admission) {
+    return {
+      output: "$ pnpm install --frozen-lockfile --offline\nadmission refused: another fresh verification subprocess holds the host - refuse, never wait",
+      refused: true,
+      ok: false,
+      buildFailed: false,
+    };
+  }
+  try {
+    const install = sh(worktree, "pnpm", ["install", "--frozen-lockfile", "--offline"]);
+    let out = install.output;
+    if (install.error || install.status !== 0) {
+      return { output: out, refused: false, ok: false, buildFailed: false, failureStage: "install" };
     }
-  };
-  invalidate(worktree);
-  out += sh(worktree, "pnpm", ["-r", "run", "build"]);
-  return out;
+    // Invalidate ALL incremental build state (the patch-fresh-build
+    // doctrine): stale tsbuildinfo masked the original defect.
+    const invalidate = (dir: string): void => {
+      const skip = new Set(["node_modules", ".git", "dist"]);
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (skip.has(entry.name)) continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) invalidate(full);
+        else if (entry.name.endsWith(".tsbuildinfo")) rmSync(full, { force: true });
+      }
+    };
+    invalidate(worktree);
+    const build = sh(worktree, "pnpm", ["-r", "run", "build"]);
+    out += build.output;
+    if (build.error) {
+      return { output: out, refused: false, ok: false, buildFailed: false, failureStage: "build" };
+    }
+    return { output: out, refused: false, ok: true, buildFailed: build.status !== 0 };
+  } finally {
+    admission.release();
+  }
 }
 
 interface CriterionRun {
   outcome: "supports" | "contradicts" | "inconclusive";
   shape?: string;
   output: string;
+  executionIds: string[];
+  criterionDigest: string;
 }
 
 /** Execute the single frozen criterion in the worktree through the criteria executor. */
@@ -199,7 +254,17 @@ async function runCriterion(worktree: string, specId: string, criterionId: strin
       .filter((v) => typeof v === "string")
       .join("\n");
     const output = textual.trim() !== "" ? textual : JSON.stringify(payload);
-    return { outcome, shape: payload["failureShape"] as string | undefined, output };
+    // Command execution identities, collected before the scratch store
+    // is deleted (CHAL-005: the record must trace to its executions).
+    const executionIds = records
+      .map((r) => (r.payload as Record<string, unknown>)["executionId"])
+      .filter((v): v is string => typeof v === "string");
+    // The challenged criterion definition, digest-pinned (CHAL-005): a
+    // spec edit silently changes what was challenged unless the record
+    // carries what ran. Per-leg: a mutation may target the spec itself.
+    const criterionDigest =
+      "sha256:" + createHash("sha256").update(JSON.stringify(acceptance[0]), "utf8").digest("hex");
+    return { outcome, shape: payload["failureShape"] as string | undefined, output, executionIds, criterionDigest };
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
@@ -244,28 +309,53 @@ export async function runChallenge(repoRoot: string, name: string): Promise<Chal
     baselineWt = createWorktree(repoRoot, fixture.criterion.spec, `${name}--baseline`, worktreesDir).path;
     mutationWt = createWorktree(repoRoot, fixture.criterion.spec, `${name}--mutation`, worktreesDir).path;
 
-    // Baseline pipeline: cold prepare + frozen criterion, pristine.
+    // Baseline pipeline: cold prepare + frozen criterion, pristine. A
+    // prepare that cannot run (admission refused, install failure,
+    // spawn kill) makes the leg inconclusive - environment uncertainty
+    // is never a criterion verdict (CHAL-002). A nonzero BUILD exit is
+    // allowed and rides the output: the detection surface itself.
     const baselinePrepare = coldPrepare(baselineWt);
-    const baselineRun = await runCriterion(baselineWt, fixture.criterion.spec, fixture.criterion.criterionId);
-    const baseline: ChallengeLegResult = {
-      ...baselineRun,
-      output: baselinePrepare + "\n" + baselineRun.output,
-      revision: baseRevision,
-    };
+    let baseline: ChallengeLegResult;
+    if (!baselinePrepare.ok) {
+      baseline = {
+        outcome: "inconclusive",
+        ...(baselinePrepare.refused ? { shape: "admission-refused" } : {}),
+        output: `${baselinePrepare.output}\n(prepare failed${baselinePrepare.failureStage ? ` at ${baselinePrepare.failureStage}` : ""}: the environment did not prepare - never a criterion verdict)`,
+        revision: baseRevision,
+        executionIds: [],
+      };
+    } else {
+      const baselineRun = await runCriterion(baselineWt, fixture.criterion.spec, fixture.criterion.criterionId);
+      baseline = {
+        ...baselineRun,
+        output: baselinePrepare.output + "\n" + baselineRun.output,
+        revision: baseRevision,
+      };
+    }
 
     // Mutation pipeline: apply the ops, cold prepare, criterion.
     const applied = applyMutation(mutationWt, fixture.mutation.ops);
     let mutation: ChallengeLegResult;
     if (!applied.ok) {
-      mutation = { outcome: "inconclusive", output: `mutation not applicable: ${applied.detail}`, revision: baseRevision };
+      mutation = { outcome: "inconclusive", output: `mutation not applicable: ${applied.detail}`, revision: baseRevision, executionIds: [] };
     } else {
       const mutationPrepare = coldPrepare(mutationWt);
-      const mutationRun = await runCriterion(mutationWt, fixture.criterion.spec, fixture.criterion.criterionId);
-      mutation = {
-        ...mutationRun,
-        output: mutationPrepare + "\n" + mutationRun.output,
-        revision: baseRevision,
-      };
+      if (!mutationPrepare.ok) {
+        mutation = {
+          outcome: "inconclusive",
+          ...(mutationPrepare.refused ? { shape: "admission-refused" } : {}),
+          output: `${mutationPrepare.output}\n(prepare failed${mutationPrepare.failureStage ? ` at ${mutationPrepare.failureStage}` : ""}: the environment did not prepare - never a criterion verdict)`,
+          revision: baseRevision,
+          executionIds: [],
+        };
+      } else {
+        const mutationRun = await runCriterion(mutationWt, fixture.criterion.spec, fixture.criterion.criterionId);
+        mutation = {
+          ...mutationRun,
+          output: mutationPrepare.output + "\n" + mutationRun.output,
+          revision: baseRevision,
+        };
+      }
     }
 
     const signaturePresent = mutation.output.includes(fixture.expectedSignature);
@@ -282,8 +372,20 @@ export async function runChallenge(repoRoot: string, name: string): Promise<Chal
       fixtureDigest: fixture.digest,
       criterion: fixture.criterion,
       outcome,
-      baseline: { outcome: baseline.outcome, revision: baseline.revision, ...(baseline.shape ? { failureShape: baseline.shape } : {}) },
-      mutation: { outcome: mutation.outcome, revision: mutation.revision, ...(mutation.shape ? { failureShape: mutation.shape } : {}) },
+      baseline: {
+        outcome: baseline.outcome,
+        revision: baseline.revision,
+        executionIds: baseline.executionIds,
+        ...(baseline.criterionDigest ? { criterionDigest: baseline.criterionDigest } : {}),
+        ...(baseline.shape ? { failureShape: baseline.shape } : {}),
+      },
+      mutation: {
+        outcome: mutation.outcome,
+        revision: mutation.revision,
+        executionIds: mutation.executionIds,
+        ...(mutation.criterionDigest ? { criterionDigest: mutation.criterionDigest } : {}),
+        ...(mutation.shape ? { failureShape: mutation.shape } : {}),
+      },
       signaturePresent,
       expectedSignature: fixture.expectedSignature,
       ...(signaturePresent
