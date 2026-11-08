@@ -1,0 +1,107 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: excerpt-priority
+  title: Explicit declarations outrank glob matches - the excerpt budget serves the plan author's priorities
+goal: >
+  Parent defect (har, 2026-11-08, reported not touched): a task
+  declaring both src/** and an explicit oracle path silently lost the
+  oracle from its dispatch excerpt - listMatchingFiles fills the
+  8-file cap with sorted glob matches, and the explicit declaration
+  competes for a slot instead of claiming one. The model never saw
+  the file it most needed; the executor correctly refused to
+  fabricate; the dispatch was starved of declared context. Reproduced
+  against the real function (10 glob matches + src/oracle.test.ts -
+  the oracle loses its slot, silently). The same union hides a worse
+  variant: readPatterns merges read AND write targets, so an explicit
+  WRITE target - the file the task exists to edit - can be crowded
+  out of its own 24KB excerpt by read globs. The excerpt budget exists
+  to orient the model; an explicit path is the plan author saying
+  THIS file matters. Globs are orientation; explicit declarations are
+  priority. The fix restores that order at the excerpt call site
+  only - listMatchingFiles stays generic (its other consumer is
+  single-pattern, unaffected), and the no-explicit-patterns case is
+  byte-identical to today (the prompt-stability sort contract holds).
+requirements:
+  - id: EXB-001
+    statement: >
+      The dispatch excerpt (packages/executor/src/execute.ts) builds
+      in priority order: readPatterns partition into EXPLICIT paths
+      (patterns containing no glob metacharacters - *, ?, [) and GLOB
+      patterns; explicit files that exist in the worktree are
+      unconditionally included in the excerpt list; glob matches fill
+      only the remaining slots of the 8-file cap (sorted); the final
+      list is deduplicated and sorted (the deterministic-order
+      contract). A plan declaring src/** plus an explicit file always
+      sees the explicit file in the excerpt regardless of how many
+      glob matches exist; a plan with no explicit patterns produces a
+      byte-identical excerpt list to today. The oracle reproduces the
+      defect against the real excerpt construction: 10 glob matches
+      plus an explicit file - the explicit file present; a control
+      with no explicit declaration unchanged.
+    priority: must
+    category: behavioral
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: EXB-001-A
+        type: command
+        command: pnpm --filter @spc/executor... build > /dev/null && pnpm --filter @spc/executor exec vitest run src/excerpt-priority.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: EXB-002
+    statement: >
+      An explicit write target is never crowded out of its excerpt:
+      write-target files already receive the honest 24KB excerpt
+      budget (the write-excerpt doctrine); this requirement pins that
+      the explicit-declaration priority covers the read+write union -
+      a task with an explicit write target and a matching-rich read
+      glob always receives the write target's excerpt. More than 8
+      explicit declarations is a plan-authoring error the cap still
+      bounds (sorted explicit, first 8) - plan validation warning is
+      out of scope here.
+    priority: must
+    category: behavioral
+    dependsOn: [EXB-001]
+    scope:
+      include: [packages/executor/src/**]
+    acceptance:
+      - id: EXB-002-A
+        type: command
+        command: pnpm --filter @spc/executor... build > /dev/null && pnpm --filter @spc/executor exec vitest run src/excerpt-priority.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: EXB-003
+    statement: >
+      Regression guard: the executor suite and the cli battery stay
+      green - listMatchingFiles itself is unchanged (its single-
+      pattern consumer and the sort contract untouched); only the
+      excerpt call site partitions; the no-explicit case is
+      byte-identical. CI-owned battery.
+    priority: must
+    category: architectural
+    scope:
+      include: [packages/**]
+    acceptance:
+      - id: EXB-003-A
+        type: suite
+        ref: cli-battery
+constraints:
+  - id: EXB-C01
+    statement: >
+      Determinism holds: the excerpt list for a given tree and plan
+      is identical on every platform and every invocation (the
+      prompt-stability contract); explicit inclusion changes WHICH
+      files appear for plans that declare explicit paths, never the
+      determinism of the result.
+    priority: must
+    acceptance:
+      - id: EXB-C01-A
+        type: command
+        command: pnpm --filter @spc/executor... build > /dev/null && pnpm --filter @spc/executor exec vitest run src/excerpt-priority.test.ts
+        expect: {exitCode: 0}
+outOfScope:
+  - Changing listMatchingFiles' generic contract or its single-pattern consumer (attribution touch-set resolution - no cross-pattern competition there).
+  - Raising or configuring the 8-file cap (the budget stands; priority within it is the fix).
+  - Plan-validation warnings for over-cap explicit declarations (a later plan-validate lint if evidence demands).
+  - Ranking among multiple explicit declarations (sorted order within the explicit tier).
