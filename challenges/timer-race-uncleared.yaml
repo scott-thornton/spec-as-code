@@ -1,0 +1,14 @@
+apiVersion: spc.dev/v1alpha1
+kind: Challenge
+metadata:
+  id: timer-race-uncleared
+  title: The archived non-streaming race-timer leak (62954d0 -> 54876bb)
+criterion:
+  spec: timer-hygiene
+  criterionId: NT-001-A
+opsJson: '[{"op":"patch","path":"packages/llm-anthropic/src/anthropic.ts","anchor":"      clearTimeout(timer);\n      if (raceTimer !== undefined) clearTimeout(raceTimer);","replacement":"      clearTimeout(timer);"}]'
+expectedSignature: "to be less than 4000"
+provenance:
+  introduced: "62954d0"
+  caught: "54876bb"
+  diagnostic: the timeoutRace inner setTimeout was armed but never cleared - a successful non-streaming call left the process lingering the full timeoutMs (adapter-streaming F6, measured 5.5s after a fast call)

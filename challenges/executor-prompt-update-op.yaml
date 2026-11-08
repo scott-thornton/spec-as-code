@@ -1,0 +1,14 @@
+apiVersion: spc.dev/v1alpha1
+kind: Challenge
+metadata:
+  id: executor-prompt-update-op
+  title: The archived executor prompt update-op gap (1c946f7 -> 6a11435)
+criterion:
+  spec: executor-prompt-update-op
+  criterionId: EPO-001-A
+opsJson: '[{"op":"patch","path":"packages/executor/src/prompts.ts","anchor":"- When the current content of a file is NOT in your context (no excerpt, no\n  digest) and patch composition is impractical, submit an update change\n  (op: \"update\", with the path and the full content) - a wholesale rewrite\n  with no baseDigest and no anchor; the schema accepts it and staging\n  applies it like any other change. Never use update to push through a patch that was refused for\n  staleness or ambiguity without first re-reading - a refused patch means\n  reality moved; update is for files you are rewriting from your own\n  authored content, not for laundering a stale composition.","replacement":"- (update-op teaching absent - the archived defect: the schema accepted update ops the prompt never taught, forcing whole-file laundering-shaped rewrites)"}]'
+expectedSignature: 'op:\s*"update"'
+provenance:
+  introduced: "1c946f7"
+  caught: "6a11435"
+  diagnostic: the executor system prompt taught patch ops but not the update op the schema already accepted (har's take-seven report - the succession one prompt-line away)

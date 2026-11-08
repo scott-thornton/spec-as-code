@@ -1,0 +1,14 @@
+apiVersion: spc.dev/v1alpha1
+kind: Challenge
+metadata:
+  id: excerpt-crowding-glob-first
+  title: The archived excerpt-crowding defect (1c946f7 -> ec13550)
+criterion:
+  spec: excerpt-priority
+  criterionId: EXB-001-A
+opsJson: '[{"op":"patch","path":"packages/executor/src/execute.ts","anchor":"  const explicitFiles = explicit.sort().slice(0, cap);\n  const remaining = cap - explicitFiles.length;\n  const globFiles = remaining > 0 ? listMatchingFiles(worktreeRoot, globs, cap).filter((f) => !explicitFiles.includes(f)).slice(0, remaining) : [];\n  return [...explicitFiles, ...globFiles].sort();","replacement":"  const globFiles = listMatchingFiles(worktreeRoot, globs, cap).slice(0, cap);\n  const remaining = cap - globFiles.length;\n  const explicitFiles = remaining > 0 ? explicit.sort().filter((f) => !globFiles.includes(f)).slice(0, remaining) : [];\n  return [...explicitFiles, ...globFiles].sort();"}]'
+expectedSignature: "src/oracle.test.ts"
+provenance:
+  introduced: "1c946f7"
+  caught: "ec13550"
+  diagnostic: sorted glob matches claimed the excerpt budget before explicit declarations - a task declaring src/** plus an explicit oracle file never saw the oracle (har's field report)
