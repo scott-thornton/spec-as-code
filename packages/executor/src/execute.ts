@@ -106,6 +106,28 @@ function digestOfWorktreeFile(worktreeRoot: string, relPath: string): string | u
  * the declared write scope, and apply them in the worktree. Actual git
  * deltas are re-checked by the runtime after this returns.
  */
+const GLOB_META = /[*?\[]/;
+
+/**
+ * specs/excerpt-priority: the dispatch excerpt budget in priority
+ * order. Explicit path declarations (patterns with no glob
+ * metacharacters) claim slots first - they are the plan author naming
+ * the files that matter - and glob matches fill the remainder.
+ * Deterministic: deduplicated, sorted, identical for the same tree
+ * and plan on every platform. A nonexistent explicit path is ignored,
+ * never fatal. listMatchingFiles itself is untouched (its sort
+ * contract and single-pattern consumer stand).
+ */
+export function buildDispatchExcerpts(worktreeRoot: string, patterns: readonly string[], cap: number): string[] {
+  const unique = [...new Set(patterns)];
+  const explicit = unique.filter((p) => !GLOB_META.test(p)).filter((p) => existsSync(path.join(worktreeRoot, p)));
+  const globs = unique.filter((p) => GLOB_META.test(p));
+  const explicitFiles = explicit.sort().slice(0, cap);
+  const remaining = cap - explicitFiles.length;
+  const globFiles = remaining > 0 ? listMatchingFiles(worktreeRoot, globs, cap).filter((f) => !explicitFiles.includes(f)).slice(0, remaining) : [];
+  return [...explicitFiles, ...globFiles].sort();
+}
+
 export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): Promise<ExecutionOutcome> {
   const { task, specIr, snapshot, worktreeRoot, attempt } = input;
   const propertyIds = [...new Set([...(task.satisfies ?? []), ...(task.verifies ?? [])])];
@@ -123,6 +145,13 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
     }));
 
   const readPatterns = [...new Set([...(task.targets?.read ?? []), ...(task.targets?.write ?? [])])];
+  // specs/excerpt-priority: explicit path declarations claim the excerpt
+  // budget; glob matches fill the remaining slots. An explicit path is
+  // the plan author saying THIS file matters - sorted glob matches
+  // silently crowding it out starved dispatches of declared context
+  // (field instance: a task declaring src/** plus an explicit oracle
+  // file never saw the oracle; the union also let read globs crowd out
+  // an explicit WRITE target's own excerpt).
   // Write-target files get an honest excerpt budget: anchors must come
   // from shown text, and a 6KB window on a large edit target hides the
   // edit region and pushes executors toward whole-file resends - the
@@ -131,7 +160,7 @@ export async function executeTask(input: ExecuteTaskInput, deps: ExecutorDeps): 
   const WRITE_EXCERPT_BYTES = 24 * 1024;
   const READ_EXCERPT_BYTES = 6 * 1024;
   const excerptWritePatterns = task.targets?.write ?? [];
-  const readFiles = listMatchingFiles(worktreeRoot, readPatterns, 8).map((p) => {
+  const readFiles = buildDispatchExcerpts(worktreeRoot, readPatterns, 8).map((p) => {
     const digest = digestOfWorktreeFile(worktreeRoot, p);
     const budget = globMatchAny(excerptWritePatterns, p) ? WRITE_EXCERPT_BYTES : READ_EXCERPT_BYTES;
     return {
