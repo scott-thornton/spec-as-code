@@ -51,10 +51,15 @@ describe("IMP-002: the projection matrix", () => {
 
   it("only fact.txt changed: the file criterion intersects and the scoped command is PROVABLY disjoint (pkg-a untouched)", () => {
     writeFileSync(path.join(fx.root, "fact.txt"), "the fact, changed\n", "utf8");
-    const r = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "add", "-A", "&&", "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "touch fact"], { cwd: fx.root, shell: "/bin/zsh", encoding: "utf8" });
-    expect(r.status).toBe(0);
+    const gc = (args: string[]) =>
+      spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: fx.root, encoding: "utf8" });
+    expect(gc(["add", "-A"]).status).toBe(0);
+    expect(gc(["commit", "-qm", "touch fact"]).status).toBe(0);
     const head2 = spawnSync("git", ["rev-parse", "HEAD"], { cwd: fx.root, encoding: "utf8" }).stdout.trim();
-    const report = impactJson(fx.base, head2);
+    // The range must contain ONLY the fact.txt change - fx.head is the
+    // commit that touched pkg-a, so diffing from fx.base would still
+    // carry a.ts in the changed set.
+    const report = impactJson(fx.head, head2);
     expect(projectionOf(report, "IMPD-001-A").projection).toBe("scope-intersected");
     const b = projectionOf(report, "IMPD-001-B");
     expect(b.projection).toBe("scope-disjoint");
