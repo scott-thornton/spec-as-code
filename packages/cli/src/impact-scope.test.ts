@@ -86,11 +86,15 @@ describe("IMP-002 rectification: completeness of the declared scope", () => {
   });
 
   it("a workspace-union scope (pnpm -r) intersects when the workspace-DEFINING config changes - the -r closure is defined by those files", () => {
+    // Diff from the head AS OF THIS TEST's start: earlier tests in this
+    // file commit too, and swallowing their commits would put the dist
+    // artifact in the changed set (correctly undetermining B).
+    const start = spawnSync("git", ["rev-parse", "HEAD"], { cwd: fx.root, encoding: "utf8" }).stdout.trim();
     writeFileSync(path.join(fx.root, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n  - tools/*\n", "utf8");
     expect(gc(["add", "-A"]).status).toBe(0);
     expect(gc(["commit", "-qm", "touch workspace config"]).status).toBe(0);
     const head4 = spawnSync("git", ["rev-parse", "HEAD"], { cwd: fx.root, encoding: "utf8" }).stdout.trim();
-    const report = impactJson(fx.head, head4);
+    const report = impactJson(start, head4);
     const e = projectionOf(report, "IMPD-001-E");
     expect(e.projection).toBe("scope-intersected");
     // A package-scoped criterion is NOT affected by the root config: pkg-a itself is untouched.
