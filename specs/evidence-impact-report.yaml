@@ -1,0 +1,99 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: evidence-impact-report
+  title: Report structurally derived evidence impact without reuse
+  description: Order 2; reporting-only first slice of revision-aware evidence applicability - the inherit direction waits.
+goal: >
+  An operator can inspect which recorded observations may require
+  revalidation after a revision range, without any impact report
+  changing requirement state, skipping a criterion, or reusing old
+  evidence. The projection machinery is the same derivation the
+  system already trusts - the command cache's declared filter scopes,
+  diff-scoped-verify's disjointness engine, the freshness ancestry -
+  surfaced as a read-only view. Two hard rules carried forward from
+  that lineage: disjointness is asserted ONLY from complete, declared
+  structural scopes (an import graph may inform a human, never
+  justify a projection), and an uncomputable diff REFUSES with the
+  git error surfaced (the diff-scoped-verify F1 lesson: an empty
+  changed-set manufactured a vacuous all-disjoint report). Impact
+  never executes a criterion - it is pure derivation over recorded
+  evidence and the diff, so it acquires no admission lock and starts
+  no subprocess.
+requirements:
+  - id: IMP-001
+    statement: >
+      spc impact <baseRev>..<headRev> resolves the changed tracked
+      paths (git diff --name-only -z --no-renames - fail-closed: an
+      uncomputable range exits non-zero with the git error surfaced,
+      never an empty report) and the relevant spec, criterion, and
+      recorded evidence identities from the run store.
+    priority: must
+    category: behavioral
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: IMP-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/impact.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: IMP-002
+    statement: >
+      Each criterion's projected relationship to the change is one of
+      scope-intersected, scope-disjoint, or undetermined. File
+      criteria: exact path membership. Command/suite criteria: the
+      declared filter scope (parseFilterScope; unscoped commands are
+      always undetermined - they declare the whole workspace);
+      disjoint only when the scope's tracked files and the changed
+      paths are provably disjoint. Everything else - undeclared
+      dependencies, empty scopes, unknown criterion types, suite
+      references that do not resolve - is undetermined, never
+      speculative disjointness.
+    priority: must
+    category: behavioral
+    dependsOn: [IMP-001]
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: IMP-002-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/impact-scope.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: IMP-003
+    statement: >
+      The report names, per criterion, the projection AND its scope
+      source (untouched path / declared scope with its packages /
+      undetermined with the reason), in text and machine-readable
+      json. It is a read-only view over existing derivations, not a
+      new authority for satisfaction.
+    priority: must
+    category: architectural
+    dependsOn: [IMP-002]
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: IMP-003-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/impact.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+constraints:
+  - id: IMP-C01
+    statement: >
+      Running impact never writes supporting evidence, alters event
+      logs, changes a property verdict, creates a run record, or
+      skips execution of a future verify run; it executes no criteria
+      (pure derivation - no subprocess, no admission lock).
+    priority: must
+    acceptance:
+      - id: IMP-C01-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/impact-readonly.test.ts
+        expect: {exitCode: 0}
+outOfScope:
+  - Cross-revision evidence inheritance, cache-policy changes, or any mutation of satisfaction (the carry-forward direction is a later slice with its own spec and its own epistemics).
+  - Import-graph heuristics as proof of dependency completeness.
+  - A new evidence-outcome enum or automatic contradiction from changed inputs.
+  - A background incremental-verification daemon.
