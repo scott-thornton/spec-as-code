@@ -38,7 +38,12 @@ export function makeImpactRepo(): ImpactFixture {
   write("packages/pkg-a/package.json", '{ "name": "@demo/pkg-a", "private": true }\n');
   write("packages/pkg-a/src/a.ts", "export const a = 1;\n");
   write("packages/pkg-a/src/b.ts", "export const b = 2;\n");
-  write("packages/pkg-b/package.json", '{ "name": "@demo/pkg-b", "private": true }\n');
+  // A TRACKED dist artifact: the disjointness check must not treat it
+  // as outside a scope that contains it (the filtered-file-set trap).
+  write("packages/pkg-a/dist/gen.js", "console.log(1);\n");
+  // pkg-b depends on pkg-a through the workspace protocol - exercises
+  // the withDeps closure resolution.
+  write("packages/pkg-b/package.json", '{ "name": "@demo/pkg-b", "private": true, "dependencies": { "@demo/pkg-a": "workspace:*" } }\n');
   write("packages/pkg-b/src/c.ts", "export const c = 3;\n");
   write("fact.txt", "the fact\n");
   write(
@@ -72,6 +77,14 @@ export function makeImpactRepo(): ImpactFixture {
       "      - id: IMPD-001-D",
       "        type: suite",
       "        ref: no-such-suite",
+      "      - id: IMPD-001-E",
+      "        type: command",
+      "        command: pnpm -r run build",
+      "        expect: {exitCode: 0}",
+      "      - id: IMPD-001-F",
+      "        type: command",
+      "        command: pnpm --filter @demo/pkg-a --filter @demo/ghost exec vitest run src/a.test.ts",
+      "        expect: {exitCode: 0}",
     ].join("\n") + "\n",
     );
   // One recorded apply run whose evidence names the file criterion.

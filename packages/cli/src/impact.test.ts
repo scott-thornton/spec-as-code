@@ -63,3 +63,11 @@ describe("IMP-003: text and machine-readable json, with the scope source", () =>
     expect(a?.evidenceIds).toContain("ev-demo-1");
   });
 });
+
+describe("IMP-001 rectification: range shape", () => {
+  it("a three-dot range is rejected by name, never silently re-parsed as base '.head'", () => {
+    const r = impact(["main...HEAD"]);
+    expect(r.status).not.toBe(0);
+    expect(r.out).toMatch(/three-dot|exactly two dots|SPC_IMPACT_RANGE/i);
+  });
+});

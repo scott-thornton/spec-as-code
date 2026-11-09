@@ -31,7 +31,7 @@ requirements:
     priority: must
     category: behavioral
     scope:
-      include: [packages/cli/src/**]
+      include: [packages/cli/**, packages/verifier/src/command-cache.ts]
     acceptance:
       - id: IMP-001-A
         type: command
@@ -54,7 +54,7 @@ requirements:
     category: behavioral
     dependsOn: [IMP-001]
     scope:
-      include: [packages/cli/src/**]
+      include: [packages/cli/**, packages/verifier/src/command-cache.ts]
     acceptance:
       - id: IMP-002-A
         type: command
@@ -72,7 +72,7 @@ requirements:
     category: architectural
     dependsOn: [IMP-002]
     scope:
-      include: [packages/cli/src/**]
+      include: [packages/cli/**, packages/verifier/src/command-cache.ts]
     acceptance:
       - id: IMP-003-A
         type: command
