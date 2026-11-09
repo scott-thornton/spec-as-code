@@ -93,7 +93,7 @@ export function parseFilterScope(command: string): CacheScope | null {
 }
 
 /** Read the workspace package directories from pnpm-workspace.yaml globs. */
-function workspacePackageDirs(root: string): Map<string, string> {
+export function workspacePackageDirs(root: string): Map<string, string> {
   const byName = new Map<string, string>();
   const wsFile = path.join(root, "pnpm-workspace.yaml");
   if (!existsSync(wsFile)) {
