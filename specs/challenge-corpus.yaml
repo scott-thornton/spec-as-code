@@ -33,7 +33,7 @@ requirements:
     priority: must
     category: behavioral
     scope:
-      include: [challenges/**, packages/cli/src/**]
+      include: [challenges/**, packages/cli/**]
     acceptance:
       - id: CORPUS-001-A
         type: command
@@ -52,7 +52,7 @@ requirements:
     priority: must
     category: behavioral
     scope:
-      include: [challenges/**, packages/cli/src/**]
+      include: [challenges/**, packages/cli/**]
     acceptance:
       - id: CORPUS-002-A
         type: command
@@ -70,7 +70,7 @@ requirements:
     priority: must
     category: behavioral
     scope:
-      include: [challenges/**, packages/cli/src/**]
+      include: [challenges/**, packages/cli/**]
     acceptance:
       - id: CORPUS-003-A
         type: command
