@@ -25,6 +25,7 @@ import { runSpecLint } from "./commands/lint.js";
 import { runApplyOwner } from "./commands/owner.js";
 import { runRecoveryCommand } from "./commands/recovery.js";
 import { runChallengeCommand } from "./commands/challenge.js";
+import { runImpactCommand } from "./commands/impact.js";
 
 const program = new Command();
 
@@ -181,6 +182,15 @@ program
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action(async (fixtureRef: string, opts: { cwd?: string }) => {
     process.exitCode = await runChallengeCommand(fixtureRef, opts.cwd);
+  });
+
+program
+  .command("impact <range>")
+  .description("read-only report: which recorded observations a revision range may touch (specs/evidence-impact-report) - projections are derived from declared scopes, never an authority for satisfaction")
+  .option("--json", "machine-readable output")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action(async (rangeArg: string, opts: { json?: boolean; cwd?: string }) => {
+    process.exitCode = await runImpactCommand(rangeArg, opts);
   });
 
 program
