@@ -57,10 +57,10 @@ export function classifyReproduction(original?: SideEvidence, fresh?: SideEviden
  *  fabricates divergence on every healthy red-to-green apply run (the
  *  adversarial F1 on run-mwa5bo8b). Last record per criterionId wins
  *  (evidence is append-only). */
-export function latestByCriterion(records: readonly SideEvidence[]): Map<string, SideEvidence> {
+export function latestByCriterion(records: readonly (SideEvidence & { phase?: string })[]): Map<string, SideEvidence> {
   const latest = new Map<string, SideEvidence>();
   for (const record of records) {
-    if ((record as { phase?: string }).phase === "red") continue;
+    if (record.phase === "red") continue;
     latest.set(record.criterionId, record);
   }
   return latest;
