@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { compileSpecFile } from "@spc/repo";
 
 // Oracle for specs/reproduce-verification.yaml REPRO-001/REPRO-004
 // (red, committed pre-run): spc reproduce <runId> re-executes a run's
@@ -57,7 +58,9 @@ beforeAll(() => {
   sh(["-c", "user.name=t", "-c", "user.email=t@t", "add", "-A"]);
   sh(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base"]);
   resultRevision = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).stdout.trim();
-  originalDigest = "sha256:" + createHash("sha256").update(specYaml, "utf8").digest("hex");
+  // The real writer records the COMPILED spec digest, not a text digest.
+  const compiled = compileSpecFile(path.join(root, "specs", "repro-demo.yaml"));
+  originalDigest = compiled.ok && compiled.ir ? compiled.ir.digest : "sha256:unrecorded";
   // A fabricated but faithful original run: metadata, state (result
   // revision), and evidence naming both criteria as supports.
   const runDir = path.join(root, ".spc", "runs", RUN_ID);

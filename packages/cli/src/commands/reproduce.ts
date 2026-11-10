@@ -26,7 +26,7 @@ import {
  * and the two are never conflated.
  */
 
-const CLI = new URL("../dist/main.js", import.meta.url).pathname;
+const CLI = new URL("../main.js", import.meta.url).pathname;
 
 interface EvidenceRecord {
   id?: string;
@@ -192,8 +192,8 @@ export async function runReproduceCommand(runId: string, opts?: { json?: boolean
       ...(original.command ? { commandDigest: commandDigest(original.command) } : {}),
     };
   });
-  const counts = { reproduced: 0, diverged: 0, "not-comparable": 0, inconclusive: 0 } as Record<string, number>;
-  for (const row of rows) counts[row.verdict]++;
+  const counts: Record<string, number> = { reproduced: 0, diverged: 0, "not-comparable": 0, inconclusive: 0 };
+  for (const row of rows) counts[row.verdict] = (counts[row.verdict] ?? 0) + 1;
 
   if (opts?.json) {
     console.log(
@@ -210,10 +210,10 @@ export async function runReproduceCommand(runId: string, opts?: { json?: boolean
         2,
       ),
     );
-    return counts["diverged"] > 0 ? 1 : 0;
+    return (counts["diverged"] ?? 0) > 0 ? 1 : 0;
   }
 
-  console.log(`reproduce ${runId} -> ${freshRunId} at ${resultRevision.slice(0, 12)}`);
+  console.log(`reproduce ${runId} -> new verification run ${freshRunId} at ${resultRevision.slice(0, 12)}`);
   if (!comparability.comparable) {
     console.log(`comparability: PARTIAL - ${comparability.reasons.join("; ")}`);
   }
@@ -226,5 +226,5 @@ export async function runReproduceCommand(runId: string, opts?: { json?: boolean
   console.log(
     `summary: ${counts["reproduced"]} reproduced, ${counts["diverged"]} diverged, ${counts["not-comparable"]} not-comparable, ${counts["inconclusive"]} inconclusive`,
   );
-  return counts["diverged"] > 0 ? 1 : 0;
+  return (counts["diverged"] ?? 0) > 0 ? 1 : 0;
 }
