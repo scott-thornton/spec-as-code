@@ -26,6 +26,7 @@ import { runApplyOwner } from "./commands/owner.js";
 import { runRecoveryCommand } from "./commands/recovery.js";
 import { runChallengeCommand } from "./commands/challenge.js";
 import { runImpactCommand } from "./commands/impact.js";
+import { runReproduceCommand } from "./commands/reproduce.js";
 
 const program = new Command();
 
@@ -191,6 +192,15 @@ program
   .option("--cwd <dir>", "repository directory", process.cwd())
   .action(async (rangeArg: string, opts: { json?: boolean; cwd?: string }) => {
     process.exitCode = await runImpactCommand(rangeArg, opts);
+  });
+
+program
+  .command("reproduce <runId>")
+  .description("re-execute a run's recorded verification at its committed result revision and compare honestly (specs/reproduce-verification): reproduced / diverged / not-comparable / inconclusive per criterion - infrastructure in the new execution is inconclusive, never divergence; the original run is only ever read")
+  .option("--json", "machine-readable output")
+  .option("--cwd <dir>", "repository directory", process.cwd())
+  .action(async (runId: string, opts: { json?: boolean; cwd?: string }) => {
+    process.exitCode = await runReproduceCommand(runId, opts);
   });
 
 program
