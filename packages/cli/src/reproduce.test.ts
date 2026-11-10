@@ -132,7 +132,7 @@ describe("REPRO-001/REPRO-004: reproduce end to end", () => {
   it("--json links the fresh run id and carries per-criterion rows with the verdicts", () => {
     const r = spawnSync(process.execPath, [CLI, "reproduce", RUN_ID, "--json"], { cwd: root, encoding: "utf8", timeout: 120_000 });
     expect(r.status).toBe(0);
-    const parsed = JSON.parse((r.stdout ?? "").split("\n").filter((l) => l.startsWith("{")).join("") || (r.stdout ?? "")) as { freshRunId?: string; criteria?: { id: string; verdict: string }[] };
+    const parsed = JSON.parse((r.stdout ?? "").trim()) as { freshRunId?: string; criteria?: { id: string; verdict: string }[] };
     expect(typeof parsed.freshRunId).toBe("string");
     expect(parsed.freshRunId).toMatch(/^v-/);
     expect(parsed.criteria?.find((c) => c.id === "RD-001-A")?.verdict).toBe("reproduced");

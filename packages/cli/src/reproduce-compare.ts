@@ -85,7 +85,7 @@ export interface ComparabilityInput {
 export function checkComparability(input: ComparabilityInput): { comparable: boolean; reasons: string[] } {
   const reasons: string[] = [];
   if (input.recordedSpecDigest === undefined) {
-    reasons.push("the run recorded no spec digest; identity cannot be established");
+    reasons.push("the run never recorded a spec digest; identity cannot be established");
   } else if (input.specDigestAtRevision === undefined) {
     reasons.push(
       `spec does not compile at the result revision; the recorded spec digest ${input.recordedSpecDigest} cannot be matched`,
