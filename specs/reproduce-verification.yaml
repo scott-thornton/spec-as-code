@@ -1,0 +1,117 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: reproduce-verification
+  title: Compare independent verification with recorded evidence
+  description: Order 3; extends verify --run with dependency preflight and an honest comparison report.
+goal: >
+  An operator can retry a run's recorded verification at its
+  committed result revision and compare the new observations with the
+  originals - clearly distinguishing reproduced outcomes from
+  divergence AND from environmental non-comparability. The guarantee
+  is honest, not universal: integrity always (the bundle machinery
+  owns that), independent reproduction where determinism allows,
+  explicit not-comparable labels where it cannot. The core attribution
+  rule carries the classification work forward: an infrastructure
+  death, budget timeout, or admission refusal in the NEW execution is
+  inconclusive, never divergence - the machine failing to observe is
+  not the artifact failing to reproduce. The existing verify --run
+  path is the execution seam (disposable worktree at the result
+  revision, criteria through the frozen executor with host admission);
+  reproduction adds the preflight comparability check and the
+  comparison report, and creates its evidence as ordinary runs -
+  original records are never rewritten.
+requirements:
+  - id: REPRO-001
+    statement: >
+      spc reproduce <runId> identifies the run, its committed result
+      revision, the frozen spec and criterion identities, and the
+      original evidence records; re-execution rides the existing
+      verify --run machinery in its disposable worktree (a normal
+      verification run - new run record, new evidence, original
+      untouched).
+    priority: must
+    category: behavioral
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: REPRO-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/reproduce.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: REPRO-002
+    statement: >
+      Before comparing, reproduction checks comparability: the
+      recorded spec/suite/criterion identities match the frozen
+      definitions, and the execution prerequisites are available.
+      Missing or mismatched artifacts, environment details, or
+      dependencies are explicitly not-comparable or inconclusive - a
+      convenient current replacement is never silently treated as the
+      original dependency.
+    priority: must
+    category: operational
+    dependsOn: [REPRO-001]
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: REPRO-002-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/reproduce-dependencies.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: REPRO-003
+    statement: >
+      The comparison distinguishes reproduced, diverged,
+      not-comparable, and inconclusive per criterion - preserving both
+      evidence IDs, both revisions, the command digests, and the
+      failure classifications. Attribution rule: infrastructure
+      death, budget timeout, suite non-execution, and admission
+      refusal in the new execution are inconclusive, never divergence;
+      divergence requires comparable executions with opposing
+      attributed outcomes.
+    priority: must
+    category: behavioral
+    dependsOn: [REPRO-002]
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: REPRO-003-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/reproduce-comparison.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: REPRO-004
+    statement: >
+      Re-execution inherits host-battery admission and placement
+      through the criteria executor; the comparison reports through
+      the CLI in text and json, links the two run records, and never
+      rewrites the original run's records or conclusions.
+    priority: must
+    category: architectural
+    dependsOn: [REPRO-003]
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: REPRO-004-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/reproduce.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+constraints:
+  - id: REPRO-C01
+    statement: >
+      Export-bundle integrity remains a distinct guarantee from
+      independent reproduction: a valid bundle asserts its records are
+      intact, never that re-execution succeeds.
+    priority: must
+    acceptance:
+      - id: REPRO-C01-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/bundle-verify.test.ts
+        expect: {exitCode: 0}
+outOfScope:
+  - Universal hermetic reproduction or arbitrary historical environment provisioning.
+  - Network installation or mutation of missing dependencies without operator approval.
+  - Claiming cryptographic integrity implies behavioral reproducibility.
+  - Retrospective changes to a prior run's satisfaction verdict.
