@@ -1,0 +1,121 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: research-pdf-dogfood
+  title: Non-code research and PDF verification dogfood
+  description: Parallel experiment; tests the current kernel's generality before any artifact abstraction is considered.
+goal: >
+  A stand-alone git repository containing research source and a
+  generated PDF runs the ordinary spc loop - plan, bounded execution,
+  verify, evidence - with three deliberately different defects
+  producing distinguishable results. This is the generality test for
+  the kernel: the write-scope, protected-path, patch-op, deadline,
+  and ownership machinery are path-and-command shaped, not
+  language-shaped, and this experiment holds that to the light. The
+  fixture is fully deterministic and offline: the "generated" PDF is
+  a committed, handcrafted minimal artifact (fixture-authored
+  scripts define the acceptance commands - source assertions,
+  manuscript-PDF correspondence, layout markers), because the point
+  is whether the LOOP works on non-code, not building a PDF
+  verifier. The experiment deliberately collides with the declined
+  artifact-evidence ruling (the operator's 2026-11-07 constitutional
+  decision): whether PDF correspondence can be verified as ordinary
+  command criteria without a new evidence class IS the question.
+requirements:
+  - id: RPDF-001
+    statement: >
+      The deterministic fixture initializes a separate git repository
+      (manuscript.md, references.json, data/observations.csv, a
+      committed minimal PDF, fixture-authored test scripts, specs/
+      with command criteria invoking those scripts) and spc operates
+      on it via its existing --cwd path - init, spec validate, plan
+      surfaces, apply, and verify all function against the non-code
+      repository without core changes.
+    priority: must
+    category: compatibility
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: RPDF-001-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/research-pdf.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: RPDF-002
+    statement: >
+      Two defect classes stay distinguishable: a source-content
+      defect (a wrong number in the manuscript) violates the
+      semantic/data criterion while the PDF-correspondence criterion
+      passes (the PDF still matches the manuscript as-committed only
+      when regenerated; a stale-PDF defect - manuscript changed, PDF
+      unchanged - violates the correspondence criterion even though
+      every source assertion passes).
+    priority: must
+    category: behavioral
+    dependsOn: [RPDF-001]
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: RPDF-002-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/research-pdf-defects.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: RPDF-003
+    statement: >
+      A third, independent defect class: a semantically correct
+      manuscript with a fixture-defined visible layout defect in the
+      rendered artifact is rejected by an independent layout
+      criterion; when the fixture's render check cannot determine the
+      result deterministically, the outcome is inconclusive through
+      the existing classification family - never a fabricated visual
+      failure.
+    priority: must
+    category: behavioral
+    dependsOn: [RPDF-001]
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: RPDF-003-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/research-pdf-render.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: RPDF-004
+    statement: >
+      The fixture's outcomes and evidence provenance are inspectable
+      through the existing surfaces (run records, verify output,
+      status) with no new core artifact type, no domain-specific
+      evidence status, and no change to @spc/core; the acceptance
+      commands ride the criteria executor with host admission like
+      any other repository.
+    priority: must
+    category: architectural
+    dependsOn: [RPDF-002, RPDF-003]
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: RPDF-004-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/research-pdf.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+constraints:
+  - id: RPDF-C01
+    statement: >
+      The experiment is offline and deterministic in CI: all
+      artifacts and fixture scripts are committed to the fixture
+      repository, pinned to a git revision; nothing is fetched or
+      generated from the network.
+    priority: must
+    acceptance:
+      - id: RPDF-C01-A
+        type: command
+        command: pnpm --filter @spc/cli... build > /dev/null && pnpm --filter @spc/cli exec vitest run src/research-pdf-render.test.ts
+        expect: {exitCode: 0}
+outOfScope:
+  - Building a generic document, PDF, design, or research adapter framework (the operator's ruling - no artifact abstraction before demonstrated need; this experiment IS the demonstration either way)
+  - Semantic certification of arbitrary prose or subjective design judgments.
+  - Pixel-identical output across unpinned rendering environments.
+  - New infrastructure, network access, or a live external source requirement.
+  - Admitting binary artifacts as committable EVIDENCE (the declined ruling stands - correspondence is verified by command criteria, not by new evidence classes)
