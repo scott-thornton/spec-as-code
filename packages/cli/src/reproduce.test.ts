@@ -67,9 +67,28 @@ beforeAll(() => {
   mkdirSync(runDir, { recursive: true });
   writeFileSync(path.join(runDir, "metadata.json"), JSON.stringify({ kind: "apply", runId: RUN_ID, specId: "repro-demo", specDigest: originalDigest, createdAt: "2026-11-10T00:00:00.000Z", baseRevision: resultRevision }, null, 2) + "\n", "utf8");
   writeFileSync(path.join(runDir, "state.json"), JSON.stringify({ status: "succeeded", resultRevision }, null, 2) + "\n", "utf8");
-  const ev = (id: string, criterionId: string, kind: string, payload: Record<string, unknown>) =>
-    JSON.stringify({ id, runId: RUN_ID, criterionId, propertyRefs: ["RD-001"], kind, outcome: "supports", producer: { type: "runtime" }, timestamp: "2026-11-10T00:00:01.000Z", repositoryRevision: resultRevision, payload });
-  writeFileSync(path.join(runDir, "evidence.jsonl"), [ev("ev-orig-1", "RD-001-A", "file", { path: "fact.txt", observed: { exists: true } }), ev("ev-orig-2", "RD-001-B", "command", { command: "node check.js", exitCode: 0 })].join("\n") + "\n", "utf8");
+  // FAITHFUL to real apply-run evidence: a red-phase record (base
+  // observation - the evaluator itself excludes it) plus a duplicate
+  // final record per criterion. Reproduce must collapse to the latest
+  // non-red record per criterion; per-record comparison would
+  // fabricate divergence (the adversarial F1 on run-mwa5bo8b).
+  const ev = (id: string, criterionId: string, kind: string, outcome: string, payload: Record<string, unknown>, phase?: string, timestamp = "2026-11-10T00:00:01.000Z") =>
+    JSON.stringify({ id, runId: RUN_ID, criterionId, propertyRefs: ["RD-001"], kind, outcome, producer: { type: "runtime" }, timestamp, repositoryRevision: resultRevision, ...(phase ? { phase } : {}), payload });
+  const lines = [
+    ev("ev-red-1", "RD-001-A", "file", "contradicts", { path: "fact.txt", observed: { exists: true } }, "red", "2026-11-09T23:59:00.000Z"),
+    ev("ev-orig-1", "RD-001-A", "file", "supports", { path: "fact.txt", observed: { exists: true } }),
+    ev("ev-orig-1b", "RD-001-A", "file", "supports", { path: "fact.txt", observed: { exists: true } }, undefined, "2026-11-10T00:00:02.000Z"),
+    ev("ev-red-2", "RD-001-B", "command", "contradicts", { command: "node check.js", exitCode: 1 }, "red", "2026-11-09T23:59:01.000Z"),
+    ev("ev-orig-2", "RD-001-B", "command", "supports", { command: "node check.js", exitCode: 0 }),
+  ];
+  writeFileSync(path.join(runDir, "evidence.jsonl"), lines.join("\n") + "\n", "utf8");
+  // A second run with EMPTY evidence: reproduce must refuse by name,
+  // never emit a vacuous all-zero green report.
+  const emptyDir = path.join(root, ".spc", "runs", "run-empty0001-cccc");
+  mkdirSync(emptyDir, { recursive: true });
+  writeFileSync(path.join(emptyDir, "metadata.json"), JSON.stringify({ kind: "apply", runId: "run-empty0001-cccc", specId: "repro-demo", specDigest: originalDigest, createdAt: "2026-11-10T01:00:00.000Z" }, null, 2) + "\n", "utf8");
+  writeFileSync(path.join(emptyDir, "state.json"), JSON.stringify({ status: "succeeded", resultRevision }, null, 2) + "\n", "utf8");
+  writeFileSync(path.join(emptyDir, "evidence.jsonl"), "", "utf8");
 });
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
@@ -109,6 +128,21 @@ describe("REPRO-001/REPRO-004: reproduce end to end", () => {
     const runsAfter = readdirSync(path.join(root, ".spc", "runs"));
     expect(runsAfter.filter((d) => !runsBefore.has(d)).length).toBeGreaterThanOrEqual(1);
   }, 180_000);
+
+  it("--json links the fresh run id and carries per-criterion rows with the verdicts", () => {
+    const r = spawnSync(process.execPath, [CLI, "reproduce", RUN_ID, "--json"], { cwd: root, encoding: "utf8", timeout: 120_000 });
+    expect(r.status).toBe(0);
+    const parsed = JSON.parse((r.stdout ?? "").split("\n").filter((l) => l.startsWith("{")).join("") || (r.stdout ?? "")) as { freshRunId?: string; criteria?: { id: string; verdict: string }[] };
+    expect(typeof parsed.freshRunId).toBe("string");
+    expect(parsed.freshRunId).toMatch(/^v-/);
+    expect(parsed.criteria?.find((c) => c.id === "RD-001-A")?.verdict).toBe("reproduced");
+  }, 180_000);
+
+  it("a run with NO original evidence refuses by name (exit 2), never a vacuous green report", () => {
+    const r = spawnSync(process.execPath, [CLI, "reproduce", "run-empty0001-cccc"], { cwd: root, encoding: "utf8", timeout: 60_000 });
+    expect(r.status).toBe(2);
+    expect((r.stdout ?? "") + (r.stderr ?? "")).toMatch(/REPRO_NO_EVIDENCE|no recorded evidence/i);
+  });
 
   it("an unknown run refuses by name (exit 2), never an empty report", () => {
     const r = spawnSync(process.execPath, [CLI, "reproduce", "run-nosuch-0000"], { cwd: root, encoding: "utf8", timeout: 60_000 });
