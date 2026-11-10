@@ -41,7 +41,8 @@ describe("RPDF-001: the loop runs on a non-code repository", () => {
   it("the baseline verify reports the source defect (RPF-001) while correspondence holds (RPF-002)", () => {
     const r = spc(fx, ["verify", "specs/paper.yaml"]);
     expect(r.status).not.toBe(0);
-    expect(r.out).toMatch(/unsatisfied[^\n]*RPF-001|RPF-001[^\n]*unsatisfied/);
+    expect(r.out).toMatch(/^\s{2}unsatisfied\s+RPF-001/m);
+    expect(r.out).toMatch(/^\s{2}satisfied\s+RPF-002/m);
     expect(r.out).toMatch(/satisfied[^\n]*RPF-002|RPF-002[^\n]*satisfied/);
   }, 120_000);
 
@@ -62,7 +63,7 @@ describe("RPDF-001: the loop runs on a non-code repository", () => {
     const r = spc(fx, ["apply", path.join(".spc", "plans", planFile)], 240_000);
     expect(r.status).toBe(0);
     for (const id of ["RPF-001", "RPF-002", "RPF-003"]) {
-      expect(r.out).toMatch(new RegExp(`satisfied[^\\n]*${id}|${id}[^\\n]*satisfied`));
+      expect(r.out).toMatch(new RegExp(`^\\s{2}satisfied\\s+${id}`, "m"));
     }
     // The non-code artifacts were actually changed and committed.
     expect(readFileSync(path.join(fx.root, "manuscript.md"), "utf8")).toContain("Result: 41");
@@ -86,11 +87,14 @@ describe("RPDF-004: outcomes and provenance through the existing surfaces, no ne
     expect(evidence).toContain("RPF-002-A");
     const status = spc(fx, ["status"]);
     expect(status.status).toBe(0);
-    expect(status.out).toContain("paper");
+    expect(status.out).toMatch(/3\/3 must satisfied/);
   }, 120_000);
 
   it("the non-code repository needed nothing beyond its own files - no core artifacts leaked in", () => {
     const top = readdirSync(fx.root).sort();
     expect(top).toEqual([".git", ".gitignore", ".spc", "checks", "data", "manuscript.md", "paper.pdf", "references.json", "specs"]);
+    // And nothing leaked one level deep either.
+    expect(readdirSync(path.join(fx.root, "checks")).sort()).toEqual(["correspondence-check.mjs", "layout-check.mjs", "source-check.mjs"]);
+    expect(readdirSync(path.join(fx.root, "specs"))).toEqual(["paper.yaml"]);
   });
 });

@@ -220,6 +220,11 @@ export function makePdfRepo(variant: PdfVariant): PdfFixture {
   write("specs/paper.yaml", SPEC);
   write(".gitignore", ".spc/runs/\n.spc/plans/\n.spc/worktrees/\n.spc/cache/\n.spc/harness/\n");
   git(["init", "-q", "-b", "main"]);
+  // spc init ON THE REAL SUBSTRATE (a git repository that already
+  // carries the research content) creates specs/ and .spc/ with the
+  // default config - the fixture then replaces the provider surface.
+  const init = spc({ root, specFile: "" }, ["init"]);
+  if (init.status !== 0) throw new Error("spc init failed on the fixture substrate: " + init.out);
   // The scripted model surface: the full loop carries the corrective
   // plan; every other variant carries an inert stub (verify constructs
   // the provider but never consults the planner).

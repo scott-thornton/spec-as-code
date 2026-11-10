@@ -30,7 +30,10 @@ requirements:
       with command criteria invoking those scripts) and spc operates
       on it via its existing --cwd path - init, spec validate, plan
       surfaces, apply, and verify all function against the non-code
-      repository without core changes.
+      repository without core changes. The loop's model surface is
+      the fake provider's scripted YAML: the pipeline around the
+      model (write scope, applicator, guards, verification) is what
+      this experiment exercises, not model reasoning.
     priority: must
     category: compatibility
     scope:

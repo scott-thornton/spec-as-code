@@ -30,15 +30,21 @@ describe("RPDF-003: layout defects and undeterminable renders", () => {
   it("defect C (missing page footer): layout RED, source and correspondence GREEN", () => {
     const r = spc(c, ["verify", "specs/paper.yaml"], 120_000);
     expect(r.status).not.toBe(0);
-    expect(r.out).toMatch(/unsatisfied[^\n]*RPF-003|RPF-003[^\n]*unsatisfied/);
-    expect(r.out).toMatch(/satisfied[^\n]*RPF-001|RPF-001[^\n]*satisfied/);
-    expect(r.out).toMatch(/satisfied[^\n]*RPF-002|RPF-002[^\n]*satisfied/);
+    expect(r.out).toMatch(/^\s{2}unsatisfied\s+RPF-003/m);
+    expect(r.out).toMatch(/^\s{2}satisfied\s+RPF-001/m);
+    expect(r.out).toMatch(/^\s{2}satisfied\s+RPF-002/m);
+    expect(r.out).not.toMatch(/^\s{2}unsatisfied\s+RPF-00[12]/m);
   }, 180_000);
 
   it("an undeterminable render is INDETERMINATE (budget-timeout), never a fabricated visual failure", () => {
     const r = spc(d, ["verify", "specs/paper.yaml"], 120_000);
-    expect(r.out).toMatch(/indeterminate[^\n]*RPF-003|RPF-003[^\n]*indeterminate/);
-    expect(r.out).not.toMatch(/unsatisfied[^\n]*RPF-003|RPF-003[^\n]*unsatisfied/);
+    expect(r.out).toMatch(/^\s{2}indeterminate\s+RPF-003/m);
+    expect(r.out).not.toMatch(/^\s{2}unsatisfied\s+RPF-003/m);
+    // The asymmetry made visible: the corrupt bytes ALSO fabricate a red one
+    // criterion over (correspondence-check exits 1 on undeterminable input)
+    // - the principled refusal belongs to the layout check, not the kernel.
+    expect(r.out).toMatch(/^\s{2}unsatisfied\s+RPF-002/m);
+    expect(evidenceOutput(d)).toMatch(/undeterminable correspondence/);
     expect(evidenceOutput(d)).toMatch(/cannot determine|refusing to fabricate/i);
     // The other two criteria still resolved - the machine's failure to
     // see did not sink the whole sweep.
@@ -55,10 +61,11 @@ describe("RPDF-C01: offline and deterministic in CI", () => {
       // The check scripts and config are pure filesystem - no network.
       for (const check of readdirSync(path.join(fixture.root, "checks"))) {
         const src = readFileSync(path.join(fixture.root, "checks", check), "utf8");
-        expect(src).not.toMatch(/https?:|fetch\(|net\.connect|axios|node-fetch/);
+        expect(src).not.toMatch(/https?:|fetch\(|net\.connect|axios|node-fetch|node:http|node:dns|undici/);
       }
       const config = readFileSync(path.join(fixture.root, ".spc", "config.yaml"), "utf8");
       expect(config).not.toMatch(/https?:/);
+      expect(config).toContain("name: fake");
     }
   });
 });
