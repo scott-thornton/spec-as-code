@@ -102,6 +102,20 @@ describe("IMP-002 rectification: completeness of the declared scope", () => {
     expect(b.projection).toBe("scope-disjoint");
   });
 
+  it("a .pnpmfile.cjs change also intersects workspace-union scopes - the hooks define the closure as much as the yaml (verify already knows; impact syncs)", () => {
+    const start = spawnSync("git", ["rev-parse", "HEAD"], { cwd: fx.root, encoding: "utf8" }).stdout.trim();
+    writeFileSync(path.join(fx.root, ".pnpmfile.cjs"), "module.exports = { hooks: {} };\n", "utf8");
+    expect(gc(["add", "-A"]).status).toBe(0);
+    expect(gc(["commit", "-qm", "touch pnpmfile"]).status).toBe(0);
+    const head5 = spawnSync("git", ["rev-parse", "HEAD"], { cwd: fx.root, encoding: "utf8" }).stdout.trim();
+    const report = impactJson(start, head5);
+    const e = projectionOf(report, "IMPD-001-E");
+    expect(e.projection).toBe("scope-intersected");
+    expect(e.source).toMatch(/pnpmfile|workspace-defining/i);
+    const b = projectionOf(report, "IMPD-001-B");
+    expect(b.projection).toBe("scope-disjoint");
+  });
+
   it("a declared package that does not resolve makes the scope incomplete - undetermined, never disjoint", () => {
     const report = impactJson(fx.base, fx.head);
     const f = projectionOf(report, "IMPD-001-F");

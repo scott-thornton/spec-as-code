@@ -34,6 +34,9 @@ export function makeImpactRepo(): ImpactFixture {
   };
 
   write("pnpm-workspace.yaml", "packages:\n  - packages/*\n");
+  // A committed pnpmfile: readPackage hooks rewrite manifests and alter
+  // install/closure behavior - it defines the workspace as much as the yaml.
+  write(".pnpmfile.cjs", "module.exports = {};\n");
   write("package.json", '{ "name": "demo-root", "private": true }\n');
   write("packages/pkg-a/package.json", '{ "name": "@demo/pkg-a", "private": true }\n');
   write("packages/pkg-a/src/a.ts", "export const a = 1;\n");
