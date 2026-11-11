@@ -136,13 +136,15 @@ function makeDsvRepo(): FreshDsv {
   write("pnpm-workspace.yaml", "packages:\n  - pkg-a\n  - pkg-b\n");
   write("package.json", JSON.stringify({ name: "fixture-root", private: true }));
   write("pkg-a/package.json", JSON.stringify({ name: "pkg-a", version: "0.0.0", scripts: { nothing: "node ../ok.cjs" } }));
-  write("pkg-b/package.json", JSON.stringify({ name: "pkg-b", version: "0.0.0", scripts: { nothing: "node ../ok.cjs" } }));
+  // pkg-b also declares an UNRESOLVABLE workspace dependency: the ...
+  // closure is incomplete by one member (the confirmation pass's F1).
+  write("pkg-b/package.json", JSON.stringify({ name: "pkg-b", version: "0.0.0", scripts: { nothing: "node ../ok.cjs" }, dependencies: { "ghost-dep": "workspace:*" } }));
   write("ok.cjs", "process.exit(0);\n");
   // A TRACKED dist artifact: the filtered file set must not treat it as
   // outside a scope that contains it.
   write("pkg-b/dist/gen.js", "console.log(1);\n");
   write("specs/dsv.yaml",
-    'apiVersion: spc.dev/v1alpha1\nkind: Spec\nmetadata:\n  id: dsv\n  title: DSV\ngoal: fixture\nrequirements:\n  - id: DSV-001\n    statement: holds\n    priority: must\n    acceptance:\n      - id: DSV-001-A\n        type: file\n        path: pkg-a/x.txt\n        assert:\n          exists: true\n      - id: DSV-001-B\n        type: command\n        command: pnpm --filter pkg-b run nothing\n        expect:\n          exitCode: 0\n      - id: DSV-001-C\n        type: command\n        command: node ok.cjs\n        expect:\n          exitCode: 0\n      - id: DSV-001-D\n        type: command\n        command: pnpm -r run nothing\n        expect:\n          exitCode: 0\n      - id: DSV-001-E\n        type: command\n        command: pnpm --filter pkg-b --filter ghost-pkg run nothing\n        expect:\n          exitCode: 0\n');
+    'apiVersion: spc.dev/v1alpha1\nkind: Spec\nmetadata:\n  id: dsv\n  title: DSV\ngoal: fixture\nrequirements:\n  - id: DSV-001\n    statement: holds\n    priority: must\n    acceptance:\n      - id: DSV-001-A\n        type: file\n        path: pkg-a/x.txt\n        assert:\n          exists: true\n      - id: DSV-001-B\n        type: command\n        command: pnpm --filter pkg-b run nothing\n        expect:\n          exitCode: 0\n      - id: DSV-001-C\n        type: command\n        command: node ok.cjs\n        expect:\n          exitCode: 0\n      - id: DSV-001-D\n        type: command\n        command: pnpm -r run nothing\n        expect:\n          exitCode: 0\n      - id: DSV-001-E\n        type: command\n        command: pnpm --filter pkg-b --filter ghost-pkg run nothing\n        expect:\n          exitCode: 0\n      - id: DSV-001-F\n        type: command\n        command: pnpm --filter pkg-b... run nothing\n        expect:\n          exitCode: 0\n');
   write("pkg-a/x.txt", "x\n");
   write(".gitignore", ".spc/\n");
   git(["init", "-q", "-b", "main"]);
@@ -206,5 +208,15 @@ describe("DSV-001 rectification: a skip must be PROVEN disjoint", () => {
     const skipped = skippedIds(r.stdout);
     expect(skipped).not.toContain("DSV-001-E");
     expect(skipped).toEqual(["DSV-001-B"]); // pkg-b genuinely untouched and fully resolvable: the one proven skip
+  });
+
+  it("channel 3, one level deeper - an unresolvable workspace DEPENDENCY in the ... closure makes the scope incomplete: never a skip (the confirmation pass's F1)", { timeout: 120_000 }, () => {
+    const fx = makeDsvRepo();
+    fx.touch("pkg-a/x.txt");
+    const r = fx.sh(["verify", "--scoped-to-diff", fx.base, "specs/dsv.yaml", "--format", "json"]);
+    expect(r.status).toBe(0);
+    const skipped = skippedIds(r.stdout);
+    expect(skipped).not.toContain("DSV-001-F");
+    expect(skipped).toEqual(["DSV-001-B"]); // the closure ghost evaluates; only the plain pkg-b scope is proven disjoint
   });
 });
