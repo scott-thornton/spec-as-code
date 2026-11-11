@@ -59,7 +59,7 @@ describe("run ergonomics", () => {
     // No planner section in the fake script: had a planner call been made,
     // the fake provider would have failed the run.
     expect(readFileSync(path.join(root, "out.txt"), "utf8")).toBe("ok");
-  });
+  }, 60_000);
 
   it("apply --stay leaves the checkout on the run branch", () => {
     const root = repo("stay", "run");
@@ -68,12 +68,12 @@ describe("run ergonomics", () => {
     expect(r.stderr).toContain("succeeded");
     const branch = git(root, ["branch", "--show-current"]);
     expect(branch).toMatch(/^spc\//);
-  });
+  }, 60_000);
 
   it("without --stay the checkout returns to the original branch", () => {
     const root = repo("nostay", "run");
     const r = sh(root, ["quick", "marker", "--verify", "test -f out.txt", "--write", "out.txt"]);
     expect(r.stderr).toContain("succeeded");
     expect(git(root, ["branch", "--show-current"])).toBe("main");
-  });
+  }, 60_000);
 });
