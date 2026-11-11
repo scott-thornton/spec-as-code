@@ -117,6 +117,9 @@ interface FreshDsv {
   base: string;
   sh: (args: string[]) => { status: number; stdout: string };
   touch: (rel: string) => void;
+  /** Touch the workspace yaml VALIDLY - appending a stray line would
+   *  corrupt the workspace and fail pnpm for the wrong reason. */
+  touchWorkspace: () => void;
 }
 
 function makeDsvRepo(): FreshDsv {
@@ -159,6 +162,11 @@ function makeDsvRepo(): FreshDsv {
       git(["-c", "user.name=t", "-c", "user.email=t@t", "add", "-A"]);
       git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", `touch ${rel}`]);
     },
+    touchWorkspace: () => {
+      writeFileSync(path.join(root, "pnpm-workspace.yaml"), "packages:\n  - pkg-a\n  - pkg-b\n  - tools/*\n", "utf8");
+      git(["-c", "user.name=t", "-c", "user.email=t@t", "add", "-A"]);
+      git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "touch workspace config"]);
+    },
   };
 }
 
@@ -181,7 +189,7 @@ describe("DSV-001 rectification: a skip must be PROVEN disjoint", () => {
 
   it("channel 2 - a workspace-defining config change never skips a workspace-union scope (pnpm -r closures are DEFINED by those files)", { timeout: 120_000 }, () => {
     const fx = makeDsvRepo();
-    fx.touch("pnpm-workspace.yaml");
+    fx.touchWorkspace();
     const r = fx.sh(["verify", "--scoped-to-diff", fx.base, "specs/dsv.yaml", "--format", "json"]);
     expect(r.status).toBe(0);
     const skipped = skippedIds(r.stdout);
