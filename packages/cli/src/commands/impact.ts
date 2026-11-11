@@ -29,7 +29,7 @@ type Projection = "scope-intersected" | "scope-disjoint" | "undetermined";
 
 /** The root files that define a pnpm workspace closure: a change to
  *  any of them affects every workspace-union scope (packages: null). */
-const WORKSPACE_DEFINING = ["pnpm-workspace.yaml", "package.json", "pnpm-lock.yaml", ".npmrc"];
+const WORKSPACE_DEFINING = ["pnpm-workspace.yaml", "package.json", "pnpm-lock.yaml", ".npmrc", ".pnpmfile.cjs"];
 
 interface CriterionLike {
   id: string;
@@ -150,7 +150,7 @@ function projectCriterion(
     // A changed path INSIDE a scope directory but outside the declared
     // file set (the node_modules/dist filters): the set is incomplete,
     // disjointness is not provable.
-    const dirPrefixes = dirs.map((d) => path.relative(repoRoot, d) + path.sep);
+    const dirPrefixes = dirs.map((d) => (path.relative(repoRoot, d) + path.sep).split(path.sep).join("/"));
     const shadowed = [...changedSet].find((c) => dirPrefixes.some((p) => c.startsWith(p)));
     if (shadowed !== undefined) {
       return {
