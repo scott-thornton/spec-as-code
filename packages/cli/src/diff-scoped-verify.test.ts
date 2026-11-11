@@ -105,3 +105,98 @@ describe("DSV-003: no evidence footprint", () => {
     expect(runsCount()).toBe(before + 1);
   });
 });
+
+// Rectification oracles (the backlog's live wire, 2026-11-11): verify's
+// own skip engine carries the three false-disjoint channels impact's
+// review found in the shared derivation - a SKIP is a criterion never
+// executed, so an unproven skip is vacuous-green territory. The spec's
+// banner letter is "proven disjoint"; these channels skip without
+// proof. Today they are red.
+interface FreshDsv {
+  root: string;
+  base: string;
+  sh: (args: string[]) => { status: number; stdout: string };
+  touch: (rel: string) => void;
+}
+
+function makeDsvRepo(): FreshDsv {
+  const root = mkdtempSync(path.join(tmpdir(), "spc-dsv-ch-"));
+  const git = (args: string[]): string => {
+    const r = spawnSync("git", args, { cwd: root, encoding: "utf8" });
+    if (r.status !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr}`);
+    return r.stdout;
+  };
+  const write = (rel: string, content: string): void => {
+    mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+    writeFileSync(path.join(root, rel), content, "utf8");
+  };
+  write("pnpm-workspace.yaml", "packages:\n  - pkg-a\n  - pkg-b\n");
+  write("package.json", JSON.stringify({ name: "fixture-root", private: true }));
+  write("pkg-a/package.json", JSON.stringify({ name: "pkg-a", version: "0.0.0", scripts: { nothing: "node ../ok.cjs" } }));
+  write("pkg-b/package.json", JSON.stringify({ name: "pkg-b", version: "0.0.0", scripts: { nothing: "node ../ok.cjs" } }));
+  write("ok.cjs", "process.exit(0);\n");
+  // A TRACKED dist artifact: the filtered file set must not treat it as
+  // outside a scope that contains it.
+  write("pkg-b/dist/gen.js", "console.log(1);\n");
+  write("specs/dsv.yaml",
+    'apiVersion: spc.dev/v1alpha1\nkind: Spec\nmetadata:\n  id: dsv\n  title: DSV\ngoal: fixture\nrequirements:\n  - id: DSV-001\n    statement: holds\n    priority: must\n    acceptance:\n      - id: DSV-001-A\n        type: file\n        path: pkg-a/x.txt\n        assert:\n          exists: true\n      - id: DSV-001-B\n        type: command\n        command: pnpm --filter pkg-b run nothing\n        expect:\n          exitCode: 0\n      - id: DSV-001-C\n        type: command\n        command: node ok.cjs\n        expect:\n          exitCode: 0\n      - id: DSV-001-D\n        type: command\n        command: pnpm -r run nothing\n        expect:\n          exitCode: 0\n      - id: DSV-001-E\n        type: command\n        command: pnpm --filter pkg-b --filter ghost-pkg run nothing\n        expect:\n          exitCode: 0\n');
+  write("pkg-a/x.txt", "x\n");
+  write(".gitignore", ".spc/\n");
+  git(["init", "-q", "-b", "main"]);
+  git(["-c", "user.name=t", "-c", "user.email=t@t", "add", "-A"]);
+  git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base"]);
+  const base = git(["rev-parse", "HEAD"]).trim();
+  return {
+    root,
+    base,
+    sh: (args) => {
+      const r = spawnSync(process.execPath, [CLI, ...args], { cwd: root, encoding: "utf8" });
+      return { status: r.status ?? -1, stdout: (r.stdout ?? "") + (r.stderr ?? "") };
+    },
+    touch: (rel) => {
+      const file = path.join(root, rel);
+      writeFileSync(file, (existsSync(file) ? readFileSync(file, "utf8") : "") + "t\n", "utf8");
+      git(["-c", "user.name=t", "-c", "user.email=t@t", "add", "-A"]);
+      git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", `touch ${rel}`]);
+    },
+  };
+}
+
+function skippedIds(stdout: string): string[] {
+  const parsed = JSON.parse(stdout) as { skippedCriteria?: { id: string }[] };
+  return (parsed["skippedCriteria"] ?? []).map((s) => s.id);
+}
+
+describe("DSV-001 rectification: a skip must be PROVEN disjoint", () => {
+  it("channel 1 - a changed TRACKED dist artifact inside the scope directory never skips that scope (the filtered file set is incomplete)", { timeout: 120_000 }, () => {
+    const fx = makeDsvRepo();
+    fx.touch("pkg-b/dist/gen.js");
+    const r = fx.sh(["verify", "--scoped-to-diff", fx.base, "specs/dsv.yaml", "--format", "json"]);
+    expect(r.status).toBe(0);
+    const skipped = skippedIds(r.stdout);
+    expect(skipped).not.toContain("DSV-001-B");
+    expect(skipped).not.toContain("DSV-001-D");
+    expect(skipped).toEqual(["DSV-001-A"]); // the untouched file path is the only PROVEN disjoint
+  });
+
+  it("channel 2 - a workspace-defining config change never skips a workspace-union scope (pnpm -r closures are DEFINED by those files)", { timeout: 120_000 }, () => {
+    const fx = makeDsvRepo();
+    fx.touch("pnpm-workspace.yaml");
+    const r = fx.sh(["verify", "--scoped-to-diff", fx.base, "specs/dsv.yaml", "--format", "json"]);
+    expect(r.status).toBe(0);
+    const skipped = skippedIds(r.stdout);
+    expect(skipped).not.toContain("DSV-001-D");
+    expect(skipped).not.toContain("DSV-001-E"); // the ghost makes E's scope incomplete: never a skip
+    expect(skipped).toEqual(["DSV-001-A", "DSV-001-B"]); // only the proven-disjoint package scopes skip
+  });
+
+  it("channel 3 - a declared package that does not resolve makes the scope incomplete: never a skip", { timeout: 120_000 }, () => {
+    const fx = makeDsvRepo();
+    fx.touch("pkg-a/x.txt");
+    const r = fx.sh(["verify", "--scoped-to-diff", fx.base, "specs/dsv.yaml", "--format", "json"]);
+    expect(r.status).toBe(0);
+    const skipped = skippedIds(r.stdout);
+    expect(skipped).not.toContain("DSV-001-E");
+    expect(skipped).toEqual(["DSV-001-B"]); // pkg-b genuinely untouched and fully resolvable: the one proven skip
+  });
+});
