@@ -4,7 +4,7 @@ import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "n
 import { gitOk, statusPorcelain } from "@spc/repo";
 import { renderGithubAnnotations, renderGithubSummary } from "@spc/renderer";
 import { createVerifyRun, freshnessCheck, inPlaceHandoffWarning, prepareDisposableWorktree, verifyBundle } from "@spc/runtime";
-import { CommandCache, parseFilterScope, resolveScopeDirs, trackedFiles, type SharedCommandRun } from "@spc/verifier";
+import { CommandCache, parseFilterScope, resolveScopeDirs, trackedFiles, workspacePackageDirs, type SharedCommandRun } from "@spc/verifier";
 import { verifyProperties, EventStore, EvidenceStore, FollowupStore } from "@spc/runtime";
 import { git } from "@spc/repo";
 import { createProvider, loadRepoConfig, resolveAllSpecs, resolveRepoRoot } from "../context.js";
@@ -347,6 +347,11 @@ export async function runVerify(
  * nothing anchors freshness, nothing can be mistaken for proof. The
  * claim shrinks honestly: the partial banner, never green-as-full.
  */
+/** The root files that define a pnpm workspace closure: a change to
+ *  any of them redefines every workspace-union scope (packages: null)
+ *  - such a scope can never be PROVEN disjoint against them. */
+const WORKSPACE_DEFINING = ["pnpm-workspace.yaml", "package.json", "pnpm-lock.yaml", ".npmrc", ".pnpmfile.cjs"];
+
 interface ScopedSkip {
   id: string;
   reason: string;
@@ -389,7 +394,7 @@ async function runScopedDiffVerify(
   for (const entry of allCriteria) {
     const c = entry.criterion;
     if (c.type === "file" && c.path !== undefined) {
-      const p = c.path.split(path.sep).join("/");
+      const p = c.path.replace(/^\.\//, "").split(path.sep).join("/");
       if (!changedSet.has(p)) {
         skipIds.add(c.id);
         skips.push({ id: c.id, reason: `untouched path: ${p} not in ${baseRev.slice(0, 8)}..HEAD` });
@@ -406,10 +411,52 @@ async function runScopedDiffVerify(
       if (command === "") continue; // nothing to derive from: evaluate
       const scope = parseFilterScope(command);
       if (scope === null) continue; // unscoped declares the workspace: never skip
+      // Completeness of the declared scope (the banner's letter is
+      // PROVEN disjoint): any declared package - or, for ... closures,
+      // any walked workspace: dependency - that does not resolve makes
+      // the scope incomplete; a silently shrunken scope can fabricate
+      // disjointness. Evaluate, never skip.
+      const byName = workspacePackageDirs(repoRoot);
+      if (scope.packages !== null) {
+        if (scope.packages.some((n) => !byName.has(n))) continue;
+        if (scope.withDeps) {
+          const seen = new Set<string>(scope.packages);
+          const queue = [...scope.packages];
+          while (queue.length > 0) {
+            const name = queue.shift()!;
+            const dir = byName.get(name)!;
+            let pj: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+            try {
+              pj = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8")) as typeof pj;
+            } catch {
+              continue; // unreadable member: scope incomplete
+            }
+            for (const deps of [pj.dependencies, pj.devDependencies]) {
+              for (const [dep, spec] of Object.entries(deps ?? {})) {
+                if (!String(spec).startsWith("workspace:")) continue;
+                if (!byName.has(dep)) continue; // unresolvable dep: scope incomplete
+                if (!seen.has(dep)) {
+                  seen.add(dep);
+                  queue.push(dep);
+                }
+              }
+            }
+          }
+        }
+      }
+      // A workspace-union scope's closure is DEFINED by the workspace
+      // root config: a change there can never be disjoint from it.
+      if (scope.packages === null && [...changedSet].some((c) => WORKSPACE_DEFINING.includes(c))) continue;
       const dirs = resolveScopeDirs(repoRoot, scope);
       const scopeFiles = trackedFiles(repoRoot, dirs).map((f) => f.split(path.sep).join("/"));
+      // The filtered-file-set shadow: a changed path INSIDE a scope
+      // directory but outside the declared file set (the
+      // node_modules/dist filters) means the set is incomplete -
+      // disjointness is not provable.
+      const dirPrefixes = dirs.map((d) => (path.relative(repoRoot, d) + path.sep).split(path.sep).join("/"));
+      const shadowed = [...changedSet].some((c) => dirPrefixes.some((p) => c.startsWith(p)));
       const disjoint = scopeFiles.every((f) => !changedSet.has(f));
-      if (scopeFiles.length > 0 && disjoint) {
+      if (scopeFiles.length > 0 && disjoint && !shadowed) {
         skipIds.add(c.id);
         const pkgNames = dirs.map((d) => path.relative(repoRoot, d) || ".").join(", ");
         skips.push({ id: c.id, reason: `scope disjoint: ${pkgNames} untouched by ${baseRev.slice(0, 8)}..HEAD` });
