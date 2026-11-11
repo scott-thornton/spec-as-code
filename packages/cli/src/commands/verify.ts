@@ -420,28 +420,40 @@ async function runScopedDiffVerify(
       if (scope.packages !== null) {
         if (scope.packages.some((n) => !byName.has(n))) continue;
         if (scope.withDeps) {
+          // Fail closed (the confirmation pass's F1): an incomplete
+          // closure - an unresolvable workspace dependency or an
+          // unreadable member - forces the criterion to EVALUATE,
+          // mirroring impact.ts exactly; the walk never silently
+          // prunes.
+          let incomplete = false;
           const seen = new Set<string>(scope.packages);
           const queue = [...scope.packages];
-          while (queue.length > 0) {
+          while (queue.length > 0 && !incomplete) {
             const name = queue.shift()!;
             const dir = byName.get(name)!;
             let pj: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
             try {
               pj = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8")) as typeof pj;
             } catch {
-              continue; // unreadable member: scope incomplete
+              incomplete = true;
+              break;
             }
             for (const deps of [pj.dependencies, pj.devDependencies]) {
               for (const [dep, spec] of Object.entries(deps ?? {})) {
                 if (!String(spec).startsWith("workspace:")) continue;
-                if (!byName.has(dep)) continue; // unresolvable dep: scope incomplete
+                if (!byName.has(dep)) {
+                  incomplete = true;
+                  break;
+                }
                 if (!seen.has(dep)) {
                   seen.add(dep);
                   queue.push(dep);
                 }
               }
+              if (incomplete) break;
             }
           }
+          if (incomplete) continue; // scope incomplete: evaluate, never skip
         }
       }
       // A workspace-union scope's closure is DEFINED by the workspace
