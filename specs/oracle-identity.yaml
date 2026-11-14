@@ -1,0 +1,154 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: oracle-identity
+  title: Flips attribute only under established oracle identity
+  description: The operator's 2026-11-14 ruling, implemented; decision record .spc/reviews/oracle-identity-decision.md is the contract.
+goal: >
+  A synthesized or in-run discriminating flip is the system's core
+  attribution claim: this criterion, as one instrument, went red against
+  one implementation state and green against another. The criterion
+  digest pins the command text; it never pinned the oracle FILE bytes
+  the command executes - so synthesis could pair a red from one
+  instrument with a green from another, silently. Two principles now
+  govern, verbatim from the ruling: "If provenance changes whether a
+  conclusion is justified, provenance cannot be merely descriptive
+  metadata." And: "A discriminating verification must compare the same
+  measurement instrument against different implementation states. A
+  recorded changeset provides attribution context but does not, by
+  itself, establish measurement equivalence." Cross-run synthesis with
+  detected oracle drift is REJECTED (the criterion renders
+  indeterminate); in-run drift triggers SAME-ORACLE COUNTERFACTUAL
+  REPLAY - the final oracle replayed against the base implementation -
+  because more information should enable a stronger verification
+  procedure, not a weaker acceptance rule. Historical evidence is
+  immutable and inspectable; it simply cannot establish what it does
+  not establish. The audit (379 command criteria): 272 discriminating
+  are file-referenced under the extractor grammar; 2 discriminating
+  land fail-closed; guards never need flips. Chain-memory exists to
+  preserve justified knowledge across runs, not to maximize reuse of
+  historical outcomes.
+requirements:
+  - id: OID-001
+    statement: >
+      Criterion-command extraction classifies every command into
+      exactly one of five outcomes: referenced (file paths resolved -
+      vitest run segments with --filter resolution through
+      workspacePackageDirs, node-executed repo scripts), unreferenced
+      (POSITIVELY command-only - the command string is the whole
+      instrument, e.g. shell test/node -e with no repo-file
+      execution), unsupported (grammar not classified safely - shell
+      pipelines, git grep, package test scripts and pnpm -r whose
+      instrument is discovery-defined), unresolved (reference exists,
+      cannot be resolved), drifted (resolved, digests differ).
+      Compound commands classify segment-wise and the WORST segment
+      wins (unsupported beats unreferenced; unresolved beats both).
+      An empty extraction NEVER implicitly means unreferenced - the
+      classification audit over specs/ is pinned as an oracle with the
+      measured distribution.
+    priority: must
+    category: behavioral
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: OID-001-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/oracle-identity.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: OID-002
+    statement: >
+      Cross-run synthesis gates on oracle identity: when
+      computeChainFlipMemory would pair a red half and a green half
+      whose referenced oracle files digest differently at the two
+      evaluation revisions (or any reference is unresolved), the
+      synthesis is REJECTED - no flip, the criterion renders
+      indeterminate under existing rules. The rejected candidate is
+      PRESERVED and rendered (runA -X-> runB, reason oracle-drift,
+      the changed paths, both revisions) - "Synthesis rejected: oracle
+      drift" - historical evidence retained, never establishing.
+      Unreferenced and matched classifications synthesize under
+      existing rules; unsupported and unresolved fail closed.
+    priority: must
+    category: behavioral
+    dependsOn: [OID-001]
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: OID-002-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/oracle-identity.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: OID-003
+    statement: >
+      In-run oracle drift triggers same-oracle counterfactual replay:
+      when a run's red half and final sweep observed different oracle
+      bytes for the same criterion, the machinery replays the FINAL
+      oracle snapshot against the BASE implementation in an isolated
+      worktree (the challenge engine's discipline: worktree at the
+      base revision, oracle files overlaid, the criterion through the
+      frozen executor with admission inherited). Red -> green under
+      the same oracle ESTABLISHES the flip with counterfactualFlip
+      provenance (a distinct kind from inRunFlip and synthesizedFlip,
+      never flattened); green -> green, or replay impossible, renders
+      indeterminate. A recorded changeset explains the transition; it
+      does not validate the measurement.
+    priority: must
+    category: behavioral
+    dependsOn: [OID-001]
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: OID-003-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/oracle-identity.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: OID-004
+    statement: >
+      Oracle fingerprints are first-class evidence: command-criterion
+      evidence records an OracleSnapshot (the criterion digest, the
+      evaluated revision, and the referenced files' content digests at
+      that revision, computed through the hardened git adapter).
+      Synthesis and replay compare snapshots; historical evidence
+      without snapshots is reconstructed at its recorded evaluation
+      revision - never from the working tree. One unresolved reference
+      rejects the comparison atomically.
+    priority: must
+    category: architectural
+    dependsOn: [OID-001]
+    scope:
+      include: [packages/runtime/src/**, packages/verifier/src/**]
+    acceptance:
+      - id: OID-004-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/oracle-identity.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: OID-005
+    statement: >
+      The historical demotion is predicted, not discovered: the spec
+      documents that CHAL-004-A's existing synthesized flip
+      (run-mw81uztk red -> run-mw86ka7e green) crosses an oracle edit
+      and becomes a rejected candidate under the gate - the criterion
+      re-renders indeterminate until a fresh in-run flip or a
+      successful counterfactual replay re-establishes it. A regression
+      fixture exercises the REAL CHAL-004-A command shape (build
+      prefix + vitest run src/challenge-skew-carveout.test.ts) with
+      the actual drift scenario, not a synthetic stand-in.
+    priority: must
+    category: behavioral
+    dependsOn: [OID-002]
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: OID-005-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/oracle-identity.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+outOfScope:
+  - Transitive-import oracle closure (the snapshot schema evolves toward it; identity scope is declared wherever fingerprints are claimed).
+  - Gating or failing runs on out-of-target commits (bookkeeping-honesty, held separately).
+  - Changing what evidence stores record historically (immutability stands; snapshots are additive).
