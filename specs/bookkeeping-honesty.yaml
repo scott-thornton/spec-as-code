@@ -1,0 +1,70 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: bookkeeping-honesty
+  title: The ledger names everything the run commits, and plan ids are collision-safe
+  description: Two bookkeeping honesty defects from the field record; both reported-never-gating.
+goal: >
+  Two defects the session's own ledger demonstrated. (1) Run
+  accounting: the finalize commit sweeps EVERYTHING dirty in the tree
+  - including paths no task declared as a write target (criterion
+  command dirt, mid-flight leftovers) - while the plan-drift
+  computation records zero because it measures replans, not write
+  honesty; the cancelled-run case (the HBA review's F2) committed an
+  out-of-target file while the ledger said nothing. The commit is
+  correct behavior (the branch must hold the result); the SILENCE is
+  the defect: every out-of-target path the run commits is named in an
+  event and a non-blocking follow-up, on every terminal status
+  including cancelled - reported, never gating, exactly the
+  RUN_ENDED_DIRTY discipline. (2) Plan-id collision: newPlanId scans
+  and mints; two concurrent planning sessions mint the same id and
+  the second writeFileSync silently overwrites the first plan
+  (demonstrated twice in one day - plans 20261110-007 and 20261111-005
+  were reused across sessions, once producing a duplicate run). The
+  fix is claim-before-generate: the id is CLAIMED with an exclusive
+  create before the (minutes-long) generation starts, and a collision
+  re-mints.
+requirements:
+  - id: BH-001
+    statement: >
+      At finalize, the set of committed paths (base revision to result
+      revision) is compared against the union of every task's declared
+      write targets; every path outside that union (and outside .spc/
+      state) is recorded in an OUT_OF_TARGET_COMMITS event carrying
+      the paths and a non-blocking follow-up naming them - on every
+      terminal status including cancelled. The commit itself is
+      unchanged; the accounting is additive and never gates the run's
+      status.
+    priority: must
+    category: behavioral
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: BH-001-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/bookkeeping.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: BH-002
+    statement: >
+      Plan-id minting is collision-safe under concurrent sessions: the
+      id is claimed with an exclusive create (fail on existing) BEFORE
+      plan generation starts, and an existing claim re-mints with the
+      next sequence number; the persisted plan file path equals the
+      claimed path. The claim is a zero-byte file at the plan's final
+      path, created with wx semantics - the later content write
+      replaces the caller's own claim, never another session's plan.
+    priority: must
+    category: behavioral
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: BH-002-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/bookkeeping.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+outOfScope:
+  - Gating or failing runs on out-of-target commits (reported, never gating - the RUN_ENDED_DIRTY discipline).
+  - Changing what finalize commits (the branch must hold the result; the accounting is additive).
+  - Cross-process plan registries or locking beyond the exclusive-create claim.
