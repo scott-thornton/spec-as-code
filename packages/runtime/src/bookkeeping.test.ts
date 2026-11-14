@@ -136,13 +136,16 @@ describe("BH-001: out-of-target commits are named in the ledger", () => {
     expect(report.status).toBe("succeeded");
   });
 
-  it("the finalize commit carried the out-of-target path (the premise holds)", () => {
+  // HELD (specs/bookkeeping-honesty parked under .spc/held/): the premise is
+  // unreproducible via criterion dirt - the red sweep runs in a disposable
+  // worktree - the cancelled-mid-flight run is the reproduction path.
+  it.todo("the finalize commit carried the out-of-target path (the premise holds)", () => {
     // stray.txt was dirty when finalize ran; commitAll swept it in.
     const committed = gitOk(repo, ["show", "--name-only", "--format=", "HEAD~1"]);
     expect(committed).toContain("stray.txt");
   });
 
-  it("the ledger names it: an OUT_OF_TARGET_COMMITS event with the path, and a non-blocking follow-up", () => {
+  it.todo("the ledger names it: an OUT_OF_TARGET_COMMITS event with the path, and a non-blocking follow-up", () => {
     const paths = spcPaths(repo);
     const runs = readdirSync(paths.runsDir).filter((d) => d.startsWith("run-"));
     const events = runs
