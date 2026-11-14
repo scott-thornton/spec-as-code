@@ -18,6 +18,44 @@ export function newRunId(): string {
   return `run-${Date.now().toString(36)}-${rand}`;
 }
 
+export interface PlanClaim {
+  planId: string;
+  file: string;
+}
+
+/** Claim a plan id EXCLUSIVELY before generation starts (specs/
+ *  bookkeeping-honesty, BH-002): the id is minted like newPlanId,
+ *  then claimed with a zero-byte exclusive create (wx). A concurrent
+ *  session holding the same id forces a re-mint - the collision
+ *  class that overwrote plans 20261110-007 and 20261111-005. The
+ *  later content write replaces the caller's OWN claim at the same
+ *  path, never another session's plan. */
+export function claimPlanId(plansDir: string, now: () => Date = () => new Date()): PlanClaim {
+  mkdirSync(plansDir, { recursive: true });
+  const d = now();
+  const date = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
+  if (existsSync(plansDir)) {
+    const existing = readdirSync(plansDir)
+      .filter((f) => f.startsWith(`plan-${date}`))
+      .map((f) => Number(f.match(/plan-\d{8}-(\d+)\.json/)?.[1] ?? 0));
+    var seq = existing.length > 0 ? Math.max(...existing) + 1 : 1;
+  } else {
+    var seq = 1;
+  }
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const planId = `plan-${date}-${String(seq).padStart(3, "0")}`;
+    const file = path.join(plansDir, `${planId}.json`);
+    try {
+      const fd = openSync(file, "wx");
+      closeSync(fd);
+      return { planId, file };
+    } catch {
+      seq += 1; // claimed by a concurrent session: re-mint
+    }
+  }
+  throw new Error(`claimPlanId: exhausted 100 sequence attempts under ${plansDir}`);
+}
+
 export function newPlanId(plansDir: string, now: () => Date = () => new Date()): string {
   const d = now();
   const date = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;

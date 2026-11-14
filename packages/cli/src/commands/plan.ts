@@ -11,6 +11,7 @@ import {
   approvePlan,
   loadConfig,
   loadPlanFile,
+  claimPlanId,
   newPlanId,
   spcPaths,
 } from "@spc/runtime";
@@ -68,7 +69,11 @@ export async function runPlan(specFile: string): Promise<number> {
 
   const paths = spcPaths(repoRoot);
   mkdirSync(paths.plansDir, { recursive: true });
-  const planId = newPlanId(paths.plansDir);
+  // Claim BEFORE generation: the minutes-long generation window is
+  // exactly where concurrent sessions collided (plans 20261110-007,
+  // 20261111-005). The claim is a zero-byte wx file at the final
+  // path; the content write below replaces our own claim.
+  const planId = claimPlanId(paths.plansDir).planId;
 
   const result = await generatePlan({
     specIr: ir,
