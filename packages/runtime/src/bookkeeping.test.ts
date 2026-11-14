@@ -121,7 +121,7 @@ describe("BH-001: out-of-target commits are named in the ledger", () => {
     const paths = spcPaths(repo);
     mkdirSync(paths.plansDir, { recursive: true });
     writeFileSync(paths.planFile("plan-bk"), JSON.stringify(plan(), null, 2));
-    const git = (args: string[]): void => gitOk(repo, ["-c", "user.name=t", "-c", "user.email=t@t", ...args]);
+    const git = (args: string[]): void => { gitOk(repo, ["-c", "user.name=t", "-c", "user.email=t@t", ...args]); };
     git(["add", "-A"]);
     git(["commit", "-m", "base"]);
     // Pin the real spec digest so plan validation passes.
