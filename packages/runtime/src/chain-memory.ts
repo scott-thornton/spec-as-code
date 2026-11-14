@@ -3,7 +3,13 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSy
 import os from "node:os";
 import path from "node:path";
 import { compileSpecFile, git } from "@spc/repo";
-import { isEligibleRed } from "@spc/verifier";
+import { isEligibleRed, workspacePackageDirs } from "@spc/verifier";
+import {
+  compareOracleSnapshots,
+  evaluateSynthesisCandidate,
+  oracleSnapshotAt,
+  type FlipDecision,
+} from "./oracle-identity.js";
 
 /**
  * Fork-crossing flip memory (specs/chain-memory). Lineage stays
@@ -57,9 +63,21 @@ export interface AncestorFlipSource {
  *  establishes the red half; the first subsequent green establishes the
  *  flip - the same run yields that run's id (the LIST-001 case), a later
  *  run yields "redRun->greenRun" provenance naming both. */
+export interface OracleGate {
+  repoRoot: string;
+  packageDirs: Map<string, string>;
+  /** criterionId -> the criterion's command text (the digest gate guarantees definition identity, so the current text IS the historical text). */
+  commands: ReadonlyMap<string, string>;
+  /** runId -> the revision each half observed: red halves at the run's base, green halves at the run's result. */
+  revisions: ReadonlyMap<string, { base?: string; result?: string }>;
+  /** Rejected candidates are reported here (SYNTHESIS_REJECTED) - never established. */
+  onRejected?: (rejection: { criterionId: string; decision: FlipDecision; redRunId: string; greenRunId: string }) => void;
+}
+
 export function computeChainFlipMemory(
   sources: readonly AncestorFlipSource[],
   currentDigests: ReadonlyMap<string, string>,
+  oracleGate?: OracleGate,
 ): Map<string, string> {
   const firstRed = new Map<string, string>();
   const flips = new Map<string, string>();
@@ -74,7 +92,51 @@ export function computeChainFlipMemory(
       } else if (record.phase !== "red" && record.outcome === "supports") {
         const red = firstRed.get(c);
         if (red !== undefined && !flips.has(c)) {
-          flips.set(c, red === source.runId ? red : `${red}->${source.runId}`);
+          if (oracleGate === undefined) {
+            flips.set(c, red === source.runId ? red : `${red}->${source.runId}`);
+            continue;
+          }
+          // specs/oracle-identity-wiring: the gate governs real
+          // synthesis. Snapshot the referenced oracle files at BOTH
+          // halves' evaluation revisions, compare, and establish only
+          // matched/unreferenced candidates. Drifted/unresolved/
+          // unsupported: REJECTED - the candidate is preserved via
+          // onRejected, never established.
+          const command = oracleGate.commands.get(c);
+          const redRev = oracleGate.revisions.get(red)?.base;
+          const greenRev = oracleGate.revisions.get(source.runId)?.result ?? oracleGate.revisions.get(source.runId)?.base;
+          if (command === undefined || redRev === undefined || greenRev === undefined) {
+            // No command (file criteria and friends are unreferenced
+            // by construction); no revisions (legacy metadata) fails
+            // closed per the ruling's conservatism.
+            if (command !== undefined) {
+              oracleGate.onRejected?.({
+                criterionId: c,
+                redRunId: red,
+                greenRunId: source.runId,
+                decision: evaluateSynthesisCandidate(
+                  { runId: red, revision: redRev ?? "unknown" },
+                  { runId: source.runId, revision: greenRev ?? "unknown" },
+                  { status: "unresolved", files: [{ path: "(revision metadata)", reason: "evaluation revision unavailable" }] },
+                ),
+              });
+            }
+            continue;
+          }
+          const comparison = compareOracleSnapshots(
+            oracleSnapshotAt(oracleGate.repoRoot, redRev, command, oracleGate.packageDirs),
+            oracleSnapshotAt(oracleGate.repoRoot, greenRev, command, oracleGate.packageDirs),
+          );
+          const decision = evaluateSynthesisCandidate(
+            { runId: red, revision: redRev },
+            { runId: source.runId, revision: greenRev },
+            comparison,
+          );
+          if (decision.established) {
+            flips.set(c, red === source.runId ? red : `${red}->${source.runId}`);
+          } else {
+            oracleGate.onRejected?.({ criterionId: c, decision, redRunId: red, greenRunId: source.runId });
+          }
         }
       }
     }

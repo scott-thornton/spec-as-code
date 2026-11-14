@@ -41,7 +41,7 @@ import { initialState, persistState, projectState } from "./state.js";
 import { appendUsageRecord, EvidenceStore, FollowupStore, ObservationStore } from "./stores.js";
 import { acquireExecutionLock, releaseExecutionLock, RUN_LOCK_HELD } from "./lock.js";
 import { verifyProperties } from "./verify.js";
-import { isEligibleRed } from "@spc/verifier";
+import { isEligibleRed, workspacePackageDirs } from "@spc/verifier";
 import { ancestorFlipSources, computeChainFlipMemory, criterionDigestOf } from "./chain-memory.js";
 import { runContaminationGuard } from "./guard.js";
 import { loadSuiteRegistry } from "@spc/repo";
@@ -1045,15 +1045,56 @@ async function finishRun(
   // eligibility semantics; adoptAncestorFlips remains the documented
   // same-run primitive and keeps its oracle.
   const currentCriterionDigests = new Map<string, string>();
+  const criterionCommands = new Map<string, string>();
   for (const property of ctx.specIr.properties) {
     for (const criterion of property.acceptance) {
       currentCriterionDigests.set(criterion.id, criterionDigestOf(criterion));
+      if (criterion.type === "command" && typeof (criterion as { command?: string }).command === "string") {
+        criterionCommands.set(criterion.id, (criterion as { command: string }).command);
+      }
+    }
+  }
+  // The revisions each prior run observed (red halves at base, green
+  // halves at result) for the oracle-identity gate.
+  const ancestorRevisions = new Map<string, { base?: string; result?: string }>();
+  {
+    const visited = new Set<string>([ctx.meta.runId]);
+    let cursor: string | undefined = ctx.meta.parentRunId;
+    while (cursor && !visited.has(cursor)) {
+      visited.add(cursor);
+      const priorDir = path.join(ctx.paths.runsDir, cursor);
+      const priorState = path.join(priorDir, "state.json");
+      if (existsSync(priorState)) {
+        try {
+          ancestorRevisions.set(cursor, JSON.parse(readFileSync(priorState, "utf8")) as { base?: string; result?: string });
+        } catch {
+          // unreadable: the gate fails closed on missing revisions
+        }
+      }
+      cursor = loadRunMeta(ctx.paths.runsDir, cursor)?.parentRunId;
     }
   }
   const inheritedFlips = ctx.meta.baseRevision
     ? computeChainFlipMemory(
         ancestorFlipSources(ctx.paths.repoRoot, ctx.paths.runsDir, ctx.meta.specId, ctx.meta.runId, ctx.meta.baseRevision),
         currentCriterionDigests,
+        {
+          repoRoot: ctx.paths.repoRoot,
+          packageDirs: workspacePackageDirs(ctx.paths.repoRoot),
+          commands: criterionCommands,
+          revisions: ancestorRevisions,
+          onRejected: (rejection) => {
+            ctx.events.append("SYNTHESIS_REJECTED", {
+              criterionId: rejection.criterionId,
+              reason: rejection.decision.rejected?.reason ?? "unknown",
+              redRunId: rejection.redRunId,
+              greenRunId: rejection.greenRunId,
+              ...(rejection.decision.rejected ? { paths: rejection.decision.rejected.paths, redRevision: rejection.decision.rejected.redRevision, greenRevision: rejection.decision.rejected.greenRevision } : {}),
+              detail: rejection.decision.render(),
+            });
+            ctx.log(`synthesis rejected (${rejection.criterionId}): ${rejection.decision.render()}`);
+          },
+        },
       )
     : new Map<string, string>();
 
