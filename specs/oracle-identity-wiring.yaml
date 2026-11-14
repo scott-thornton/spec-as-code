@@ -1,0 +1,69 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: oracle-identity-wiring
+  title: The gate governs real synthesis
+  description: Slice 2 of the operator's 2026-11-14 ruling; the decision layer (specs/oracle-identity) proven pure, now wired.
+goal: >
+  The oracle-identity decision layer is proven pure (slice 1, 22/22)
+  but governs nothing yet: computeChainFlipMemory still synthesizes on
+  the criterion digest alone. This slice wires the gate into the live
+  synthesis path - every candidate pairing is classified, snapshotted
+  at both evaluation revisions, compared, and either established or
+  REJECTED with the candidate preserved as a run event. The ruling's
+  predicted demotion becomes observable: CHAL-004-A's existing
+  synthesized flip crosses an oracle edit (the oracle was corrected
+  between run-mw81uztk's red and run-mw86ka7e's green) and must
+  re-render indeterminate until fresh evidence re-establishes it. The
+  in-run replay ENGINE (same-oracle counterfactual) is the third
+  slice - deliberately sequenced after the cross-run gate proves
+  itself against real history.
+requirements:
+  - id: OIDW-001
+    statement: >
+      computeChainFlipMemory's caller (apply.ts's inheritedFlips
+      computation) gates every candidate through the decision layer:
+      classify the criterion command, snapshot the referenced oracle
+      files at BOTH the red half's and the green half's evaluation
+      revisions, compare, and only matched/unreferenced candidates
+      enter the flip map. Drifted and unresolved candidates are
+      rejected - recorded as SYNTHESIS_REJECTED events (the run ids,
+      reason, paths, both revisions) and never rendered as
+      established flips. Unsupported classifications fail closed.
+      Unresolvable-filter criteria skip the gate only when the
+      workspace map itself is unresolvable (the starvation class) -
+      never silently.
+    priority: must
+    category: behavioral
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: OIDW-001-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/oracle-identity-wiring.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: OIDW-002
+    statement: >
+      The predicted demotion is observable against REAL history: in a
+      repository whose runs include a cross-run candidate whose oracle
+      bytes differ between the halves' revisions, a fresh apply run
+      renders that criterion indeterminate (no synthesized flip) and
+      its events carry the SYNTHESIS_REJECTED record with both run
+      ids; a candidate whose oracle bytes match still synthesizes.
+      The demotion diff is predicted in this spec, not discovered.
+    priority: must
+    category: behavioral
+    dependsOn: [OIDW-001]
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: OIDW-002-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/oracle-identity-wiring.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+outOfScope:
+  - The in-run same-oracle counterfactual replay ENGINE (slice 3 - sequenced after the cross-run gate proves itself).
+  - Recording OracleSnapshots into evidence at creation time (the gate reconstructs at evaluation revisions; creation-time recording rides slice 3).
+  - Transitive-import oracle closure.
