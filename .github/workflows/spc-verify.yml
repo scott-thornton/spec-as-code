@@ -8,6 +8,13 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    # The honest sweep's ceiling: the quoted-glob starvation fix
+    # (2026-11-14) ended spurious scope-digest reuse - prior sweeps
+    # ran 4 commands and reused 408 results across genuinely
+    # different scopes. The first honest run rebuilds the command
+    # cache from scratch (~50 min, corpus challenges dominating);
+    # the prefix-fallback cache then carries true matches forward.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: pnpm/action-setup@v6.1.0
