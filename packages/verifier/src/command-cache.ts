@@ -108,7 +108,11 @@ export function workspacePackageDirs(root: string): Map<string, string> {
   const globs: string[] = [];
   for (const line of readFileSync(wsFile, "utf8").split("\n")) {
     const m = /^\s*-\s*(\S+)/.exec(line);
-    if (m) globs.push(m[1]!);
+    // pnpm-workspace.yaml permits quoted entries (- "packages/*" -
+    // this repository's own shape); strip matched surrounding quotes
+    // or the glob never resolves and every member starves (found by
+    // the oracle-identity audit, pinned in workspace-globs.test.ts).
+    if (m) globs.push(m[1]!.replace(/^("[^"]*"|'[^']*')$/, (q) => q.slice(1, -1)));
   }
   for (const glob of globs) {
     // Minimal glob handling: prefix/* and literal dirs.
