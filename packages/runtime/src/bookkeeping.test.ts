@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { FakeProvider, parseFakeScript } from "@spc/llm-fake";
+import { compileSpecFile } from "@spc/repo";
 import { gitOk } from "@spc/repo";
 import type { Plan } from "@spc/schema";
 import { applyPlan, type ApplyReport } from "./apply.js";
@@ -55,7 +56,7 @@ function plan(): Plan {
     apiVersion: "spc.dev/v1alpha1",
     kind: "Plan",
     metadata: { id: "plan-bk", createdAt: "2026-11-14T00:00:00.000Z" },
-    spec: { id: "bk", digest: "sha256:" + "0".repeat(64) },
+    spec: { id: "bk", digest: "" }, // filled from the compiled spec at setup
     repository: { revision: "r", snapshotDigest: "sha256:" + "0".repeat(64) },
     tasks: [
       {
@@ -95,14 +96,22 @@ describe("BH-001: out-of-target commits are named in the ledger", () => {
     repo = initRepo("bh001");
     mkdirSync(path.join(repo, "specs"), { recursive: true });
     writeFileSync(path.join(repo, "specs", "bk.yaml"), specYaml);
+    // In-place on the current branch: the apply commits land in THIS
+    // tree (run-branch mode would put them on a worktree branch).
+    mkdirSync(path.join(repo, ".spc"), { recursive: true });
+    writeFileSync(path.join(repo, ".spc", "config.yaml"), "version: 1\nprovider:\n  name: fake\n  script: .spc/fake.yaml\nexecution:\n  inPlace: true\n  inPlaceBranch: current\n");
+    writeFileSync(path.join(repo, ".spc", "fake.yaml"), "executor:\n  T001:\n    status: completed\n    summary: x\n");
     // The criterion command: checks the fact AND dirties stray.txt -
     // a tracked path outside every task's declared write targets.
     writeFileSync(
       path.join(repo, "check.js"),
       [
         'const { readFileSync, writeFileSync, existsSync } = require("node:fs");',
-        "if (!existsSync(\"fact.txt\")) process.exit(1);",
+        // stray FIRST: the red-phase sweep (before tasks, before the
+        // finalize commit) dirties it, so commitAll sweeps it in -
+        // the HBA cancelled-run shape, reproduced deterministically.
         "writeFileSync(\"stray.txt\", \"dirtied by the criterion command\\n\");",
+        "if (!existsSync(\"fact.txt\")) process.exit(1);",
         "process.exit(readFileSync(\"fact.txt\", \"utf8\").includes(\"fact\") ? 0 : 1);",
         "",
       ].join("\n"),
@@ -115,6 +124,11 @@ describe("BH-001: out-of-target commits are named in the ledger", () => {
     const git = (args: string[]): void => gitOk(repo, ["-c", "user.name=t", "-c", "user.email=t@t", ...args]);
     git(["add", "-A"]);
     git(["commit", "-m", "base"]);
+    // Pin the real spec digest so plan validation passes.
+    const compiled = compileSpecFile(path.join(repo, "specs", "bk.yaml"));
+    const planObj = plan() as { spec: { digest: string } };
+    planObj.spec.digest = compiled.ok && compiled.ir ? compiled.ir.digest : "";
+    writeFileSync(paths.planFile("plan-bk"), JSON.stringify(planObj, null, 2));
     report = await applyPlan({ repoRoot: repo }, { providerFactory: async () => script(), log: () => {} });
   }, 180_000);
 
