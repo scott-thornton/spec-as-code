@@ -56,29 +56,54 @@ function classifySegment(segment: string, packageDirs: Map<string, string>): Ora
       }
       return { kind: "referenced", files: files.map((f) => path.posix.join(dir, f)) };
     }
-    if (/\bexec\s+node\b/.test(rest)) {
-      const m = /(?:^|\s)([\w./-]+\.[cm]?js)\b/.exec(rest);
-      if (m && dir !== undefined && !m[1]!.startsWith("/")) {
+    if (/\bexec\s+(node|tsx|ts-node|bash|sh)\b/.test(rest)) {
+      if (dir === undefined) {
+        return { kind: "unsupported", reason: `--filter ${pkg} does not resolve to a workspace directory` };
+      }
+      const m = /(?:^|\s)([\w./-]+\.[cm]?[jt]sx?)\b/.exec(rest);
+      if (m && !m[1]!.startsWith("/")) {
         return { kind: "referenced", files: [path.posix.join(dir, m[1]!)] };
       }
       if (m && m[1]!.startsWith("/")) {
         return { kind: "referenced", files: [m[1]!.slice(1)] };
       }
+      return { kind: "unsupported", reason: "exec with no recognizable script path" };
+    }
+    if (/\b(typecheck|lint|eslint|prettier)\b/.test(rest)) {
+      return { kind: "unsupported", reason: "script-defined tool execution: instrument is config-defined" };
+    }
+    // A build tail (pnpm --filter X build [> /dev/null]) is positively
+    // command-defined - same class as pnpm -r build in the ruling's
+    // table: the command string is the whole instrument (no test-file
+    // argument claims an oracle). Build prefixes are universal in this
+    // repo's compounds; the vitest segment carries the oracle claim.
+    if (/^\s*build\b/.test(rest)) {
+      return { kind: "unreferenced" };
     }
     if (/\btest\b/.test(rest) || /\brun\s+\S+/.test(rest)) {
       // package test scripts / run scripts: the instrument is the
       // script definition (package.json) + discovery - unsupported.
       return { kind: "unsupported", reason: "package script execution: instrument is script-defined, not command-only" };
     }
-    return { kind: "unreferenced" }; // e.g. bare pnpm --filter X with no execution
+    // POSITIVE command-only: a bare --filter with NOTHING after it -
+    // no subcommand, no script - executes nothing. Every other
+    // unrecognized tail is unsupported (never defaulted open).
+    if (rest.trim() === "") return { kind: "unreferenced" };
+    return { kind: "unsupported", reason: `pnpm tail not classified: ${rest.trim().split(/\s+/)[0]}` };
   }
   // node-executed repo scripts: referenced
   if (tokens[0] === "node") {
-    const m = /^"?([\w./-]+\.[cm]?js)"?/.exec(tokens[1] ?? "");
-    if (m && !tokens.slice(1).join(" ").startsWith("-e")) {
+    // node --test runs the native test runner (file-backed) - unsupported
+    // unless the file grammar resolves; node -e/--eval/no-args executes no
+    // repo file - POSITIVELY command-only; anything else fails closed.
+    if (tokens[1] === "-e" || tokens[1] === "--eval" || tokens[1] === undefined) {
+      return { kind: "unreferenced" };
+    }
+    const m = /^"?([\w./-]+\.[cm]?[jt]sx?)"?/.exec(tokens[1] ?? "");
+    if (m && !tokens.includes("--test")) {
       return { kind: "referenced", files: [m[1]!] };
     }
-    return { kind: "unreferenced" }; // node -e / node (REPL): command-only
+    return { kind: "unsupported", reason: `node invocation not classified (flags: ${tokens.slice(1, 4).join(" ")})` };
   }
   // Positively command-only shell: a BARE test/[ with simple flags
   // observes the tree, it does not execute repo files. Command
@@ -183,6 +208,8 @@ export function compareOracleSnapshots(
 export interface FlipRejection {
   reason: "oracle-drift" | "oracle-unresolved";
   paths: string[];
+  redRunId: string;
+  greenRunId: string;
   redRevision: string;
   greenRevision: string;
 }
@@ -202,7 +229,7 @@ function rejectedDecision(rejection: FlipRejection): FlipDecision {
     rejected: rejection,
     render(): string {
       const lines = [
-        `Synthesis rejected: oracle ${word}`,
+        `Synthesis rejected: oracle ${word} (${rejection.redRunId} -X-> ${rejection.greenRunId})`,
         ...rejection.paths.map((p) => `  ${p} (${rejection.redRevision.slice(0, 8)} -> ${rejection.greenRevision.slice(0, 8)})`),
         "  historical evidence retained; the observations cannot establish a discriminating transition",
       ];
@@ -227,9 +254,9 @@ export function evaluateSynthesisCandidate(
   }
   const paths = comparison.files.map((f) => f.path);
   if (comparison.status === "drifted") {
-    return rejectedDecision({ reason: "oracle-drift", paths, redRevision: red.revision, greenRevision: green.revision });
+    return rejectedDecision({ reason: "oracle-drift", paths, redRunId: red.runId, greenRunId: green.runId, redRevision: red.revision, greenRevision: green.revision });
   }
-  return rejectedDecision({ reason: "oracle-unresolved", paths, redRevision: red.revision, greenRevision: green.revision });
+  return rejectedDecision({ reason: "oracle-unresolved", paths, redRunId: red.runId, greenRunId: green.runId, redRevision: red.revision, greenRevision: green.revision });
 }
 
 export function evaluateInRunFlip(state: { drifted: boolean }, replayOutcome: "red" | "green" | "unavailable"): FlipDecision {

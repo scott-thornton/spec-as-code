@@ -25,7 +25,7 @@ goal: >
   immutable and inspectable; it simply cannot establish what it does
   not establish. The audit (379 command criteria): 272 discriminating
   are file-referenced under the extractor grammar; 2 discriminating
-  land fail-closed; guards never need flips. Chain-memory exists to
+  land fail-closed (the measured count, honestly 6 after the extractor landed - the audit sketch said 2; the extractor is stricter); guards never need flips, and the audit pins the discriminating unreferenced bucket at ZERO (the open bucket is unreachable by construction, not by convention). Chain-memory exists to
   preserve justified knowledge across runs, not to maximize reuse of
   historical outcomes.
 requirements:

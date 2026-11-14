@@ -213,3 +213,57 @@ describe("OID-005: the real CHAL-004-A history shape", () => {
     expect(decision.rejected?.reason).toBe("oracle-drift");
   });
 });
+
+// Rectification oracles (adversarial pass on run-mwgpvmrz, F1s 1-2):
+// unknown tails must NEVER default to unreferenced (the ruling's
+// explicit prohibition) - unreferenced is POSITIVE (bare --filter with
+// nothing executing; node -e with no file). The unresolvable-filter
+// polarity is uniform (fail closed in every branch). The rejected
+// candidate carries BOTH run ids. Today these are red.
+describe("OID-001 rectification: no open defaults", () => {
+  it("node --test and exec tsx/bash shapes are UNSUPPORTED (instrument is file-backed), never unreferenced", () => {
+    expect(classifyCommandOracle("node --test src/challenge.test.js", PKGS).kind).toBe("unsupported");
+    // A resolvable script under ANY known interpreter is file-backed -
+    // the script IS the oracle; the interpreter is irrelevant.
+    expect(classifyCommandOracle("pnpm --filter @spc/cli exec tsx scripts/x.ts", PKGS).kind).toBe("referenced");
+    // A non-JS script shape the grammar cannot resolve: fail closed.
+    expect(classifyCommandOracle("pnpm --filter @spc/cli exec bash scripts/x.sh", PKGS).kind).toBe("unsupported");
+    expect(classifyCommandOracle("pnpm --filter @spc/cli typecheck", PKGS).kind).toBe("unsupported");
+  });
+
+  it("unreferenced is POSITIVE: bare --filter with nothing executing, node -e, node with no args", () => {
+    expect(classifyCommandOracle("pnpm --filter @spc/cli", PKGS).kind).toBe("unreferenced");
+    expect(classifyCommandOracle('node -e "process.exit(0)"', PKGS).kind).toBe("unreferenced");
+    expect(classifyCommandOracle("node", PKGS).kind).toBe("unreferenced");
+  });
+
+  it("uniform polarity: an unresolvable --filter fails closed in EVERY branch (exec-node too)", () => {
+    expect(classifyCommandOracle("pnpm --filter @no-such/pkg exec node check.js", PKGS).kind).toBe("unsupported");
+    expect(classifyCommandOracle("pnpm --filter @no-such/pkg exec vitest run src/x.test.ts", PKGS).kind).toBe("unsupported");
+  });
+
+  it("the rejected candidate carries BOTH run ids in its rendering (runA -X-> runB)", () => {
+    const cmd = "pnpm --filter @spc/cli exec vitest run src/foo.test.ts";
+    const d = evaluateSynthesisCandidate(
+      { runId: "run-mw81uztk", revision: base },
+      { runId: "run-mw86ka7e", revision: drifted },
+      compareOracleSnapshots(oracleSnapshotAt(repo, base, cmd, PKGS), oracleSnapshotAt(repo, drifted, cmd, PKGS)),
+    );
+    expect(d.established).toBe(false);
+    expect(d.render()).toContain("run-mw81uztk -X-> run-mw86ka7e");
+  });
+
+  it("the audit pins the unreferenced discriminating bucket at ZERO (future specs cannot silently reach the open bucket)", () => {
+    const repoRoot = path.resolve(import.meta.dirname, "../../..");
+    const fullMap = new Map<string, string>();
+    for (const entry of readdirSync(path.join(repoRoot, "packages"))) {
+      const pj = path.join(repoRoot, "packages", entry, "package.json");
+      if (existsSync(pj)) {
+        const name = (JSON.parse(readFileSync(pj, "utf8")) as { name?: string }).name;
+        if (name) fullMap.set(name, `packages/${entry}`);
+      }
+    }
+    const audit = auditSpecsClassification(repoRoot, fullMap);
+    expect(audit.byFlag.discriminating.unreferenced).toBe(0);
+  });
+});
