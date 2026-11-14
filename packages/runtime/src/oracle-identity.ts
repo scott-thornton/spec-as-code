@@ -80,8 +80,11 @@ function classifySegment(segment: string, packageDirs: Map<string, string>): Ora
     }
     return { kind: "unreferenced" }; // node -e / node (REPL): command-only
   }
-  // Positively command-only shell: test/[: -f checks observe, don't execute repo files
-  if (tokens[0] === "test" || tokens[0] === "[") {
+  // Positively command-only shell: a BARE test/[ with simple flags
+  // observes the tree, it does not execute repo files. Command
+  // substitution ($(...)), pipes, or redirections make the grammar
+  // unclassifiable - unsupported, fail closed.
+  if ((tokens[0] === "test" || tokens[0] === "[") && !/[|$`]/.test(segment)) {
     return { kind: "unreferenced" };
   }
   // Everything else: unsupported (fail closed)
@@ -142,7 +145,18 @@ export type OracleComparison =
   | { status: "drifted"; files: { path: string; redDigest: string; greenDigest: string }[] }
   | { status: "unresolved"; files: { path: string; reason: string }[] };
 
-export function compareOracleSnapshots(red?: OracleSnapshot | null, green?: OracleSnapshot | null): OracleComparison {
+export function compareOracleSnapshots(
+  red?: OracleSnapshot | null,
+  green?: OracleSnapshot | null,
+  resolvable?: (revision: string) => boolean,
+): OracleComparison {
+  if (resolvable !== undefined) {
+    for (const snap of [red, green]) {
+      if (snap !== undefined && snap !== null && !resolvable(snap.revision)) {
+        return { status: "unresolved", files: [{ path: "(revision)", reason: `revision ${snap.revision.slice(0, 12)} cannot be resolved` }] };
+      }
+    }
+  }
   if (red === undefined || green === undefined) return { status: "unresolved", files: [{ path: "(classification failed closed)", reason: "snapshot unavailable" }] };
   if (red === null && green === null) return { status: "unreferenced" };
   if (red === null || green === null) {
@@ -271,13 +285,20 @@ export function auditSpecsClassification(
       // Look ahead for the discriminating flag (it follows command in
       // the house layout: command, expect, discriminating).
       let disc = false;
-      for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
-        if (/^\s*-\s+id:/.test(lines[j]!)) break; // next criterion
-        if (/^\s*discriminating:\s*true/.test(lines[j]!)) {
+      const isBoundary = (l: string): boolean => /^\s*(-\s+id:|requirements:|constraints:|acceptance:|statement:)/.test(l);
+      for (let j = i + 1; j < Math.min(i + 8, lines.length) && !isBoundary(lines[j]!); j++) {
+        if (/discriminating:\s*true/.test(lines[j]!)) {
           disc = true;
           break;
         }
-        if (/^\s*(command|type):/.test(lines[j]!)) break;
+      }
+      if (!disc) {
+        for (let j = i - 1; j >= Math.max(0, i - 8) && !isBoundary(lines[j]!); j--) {
+          if (/discriminating:\s*true/.test(lines[j]!)) {
+            disc = true;
+            break;
+          }
+        }
       }
       totalCommands += 1;
       const c = classifyCommandOracle(command, packageDirs);
