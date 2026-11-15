@@ -39,7 +39,7 @@ export async function referencedOracleDiff(
   resultRevision: string,
   command: string,
   packageDirs: Map<string, string>,
-): OracleDrift {
+): Promise<OracleDrift> {
   const classification = classifyCommandOracle(command, packageDirs);
   if (classification.kind === "unreferenced") return { status: "untouched", files: [] };
   if (classification.kind === "unsupported") return { status: "held-fail-closed", files: [] };
