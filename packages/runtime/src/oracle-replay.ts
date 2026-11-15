@@ -33,7 +33,7 @@ export interface OracleDrift {
 /** Did the run's own changes (base -> result) touch any oracle file
  *  the criterion's command references? Unsupported classifications
  *  hold for replay conservatively (fail closed). */
-export function referencedOracleDiff(
+export async function referencedOracleDiff(
   repoRoot: string,
   baseRevision: string,
   resultRevision: string,
@@ -43,14 +43,25 @@ export function referencedOracleDiff(
   const classification = classifyCommandOracle(command, packageDirs);
   if (classification.kind === "unreferenced") return { status: "untouched", files: [] };
   if (classification.kind === "unsupported") return { status: "held-fail-closed", files: [] };
+  // Globs resolve against each revision's tree; a changed membership
+  // IS drift (the instrument set changed).
+  const { expandOracleFiles } = await import("@spc/repo");
+  const baseFiles = expandOracleFiles(repoRoot, baseRevision, classification.files);
+  const resultFiles = expandOracleFiles(repoRoot, resultRevision, classification.files);
+  if (baseFiles === undefined || resultFiles === undefined) {
+    return { status: "held-fail-closed", files: classification.files };
+  }
+  if (JSON.stringify(baseFiles) !== JSON.stringify(resultFiles)) {
+    return { status: "drifted", files: [...new Set([...baseFiles, ...resultFiles])] };
+  }
   const drifted: string[] = [];
-  for (const file of classification.files) {
+  for (const file of baseFiles) {
     const base = git(repoRoot, ["show", `${baseRevision}:${file}`]);
     const result = git(repoRoot, ["show", `${resultRevision}:${file}`]);
     if (!base.ok || !result.ok) {
       // A file that does not resolve at either revision: the anchor
       // set is incomplete - hold for replay (fail closed).
-      return { status: "held-fail-closed", files: classification.files };
+      return { status: "held-fail-closed", files: baseFiles };
     }
     if (base.stdout !== result.stdout) drifted.push(file);
   }

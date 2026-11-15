@@ -1290,7 +1290,7 @@ async function finishRun(
       const green = ctx.evidence.all().some((ev) => ev.criterionId === criterionId && (ev as { phase?: string }).phase !== "red" && ev.outcome === "supports");
       if (!green) continue;
       const baseRev = ctx.meta.baseRevision ?? resultRevision;
-      const drift = referencedOracleDiff(worktree, baseRev, resultRevision, meta.command, pkgDirs);
+      const drift = await referencedOracleDiff(worktree, baseRev, resultRevision, meta.command, pkgDirs);
       if (drift.status === "untouched") continue;
       const replay = await runCounterfactualReplay(
         ctx.paths.repoRoot,

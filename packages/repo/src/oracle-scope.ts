@@ -140,13 +140,17 @@ function classifySegment(segment: string, packageDirs: Map<string, string>): Ora
     if (tokens[1] === "-e" || tokens[1] === "--eval" || tokens[1] === undefined) {
       return { kind: "unreferenced" };
     }
-    // node --test with EXPLICIT files: the files are the instrument
-    // (the native runner executing named tests). Discovery mode
-    // (no files) is unsupported - the instrument is
-    // discovery-defined.
+    // node --test with EXPLICIT files or shell globs (a deterministic
+    // set once resolved against the tree at a revision; the snapshot
+    // machinery expands globs via git ls-tree): the files are the
+    // instrument. Discovery mode (no arguments) is unsupported - the
+    // instrument is discovery-defined.
     if (tokens.includes("--test")) {
-      const files = tokens.slice(2).filter((t) => /^[\w./-]+\.[cm]?[jt]sx?$/.test(t.replace(/"/g, "")));
-      if (files.length > 0) return { kind: "referenced", files: files.map((f) => f.replace(/"/g, "")) };
+      const files = tokens
+        .slice(2)
+        .map((t) => t.replace(/"/g, ""))
+        .filter((t) => /^[\w.*/-]+\.[cm]?[jt]sx?$/.test(t));
+      if (files.length > 0) return { kind: "referenced", files };
       return { kind: "unsupported", reason: "node --test discovery mode: instrument is discovery-defined" };
     }
     const m = /^"?([\w./-]+\.[cm]?[jt]sx?)"?/.exec(tokens[1] ?? "");
@@ -196,6 +200,32 @@ export interface OracleSnapshot {
 /** Snapshot the referenced oracle files AT a revision (hardened git
  *  adapter; never the working tree). null = command-only (positively
  *  unreferenced); undefined = classification fail-closed. */
+/** Resolve a file list at a revision: literals pass through; glob
+ *  entries (containing *) expand against the tree at the revision via
+ *  git ls-tree. Returns undefined when a glob matches nothing (fail
+ *  closed - an empty instrument set is a classification failure). */
+export function expandOracleFiles(repoRoot: string, revision: string, files: readonly string[]): string[] | undefined {
+  const resolved: string[] = [];
+  for (const file of files) {
+    if (!file.includes("*")) {
+      resolved.push(file);
+      continue;
+    }
+    const slashBeforeStar = file.lastIndexOf("/", file.indexOf("*"));
+    const dirPrefix = slashBeforeStar >= 0 ? file.slice(0, slashBeforeStar + 1) : "";
+    const listing = git(repoRoot, ["ls-tree", "-r", "--name-only", revision, ...(dirPrefix ? [dirPrefix] : [])]);
+    if (!listing.ok) return undefined;
+    const pattern = new RegExp("^" + file.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*") + "$");
+    const matched = listing.stdout
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => pattern.test(l));
+    if (matched.length === 0) return undefined;
+    resolved.push(...matched);
+  }
+  return [...new Set(resolved)];
+}
+
 export function oracleSnapshotAt(
   repoRoot: string,
   revision: string,
@@ -205,8 +235,10 @@ export function oracleSnapshotAt(
   const classification = classifyCommandOracle(command, packageDirs);
   if (classification.kind === "unreferenced") return null;
   if (classification.kind === "unsupported") return undefined;
+  const resolved = expandOracleFiles(repoRoot, revision, classification.files);
+  if (resolved === undefined) return undefined;
   const files: OracleFileSnapshot[] = [];
-  for (const file of classification.files) {
+  for (const file of resolved) {
     const show = git(repoRoot, ["show", `${revision}:${file}`]);
     if (!show.ok) return undefined; // unresolved at this revision: fail closed
     files.push({ path: file, digest: "sha256:" + createHash("sha256").update(show.stdout, "utf8").digest("hex") });
