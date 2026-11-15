@@ -1271,7 +1271,7 @@ async function finishRun(
     const pkgDirs = workspacePackageDirs(worktree);
     const redThisRun = new Set<string>();
     for (const ev of ctx.evidence.all()) {
-      if (ev.runId === ctx.meta.runId && (ev as { phase?: string }).phase === "red" && ev.outcome === "contradicts") {
+      if (ev.runId === ctx.meta.runId && (ev as { phase?: string }).phase === "red" && ev.outcome === "contradicts" && typeof ev.criterionId === "string") {
         redThisRun.add(ev.criterionId);
       }
     }

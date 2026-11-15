@@ -1,23 +1,3 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import path from "node:path";
-
-/**
- * Oracle identity (specs/oracle-identity; the operator's 2026-11-14
- * ruling, decision record .spc/reviews/oracle-identity-decision.md).
- * A discriminating flip is the system's core attribution claim: this
- * criterion, as ONE instrument, went red against one implementation
- * state and green against another. The criterion digest pins the
- * command text; this module pins the oracle FILE bytes the command
- * executes. "If provenance changes whether a conclusion is justified,
- * provenance cannot be merely descriptive metadata." Cross-run
- * synthesis with detected oracle drift is REJECTED (candidate
- * preserved, rendered, never establishing); in-run drift demands
- * same-oracle counterfactual replay - "more information should enable
- * a stronger verification procedure, not a weaker acceptance rule."
- * Extraction is five-way and fail-closed: an empty extraction NEVER
- * implicitly means unreferenced.
- */
-
 export {
   classifyCommandOracle,
   oracleSnapshotAt,
@@ -26,7 +6,21 @@ export {
   type OracleFileSnapshot,
   type OracleSnapshot,
 } from "@spc/repo";
+import type { OracleFileSnapshot, OracleSnapshot } from "@spc/repo";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import path from "node:path";
 import { classifyCommandOracle } from "@spc/repo";
+
+/**
+ * Oracle identity (specs/oracle-identity; the operator's 2026-11-14
+ * ruling, decision record .spc/reviews/oracle-identity-decision.md).
+ * The classifier, workspace map, and snapshot machinery live in
+ * @spc/repo/src/oracle-scope (shared with the verifier without
+ * cycles); this module keeps the DECISION LAYER - comparison, the
+ * synthesis gate's verdicts, the counterfactual decision, and the
+ * spec-corpus audit. "If provenance changes whether a conclusion is
+ * justified, provenance cannot be merely descriptive metadata."
+ */
 
 export type OracleComparison =
   | { status: "unreferenced" }
