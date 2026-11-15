@@ -336,6 +336,17 @@ export async function runChallenge(repoRoot: string, name: string): Promise<Chal
   let baselineWt: string | null = null;
   let mutationWt: string | null = null;
   try {
+    // Defensive pre-clean of crash-left worktrees (the challenge
+    // review's F3: a hard-interrupted run leaves --baseline/--mutation
+    // behind and createWorktree then refuses FOREVER - the same
+    // fixture can never be challenged again until manual cleanup).
+    // Nothing to remove on the first run, and that is not an error
+    // (verify.ts's own discipline for its worktree).
+    for (const suffix of ["--baseline", "--mutation"]) {
+      const stale = path.join(worktreesDir, `${name}${suffix}`);
+      if (existsSync(stale)) rmSync(stale, { recursive: true, force: true });
+    }
+    spawnSync("git", ["worktree", "prune"], { cwd: repoRoot, encoding: "utf8" });
     baselineWt = createWorktree(repoRoot, fixture.criterion.spec, `${name}--baseline`, worktreesDir).path;
     mutationWt = createWorktree(repoRoot, fixture.criterion.spec, `${name}--mutation`, worktreesDir).path;
 

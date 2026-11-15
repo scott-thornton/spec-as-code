@@ -98,6 +98,19 @@ describe("CHAL-001/CHAL-005: the engine end to end (file criterion)", () => {
     expect(Array.isArray(record.mutation["executionIds"])).toBe(true);
   });
 
+  it("crash-left worktrees are pre-cleaned - a hard-interrupted run cannot wedge the fixture forever (the F3, reproduced)", async () => {
+    // Simulate the crash leftovers: create both paths + git's registry
+    // entries, then run the challenge - it must pre-clean and succeed.
+    const { mkdirSync, writeFileSync: wf } = await import("node:fs");
+    for (const suffix of ["--baseline", "--mutation"]) {
+      const stale = path.join(repo, ".spc", "worktrees", `delete-fact${suffix}`);
+      mkdirSync(stale, { recursive: true });
+      wf(path.join(stale, "junk"), "left by a crashed run\n");
+    }
+    const r = await runChallenge(repo, fixtureName);
+    expect(r.outcome).toBe("discriminating");
+  }, 120_000);
+
   it("both worktrees are cleaned on every exit path - no leftovers at all", () => {
     const worktreesDir = path.join(repo, ".spc", "worktrees");
     const leftover = existsSync(worktreesDir) ? readdirSync(worktreesDir) : [];
