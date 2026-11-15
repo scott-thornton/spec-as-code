@@ -43,6 +43,7 @@ import { acquireExecutionLock, releaseExecutionLock, RUN_LOCK_HELD } from "./loc
 import { verifyProperties } from "./verify.js";
 import { isEligibleRed } from "@spc/verifier";
 import { referencedOracleDiff, runCounterfactualReplay } from "./oracle-replay.js";
+import { workspacePackageDirs } from "@spc/repo";
 import { ancestorFlipSources, computeChainFlipMemory, criterionDigestOf } from "./chain-memory.js";
 import { runContaminationGuard } from "./guard.js";
 import { loadSuiteRegistry } from "@spc/repo";
@@ -1288,14 +1289,15 @@ async function finishRun(
       if (!redThisRun.has(criterionId)) continue;
       const green = ctx.evidence.all().some((ev) => ev.criterionId === criterionId && (ev as { phase?: string }).phase !== "red" && ev.outcome === "supports");
       if (!green) continue;
-      const drift = referencedOracleDiff(worktree, ctx.meta.baseRevision ?? resultRevision, resultRevision, meta.command, pkgDirs);
+      const baseRev = ctx.meta.baseRevision ?? resultRevision;
+      const drift = referencedOracleDiff(worktree, baseRev, resultRevision, meta.command, pkgDirs);
       if (drift.status === "untouched") continue;
       const replay = await runCounterfactualReplay(
         ctx.paths.repoRoot,
         ctx.specIr.spec.metadata.id,
         criterionId,
         meta.command,
-        ctx.meta.baseRevision ?? resultRevision,
+        baseRev,
         resultRevision,
         pkgDirs,
       );
@@ -1304,7 +1306,7 @@ async function finishRun(
         outcome: replay.outcome,
         provenance: replay.outcome === "red" ? "counterfactualFlip" : "indeterminate",
         overlaid: replay.overlaid,
-        baseRevision: ctx.meta.baseRevision ?? resultRevision,
+        baseRevision: baseRev,
         resultRevision,
         detail: replay.detail,
       });

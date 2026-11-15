@@ -26,8 +26,6 @@ export {
   type OracleFileSnapshot,
   type OracleSnapshot,
 } from "@spc/repo";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import path from "node:path";
 import { classifyCommandOracle } from "@spc/repo";
 
 export type OracleComparison =

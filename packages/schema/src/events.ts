@@ -50,6 +50,7 @@ export const eventTypeSchema = z.enum([
   "BUDGET_SIGNAL",
   "SUPERSEDED_RUN",
   "SYNTHESIS_REJECTED",
+  "COUNTERFACTUAL_REPLAY",
 ]);
 
 export const eventSchema = z.strictObject({

@@ -83,7 +83,7 @@ export async function runCounterfactualReplay(
   const name = `replay-${criterionId}-${Date.now()}`;
   let worktree: string | null = null;
   try {
-    worktree = createWorktree(repoRoot, specId, name, worktreesDir).path;
+    worktree = createWorktree(repoRoot, specId, name, worktreesDir, { startPoint: baseRevision }).path;
     // Overlay the FINAL oracle contents onto the base worktree.
     for (const file of classification.files) {
       const result = git(repoRoot, ["show", `${resultRevision}:${file}`]);

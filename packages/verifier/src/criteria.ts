@@ -17,6 +17,7 @@ import { z } from "zod";
 import { classifyCommand, evaluateCommandPolicy, runCommand, type CommandRunResult } from "@spc/executor";
 import { acquireHostAdmission } from "./admission.js";
 import { classifyOracleValidity } from "./oracle-validity.js";
+import { classifyCommandOracle, oracleSnapshotAt, workspacePackageDirs } from "@spc/repo";
 import { isSafeRelativePath } from "@spc/core";
 import type { SuiteProvenance } from "./suites.js";
 
@@ -463,7 +464,6 @@ async function verifyCommand(
         // never throws.
         ...(((): Record<string, unknown> => {
           try {
-            const { classifyCommandOracle, oracleSnapshotAt, workspacePackageDirs } = require("@spc/repo") as typeof import("@spc/repo");
             const dirs = workspacePackageDirs(ctx.cwd);
             const cls = classifyCommandOracle(criterion.command, dirs);
             if (cls.kind === "unreferenced") return { oracleClassification: "command-only" };
