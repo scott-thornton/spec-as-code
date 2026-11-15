@@ -8,6 +8,9 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    # Steady state: the per-command digest cache carries untouched
+    # scopes forward (the 1h55m run was the cold honest build; warm
+    # sweeps reuse everything whose scope files did not change).
     # The honest sweep's ceiling: the quoted-glob starvation fix
     # (2026-11-14) ended spurious scope-digest reuse - prior sweeps
     # ran 4 commands and reused 408 results across genuinely
