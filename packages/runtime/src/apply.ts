@@ -1054,24 +1054,32 @@ async function finishRun(
       }
     }
   }
-  // The revisions each prior run observed (red halves at base, green
-  // halves at result) for the oracle-identity gate.
+  // The revisions each run observed (red halves at base, green halves
+  // at result) for the oracle-identity gate. The CURRENT run is in the
+  // map too: in-run flips (red phase and final sweep of one run) gate
+  // on the run's own revisions - never routed through the ancestor
+  // chain, which would reject every legitimate in-run flip.
   const ancestorRevisions = new Map<string, { base?: string; result?: string }>();
+  ancestorRevisions.set(ctx.meta.runId, {
+    base: ctx.meta.baseRevision,
+    result: currentRevision(ctx.paths.repoRoot),
+  });
   {
-    const visited = new Set<string>([ctx.meta.runId]);
-    let cursor: string | undefined = ctx.meta.parentRunId;
-    while (cursor && !visited.has(cursor)) {
-      visited.add(cursor);
-      const priorDir = path.join(ctx.paths.runsDir, cursor);
-      const priorState = path.join(priorDir, "state.json");
-      if (existsSync(priorState)) {
-        try {
-          ancestorRevisions.set(cursor, JSON.parse(readFileSync(priorState, "utf8")) as { base?: string; result?: string });
-        } catch {
-          // unreadable: the gate fails closed on missing revisions
-        }
+    // Populate from every run's state.json - the same discipline as
+    // ancestorFlipSources (which scans by git ancestry, not the
+    // parentRunId chain; library-level applies may not carry
+    // parentRunId at gate time). Unreadable runs are simply absent:
+    // the gate fails closed on missing revisions.
+    for (const entry of existsSync(ctx.paths.runsDir) ? readdirSync(ctx.paths.runsDir) : []) {
+      if (entry === ctx.meta.runId) continue;
+      const priorState = path.join(ctx.paths.runsDir, entry, "state.json");
+      if (!existsSync(priorState)) continue;
+      try {
+        const prior = JSON.parse(readFileSync(priorState, "utf8")) as { baseRevision?: string; resultRevision?: string };
+        ancestorRevisions.set(entry, { base: prior.baseRevision, result: prior.resultRevision });
+      } catch {
+        // unreadable: absent
       }
-      cursor = loadRunMeta(ctx.paths.runsDir, cursor)?.parentRunId;
     }
   }
   const inheritedFlips = ctx.meta.baseRevision

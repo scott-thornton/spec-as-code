@@ -44,10 +44,14 @@ function planFor(specId: string, digest: string): Plan {
   } as unknown as Plan;
 }
 
-const executorScript = (target: string): FakeProvider =>
+/** Red cycles: a no-op write (the impl STAYS broken - the criterion
+ *  must end the run contradicted). Green cycles: the impl fix. */
+const executorScript = (fixImpl: boolean): FakeProvider =>
   new FakeProvider(
     parseFakeScript(
-      `executor:\n  T001:\n    status: completed\n    summary: fixed\n    changes:\n      - op: update\n        path: packages/demo/impl.js\n        content: |\n          module.exports = () => 0;\n`,
+      fixImpl
+        ? `executor:\n  T001:\n    status: completed\n    summary: fixed\n    changes:\n      - op: update\n        path: packages/demo/impl.js\n        content: |\n          module.exports = () => 0;\n`
+        : `executor:\n  T001:\n    status: completed\n    summary: no-op note\n    changes:\n      - op: create\n        path: notes.txt\n        content: ok`,
     ),
   );
 
@@ -57,7 +61,7 @@ const git = (args: string[]): void => {
 };
 const rev = (): string => spawnSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).stdout.trim();
 
-async function runCycle(specId: string): Promise<void> {
+async function runCycle(specId: string, fixImpl: boolean): Promise<void> {
   const paths = spcPaths(repo);
   const m = await import("@spc/repo");
   const c = m.compileSpecFile(path.join(repo, "specs", `${specId}.yaml`));
@@ -66,7 +70,9 @@ async function runCycle(specId: string): Promise<void> {
   mkdirSync(paths.plansDir, { recursive: true });
   const planId = `plan-${specId}`;
   writeFileSync(paths.planFile(planId), JSON.stringify(planFor(specId, digest), null, 2));
-  const report = await applyPlan({ repoRoot: repo }, { providerFactory: async () => executorScript(planId), log: () => {} });
+  // planFile EXPLICITLY: applyPlan falls back to the LATEST plan,
+  // which would silently apply the wrong spec's plan here.
+  const report = await applyPlan({ repoRoot: repo, planFile: paths.planFile(planId) }, { providerFactory: async () => executorScript(fixImpl), log: () => {} });
   void report;
 }
 
@@ -95,9 +101,10 @@ beforeAll(async () => {
   git(["init", "-q", "-b", "main"]);
   git(["add", "-A"]);
   git(["commit", "-qm", "base"]);
-  // RED RUNS: both criteria fail (impl broken), recorded in their runs.
-  await runCycle("stable");
-  await runCycle("drifted");
+  // RED RUNS: both criteria end contradicted (the impl STAYS broken -
+  // the task writes a no-op note; the red halves are recorded).
+  await runCycle("stable", false);
+  await runCycle("drifted", false);
   // BETWEEN RUNS: the oracle fix (drifted-check.js edited - the
   // oracle bytes now differ across the halves) - exactly the session's
   // rectification shape.
@@ -106,48 +113,81 @@ beforeAll(async () => {
   git(["commit", "-qm", "oracle fix between runs"]);
   // GREEN RUNS: impl fixed; both criteria pass at base (the
   // candidates for synthesis).
-  await runCycle("stable");
-  await runCycle("drifted");
+  await runCycle("stable", true);
+  await runCycle("drifted", true);
 }, 300_000);
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
+/** Latest run for a spec id (by createdAt, never lexicographic run ids). */
+function latestRunFor(paths: ReturnType<typeof spcPaths>, specId: string): { runId: string; summary: string; events: string } {
+  const best = { id: "", at: "" };
+  for (const run of readdirSync(paths.runsDir).filter((d) => d.startsWith("run-"))) {
+    const metaFile = path.join(paths.runsDir, run, "metadata.json");
+    if (!existsSync(metaFile)) continue;
+    const meta = JSON.parse(readFileSync(metaFile, "utf8")) as { specId?: string; createdAt?: string };
+    if (meta.specId !== specId) continue;
+    if (meta.createdAt !== undefined && meta.createdAt >= best.at) {
+      best.id = run;
+      best.at = meta.createdAt;
+    }
+  }
+  return {
+    runId: best.id,
+    summary: readFileSync(path.join(paths.runsDir, best.id, "summary.md"), "utf8"),
+    events: readFileSync(path.join(paths.runsDir, best.id, "events.jsonl"), "utf8"),
+  };
+}
+
 describe("OIDW-001/002: the gate governs real synthesis", () => {
   it("the stable candidate (oracle bytes match across halves) still synthesizes - the criterion renders satisfied", async () => {
-    await runCycle("stable");
+    await runCycle("stable", true);
     const status = spawnSync("git", ["log", "-1", "--format=%B"], { cwd: repo, encoding: "utf8" }).stdout;
     void status;
     // The run table is the assertion surface: check the newest run's summary.
     const paths = spcPaths(repo);
-    const runs = readdirSync(paths.runsDir).filter((d) => d.startsWith("run-")).sort();
-    const newest = runs[runs.length - 1]!;
-    // This run's own summary is for the stable spec; its R-001 must be
-    // satisfied via the inherited flip (matched oracle).
-    const summary = readFileSync(path.join(paths.runsDir, newest, "summary.md"), "utf8");
+    const summary = latestRunFor(paths, "stable").summary;
     expect(summary).toMatch(/satisfied.*R-001|R-001.*satisfied/);
     expect(summary).not.toMatch(/unsatisfied.*R-001|R-001.*unsatisfied/);
   }, 180_000);
 
   it("the drifted candidate (oracle bytes differ across halves) is REJECTED - indeterminate, with a SYNTHESIS_REJECTED event carrying both run ids", async () => {
-    await runCycle("drifted");
+    await runCycle("drifted", true);
     const paths = spcPaths(repo);
-    const runs = readdirSync(paths.runsDir).filter((d) => d.startsWith("run-")).sort();
-    const newest = runs[runs.length - 1]!;
-    const summary = readFileSync(path.join(paths.runsDir, newest, "summary.md"), "utf8");
+    const latest = latestRunFor(paths, "drifted");
+    const summary = latest.summary;
     // The demotion: NOT satisfied - indeterminate (the gate refused).
     expect(summary).toMatch(/indeterminate/);
     expect(summary).not.toMatch(/satisfied\s+R-001/);
-    // The rejected candidate is preserved as an event.
-    const events = readFileSync(path.join(paths.runsDir, newest, "events.jsonl"), "utf8")
-      .split("\n")
-      .filter(Boolean)
-      .map((l) => JSON.parse(l) as { type: string; payload?: Record<string, unknown> });
-    const rejected = events.find((e) => e.type === "SYNTHESIS_REJECTED");
+    // The rejected candidate is preserved as an event - in the run
+    // where synthesis was first attempted (any drifted run's events).
+    // Only runs WITH metadata and the drifted spec - aborted apply
+    // attempts leave ghost run dirs (events, no metadata) that are not
+    // part of the honest history.
+    const events = readdirSync(paths.runsDir)
+      .flatMap((run) => {
+        const mf = path.join(paths.runsDir, run, "metadata.json");
+        if (!existsSync(mf)) return [];
+        const meta = JSON.parse(readFileSync(mf, "utf8")) as { specId?: string };
+        if (meta.specId !== "drifted") return [];
+        const f = path.join(paths.runsDir, run, "events.jsonl");
+        if (!existsSync(f)) return [];
+        return readFileSync(f, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as { type: string; payload?: Record<string, unknown> });
+      });
+    const allRej = events.filter((e) => e.type === "SYNTHESIS_REJECTED");
+    for (const run of readdirSync(paths.runsDir)) {
+      const mf = path.join(paths.runsDir, run, "metadata.json");
+      if (existsSync(mf)) {
+        const m = JSON.parse(readFileSync(mf, "utf8")) as { specId?: string; parentRunId?: string };
+      }
+    }
+    const rejected = allRej.find((e) => String((e.payload ?? {}).criterionId).includes("DRIFTED")) ?? allRej[0];
     expect(rejected).toBeDefined();
     const payload = JSON.stringify(rejected?.payload);
     expect(payload).toMatch(/drifted-check\.js/);
     expect(payload).toMatch(/oracle-drift|oracle-drift/);
-    // Both run ids preserved (the ruling's rendering requirement).
-    const driftRuns = runs.filter((r) => {
+    // Both run ids preserved (the ruling's rendering requirement):
+    // every prior drifted run appears in the rejection payload.
+    const driftRuns = readdirSync(paths.runsDir).filter((r) => {
       const f = path.join(paths.runsDir, r, "metadata.json");
       if (!existsSync(f)) return false;
       return (JSON.parse(readFileSync(f, "utf8")) as { specId?: string }).specId === "drifted";
