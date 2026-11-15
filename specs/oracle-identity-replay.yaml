@@ -1,0 +1,94 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: oracle-identity-replay
+  title: In-run oracle drift demands same-oracle counterfactual replay
+  description: Slice 3 of the operator's 2026-11-14 ruling; the gate (slice 2) demotes, the replay re-establishes.
+goal: >
+  The ruling's third slice. When a run's own changes touch a
+  discriminating criterion's oracle files, the in-run red -> green
+  flip crossed instrument drift: the changeset explains the
+  transition, it does not validate the measurement (the
+  weakened-oracle counterexample). The flip is held pending
+  SAME-ORACLE COUNTERFACTUAL REPLAY: an isolated worktree at the
+  base revision with the FINAL oracle files overlaid, the criterion
+  executed through the frozen machinery - "would the corrected
+  oracle have failed against the original implementation?" Red ->
+  green under one oracle ESTABLISHES the flip with
+  counterfactualFlip provenance (a distinct kind, never flattened);
+  green -> green or replay-unavailable renders indeterminate - never
+  an unqualified flip, never a silent acceptance. More information
+  enables a stronger verification procedure, not a weaker acceptance
+  rule.
+requirements:
+  - id: OIR-001
+    statement: >
+      In-run drift detection: when a discriminating criterion's
+      in-run flip is being established and the run's own changes
+      (base revision to result revision) touched any oracle file the
+      criterion's command references, the flip is NOT auto-established
+      - it is held for replay. Unreferenced and untouched-oracle
+      flips establish as today (inRunFlip). Unsupported
+      classifications hold for replay conservatively (fail closed) -
+      an unclassifiable instrument cannot be validated, only tested.
+    priority: must
+    category: behavioral
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: OIR-001-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/oracle-replay.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: OIR-002
+    statement: >
+      The replay engine: an isolated worktree cut at the run's base
+      revision, the FINAL oracle file contents (at the result
+      revision) overlaid onto it, the criterion's command executed
+      there through the criteria executor (host admission inherited,
+      timeout classification inherited). Contradicted (red) ->
+      counterfactualFlip ESTABLISHED (the final oracle against the
+      base implementation failed; the implementation change is what
+      the criterion detected). Supported (green) -> indeterminate
+      (green -> green: the oracle change produced the flip).
+      Inconclusive or replay-unavailable -> indeterminate, the reason
+      named. A COUNTERFACTUAL_REPLAY event preserves the outcome, the
+      overlaid paths, both revisions, and the provenance kind.
+    priority: must
+    category: behavioral
+    dependsOn: [OIR-001]
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: OIR-002-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/oracle-replay.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: OIR-003
+    statement: >
+      Creation-time oracle snapshots: command-criterion evidence
+      records the referenced oracle files' content digests AT THE
+      EVALUATED REVISION in the evidence payload (oracleSnapshot
+      field), so future comparisons read recorded data instead of
+      reconstructing from git. Criteria whose classification is
+      unreferenced record an explicit command-only marker; unsupported
+      classifications record the classification failure. Reconstruction
+      from git remains the fallback for legacy evidence without
+      snapshots.
+    priority: must
+    category: architectural
+    dependsOn: [OIR-001]
+    scope:
+      include: [packages/runtime/src/**, packages/verifier/src/**]
+    acceptance:
+      - id: OIR-003-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/oracle-replay.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+outOfScope:
+  - Transitive-import oracle closure (identity scope declared, closure later).
+  - Gating verify sweeps (the gate and replay fire in APPLY-run synthesis and in-run flips only).
+  - Re-establishing the already-demoted cross-run candidates (they need fresh in-run flips; the replay governs future in-run drift).
