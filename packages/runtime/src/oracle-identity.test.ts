@@ -222,7 +222,10 @@ describe("OID-005: the real CHAL-004-A history shape", () => {
 // candidate carries BOTH run ids. Today these are red.
 describe("OID-001 rectification: no open defaults", () => {
   it("node --test and exec tsx/bash shapes are UNSUPPORTED (instrument is file-backed), never unreferenced", () => {
-    expect(classifyCommandOracle("node --test src/challenge.test.js", PKGS).kind).toBe("unsupported");
+    // node --test with EXPLICIT files: referenced (the files are the
+    // instrument); DISCOVERY mode stays unsupported.
+    expect(classifyCommandOracle('node --test src/challenge.test.js', PKGS).kind).toBe("referenced");
+    expect(classifyCommandOracle("node --test", PKGS).kind).toBe("unsupported");
     // A resolvable script under ANY known interpreter is file-backed -
     // the script IS the oracle; the interpreter is irrelevant.
     expect(classifyCommandOracle("pnpm --filter @spc/cli exec tsx scripts/x.ts", PKGS).kind).toBe("referenced");

@@ -99,8 +99,17 @@ function classifySegment(segment: string, packageDirs: Map<string, string>): Ora
     if (tokens[1] === "-e" || tokens[1] === "--eval" || tokens[1] === undefined) {
       return { kind: "unreferenced" };
     }
+    // node --test with EXPLICIT files: the files are the instrument
+    // (the native runner executing named tests). Discovery mode
+    // (no files) is unsupported - the instrument is
+    // discovery-defined.
+    if (tokens.includes("--test")) {
+      const files = tokens.slice(2).filter((t) => /^[\w./-]+\.[cm]?[jt]sx?$/.test(t.replace(/"/g, "")));
+      if (files.length > 0) return { kind: "referenced", files: files.map((f) => f.replace(/"/g, "")) };
+      return { kind: "unsupported", reason: "node --test discovery mode: instrument is discovery-defined" };
+    }
     const m = /^"?([\w./-]+\.[cm]?[jt]sx?)"?/.exec(tokens[1] ?? "");
-    if (m && !tokens.includes("--test")) {
+    if (m) {
       return { kind: "referenced", files: [m[1]!] };
     }
     return { kind: "unsupported", reason: `node invocation not classified (flags: ${tokens.slice(1, 4).join(" ")})` };
