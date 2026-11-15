@@ -41,7 +41,8 @@ import { initialState, persistState, projectState } from "./state.js";
 import { appendUsageRecord, EvidenceStore, FollowupStore, ObservationStore } from "./stores.js";
 import { acquireExecutionLock, releaseExecutionLock, RUN_LOCK_HELD } from "./lock.js";
 import { verifyProperties } from "./verify.js";
-import { isEligibleRed, workspacePackageDirs } from "@spc/verifier";
+import { isEligibleRed } from "@spc/verifier";
+import { referencedOracleDiff, runCounterfactualReplay } from "./oracle-replay.js";
 import { ancestorFlipSources, computeChainFlipMemory, criterionDigestOf } from "./chain-memory.js";
 import { runContaminationGuard } from "./guard.js";
 import { loadSuiteRegistry } from "@spc/repo";
@@ -1256,6 +1257,73 @@ async function finishRun(
           return s;
         })
       : sweep.states;
+  // In-run oracle drift -> same-oracle counterfactual replay (specs/
+  // oracle-identity-replay, OIR-001/OIR-002; the ruling's slice 3).
+  // A discriminating criterion whose in-run red -> green flip crossed
+  // drift of its OWN oracle files (the run changed the instrument)
+  // holds for replay: the changeset explains the transition, it does
+  // not validate the measurement. Replay the FINAL oracle against the
+  // BASE implementation - red establishes with counterfactualFlip
+  // provenance; green or unavailable renders indeterminate, never an
+  // unqualified flip.
+  {
+    const pkgDirs = workspacePackageDirs(worktree);
+    const redThisRun = new Set<string>();
+    for (const ev of ctx.evidence.all()) {
+      if (ev.runId === ctx.meta.runId && (ev as { phase?: string }).phase === "red" && ev.outcome === "contradicts") {
+        redThisRun.add(ev.criterionId);
+      }
+    }
+    const criterionByProperty = new Map<string, { id: string; command: string; propertyId: string }>();
+    for (const property of ctx.specIr.properties) {
+      for (const criterion of property.acceptance) {
+        const c = criterion as { id?: string; type?: string; command?: string; discriminating?: boolean };
+        if (c.type === "command" && c.discriminating === true && typeof c.command === "string" && typeof c.id === "string") {
+          criterionByProperty.set(c.id, { id: c.id, command: c.command, propertyId: property.id });
+        }
+      }
+    }
+    const replayVerdicts = new Map<string, { outcome: "red" | "green" | "unavailable"; detail: string }>();
+    for (const [criterionId, meta] of criterionByProperty) {
+      if (!redThisRun.has(criterionId)) continue;
+      const green = ctx.evidence.all().some((ev) => ev.criterionId === criterionId && (ev as { phase?: string }).phase !== "red" && ev.outcome === "supports");
+      if (!green) continue;
+      const drift = referencedOracleDiff(worktree, ctx.meta.baseRevision ?? resultRevision, resultRevision, meta.command, pkgDirs);
+      if (drift.status === "untouched") continue;
+      const replay = await runCounterfactualReplay(
+        ctx.paths.repoRoot,
+        ctx.specIr.spec.metadata.id,
+        criterionId,
+        meta.command,
+        ctx.meta.baseRevision ?? resultRevision,
+        resultRevision,
+        pkgDirs,
+      );
+      ctx.events.append("COUNTERFACTUAL_REPLAY", {
+        criterionId,
+        outcome: replay.outcome,
+        provenance: replay.outcome === "red" ? "counterfactualFlip" : "indeterminate",
+        overlaid: replay.overlaid,
+        baseRevision: ctx.meta.baseRevision ?? resultRevision,
+        resultRevision,
+        detail: replay.detail,
+      });
+      ctx.log(`counterfactual replay (${criterionId}): ${replay.outcome} - ${replay.detail}`);
+      replayVerdicts.set(meta.propertyId, { outcome: replay.outcome, detail: replay.detail });
+    }
+    if (replayVerdicts.size > 0) {
+      for (const [propertyId, verdict] of replayVerdicts) {
+        if (verdict.outcome !== "red") {
+          const st = chainedStates.find((s) => s.propertyId === propertyId);
+          if (st && st.status === "satisfied") {
+            st.status = "indeterminate";
+            st.reason = `in-run oracle drift: counterfactual replay ${verdict.outcome} - ${verdict.detail}`;
+          }
+        }
+      }
+    }
+  }
+
   ctx.state = {
     ...ctx.state,
     requirements: { ...ctx.state.requirements, ...Object.fromEntries(chainedStates.map((s) => [s.propertyId, s])) },

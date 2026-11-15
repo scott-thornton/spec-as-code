@@ -456,6 +456,27 @@ async function verifyCommand(
             : {}
         ),
         ...(run.deniedReason ? { deniedReason: run.deniedReason } : {}),
+        // Creation-time oracle snapshot (specs/oracle-identity-replay,
+        // OIR-003): the referenced oracle files' digests AT THE
+        // EVALUATED REVISION - recorded, not reconstructed. Command-only
+        // and unsupported classifications record their marker; recording
+        // never throws.
+        ...(((): Record<string, unknown> => {
+          try {
+            const { classifyCommandOracle, oracleSnapshotAt, workspacePackageDirs } = require("@spc/repo") as typeof import("@spc/repo");
+            const dirs = workspacePackageDirs(ctx.cwd);
+            const cls = classifyCommandOracle(criterion.command, dirs);
+            if (cls.kind === "unreferenced") return { oracleClassification: "command-only" };
+            if (cls.kind === "unsupported") return { oracleClassification: "unsupported" };
+            const rev = ctx.repositoryRevision ?? "HEAD";
+            const snap = oracleSnapshotAt(ctx.cwd, rev, criterion.command, dirs);
+            if (snap === undefined) return { oracleClassification: "unresolved" };
+            if (snap === null) return { oracleClassification: "command-only" };
+            return { oracleSnapshot: snap };
+          } catch {
+            return { oracleClassification: "recording-failed" };
+          }
+        })()),
         ...(execution?.executionId ? { executionId: execution.executionId } : {}),
         ...(execution?.reused ? { reusedFrom: execution.originRunId } : {}),
         ...(() => {
