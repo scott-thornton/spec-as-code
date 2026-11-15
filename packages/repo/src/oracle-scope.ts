@@ -78,7 +78,16 @@ function classifySegment(segment: string, packageDirs: Map<string, string>): Ora
   if (tokens[0] === "pnpm") {
     const filterIdx = tokens.findIndex((t) => t === "--filter" || t.startsWith("--filter="));
     if (filterIdx === -1) {
-      return { kind: "unsupported", reason: "pnpm without --filter: instrument discovery-defined" };
+      // pnpm exec vitest run <files> (no filter): the files resolve
+      // against the repo root. Anything else without a filter is
+      // discovery-defined.
+      const vitestNoFilter = /\bvitest\s+run\b/.exec(tokens.slice(1).join(" "));
+      if (vitestNoFilter) {
+        const after = tokens.slice(1).join(" ").slice(vitestNoFilter.index! + vitestNoFilter[0].length);
+        const files = [...after.matchAll(/(?:^|\s)([\w./-]+\.test\.[cm]?[jt]sx?)/g)].map((m) => m[1]!);
+        if (files.length > 0) return { kind: "referenced", files };
+      }
+      return { kind: "unsupported", reason: "pnpm without --filter and no explicit vitest files: instrument discovery-defined" };
     }
     const spec = tokens[filterIdx] === "--filter" ? tokens[filterIdx + 1] : tokens[filterIdx]!.slice("--filter=".length);
     const pkg = (spec ?? "").replace(/\.{2,}$/, "");
