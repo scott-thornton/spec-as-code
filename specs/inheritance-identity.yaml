@@ -1,0 +1,100 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: inheritance-identity
+  title: Chain-state inheritance rests on admissible establishment
+  description: The operator's 2026-11-16 ruling; decision record .spc/reviews/inheritance-identity-decision.md is the contract.
+goal: >
+  The same evidence requirements govern every route to current
+  satisfaction. Chain-state inheritance - a digest-bound ancestor's
+  recorded verdict promoting a pass-at-base property - may no longer
+  rest on a persisted label alone: the promotion requires an
+  establishment ADMISSIBLE under the current attribution rules (the
+  synthesis gate would establish it, or the machinery itself earned
+  it, including counterfactual replay), and the ESTABLISHING oracle
+  must match the CURRENT oracle (the establishing revision's vs the
+  current base revision's - a token that drifted between then and now
+  does not transfer). Codex's tie-breaker finding drove both halves:
+  using the same operational satisfied makes historical authority
+  substitute for evidence (the different-claim position's flaw), and
+  a naive ancestor-vs-current comparison misses the original invalid
+  transition (O1 -> O2 synthesized, today still O2 - "matched" while
+  the establishment was exactly what the gate exists to reject). The
+  edge to validate is the ESTABLISHING EVIDENCE, not the final green
+  half. Rejections are preserved events (immutable, inspectable,
+  non-establishing); non-discriminating and non-command criteria
+  inherit freely (no attribution claim); eligibility is record-based,
+  never date-based. If provenance changes whether a conclusion is
+  justified, provenance cannot be merely descriptive metadata - and a
+  channel that promotes a verdict may only rest on evidence the
+  current attribution rules admit.
+requirements:
+  - id: INH-001
+    statement: >
+      Before the chain-state walk promotes an indeterminate property
+      to satisfied, every DISCRIMINATING COMMAND criterion of that
+      property rendered pass-at-base must carry an admissible
+      establishment: the synthesis gate's inheritedFlips established
+      it, or the criterion is not attribution-bearing. When the
+      criterion's establishment is absent or rejected, the promotion
+      is REFUSED for the property, a PROPERTY_INHERITANCE_REJECTED
+      event is appended (propertyId, priorRunId, criterionId, reason
+      "establishing evidence not admissible under current attribution
+      rules"), and the property remains indeterminate. Non-command
+      and non-discriminating criteria never block inheritance.
+    priority: must
+    category: behavioral
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: INH-001-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/inheritance-identity.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: INH-002
+    statement: >
+      The transfer check: even when the gate establishes the
+      criterion, inheritance requires the ESTABLISHING oracle to
+      match the CURRENT oracle - the establishing revision's
+      referenced-file digests vs the current base revision's. Drift
+      between the establishment and now rejects the promotion with
+      reason "establishing oracle drifted from current" (the same
+      preserved-event discipline); matched or positively-unreferenced
+      transfer. The comparison uses the shared classifier and
+      snapshot machinery; unsupported classifications fail closed.
+    priority: must
+    category: behavioral
+    dependsOn: [INH-001]
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: INH-002-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/inheritance-identity.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: INH-003
+    statement: >
+      The control: an admissible establishment (untouched oracle,
+      gate-established) still inherits - the gate adds discipline,
+      not blanket refusal. And the demoted fixture - a pre-gate-style
+      ancestor whose state RECORDS satisfied over drifted evidence
+      with no admissible pairing - renders indeterminate, never
+      satisfied-via-label.
+    priority: must
+    category: behavioral
+    dependsOn: [INH-001]
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: INH-003-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/inheritance-identity.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+outOfScope:
+  - Grandfathering by date (eligibility is record-based - the ruling's explicit refusal).
+  - Extending the transfer check to the synthesis channel itself (the ruling's letter for synthesis governs red-green identity; establishing-vs-current for synthesis is a future operator question).
+  - Editing ancestor records (immutable, inspectable; supersede remains the administrative correction).
+  - Retroactive re-judgment of any recorded verdict (today's run decides what it may RELY on; history records what happened).
