@@ -51,6 +51,7 @@ export const eventTypeSchema = z.enum([
   "SUPERSEDED_RUN",
   "SYNTHESIS_REJECTED",
   "COUNTERFACTUAL_REPLAY",
+  "PROPERTY_INHERITANCE_REJECTED",
 ]);
 
 export const eventSchema = z.strictObject({

@@ -43,7 +43,7 @@ import { acquireExecutionLock, releaseExecutionLock, RUN_LOCK_HELD } from "./loc
 import { verifyProperties } from "./verify.js";
 import { isEligibleRed } from "@spc/verifier";
 import { referencedOracleDiff, runCounterfactualReplay } from "./oracle-replay.js";
-import { workspacePackageDirs } from "@spc/repo";
+import { compareOracleSnapshots, oracleSnapshotAt, workspacePackageDirs } from "@spc/repo";
 import { ancestorFlipSources, computeChainFlipMemory, criterionDigestOf } from "./chain-memory.js";
 import { runContaminationGuard } from "./guard.js";
 import { loadSuiteRegistry } from "@spc/repo";
@@ -1243,6 +1243,67 @@ async function finishRun(
             // The transition is an EVENT, not just a state mutation: the
             // event log stays authoritative and replay reconstructs the
             // inherited status (external review Finding B).
+            // specs/inheritance-identity (the 2026-11-16 ruling):
+            // a promotion may rest only on ADMISSIBLE ESTABLISHMENT,
+            // never a persisted label - the same evidence requirements
+            // govern every route to current satisfaction. Every
+            // discriminating COMMAND criterion rendered pass-at-base
+            // must (1) carry a gate-established flip in
+            // inheritedFlips and (2) TRANSFER: the ESTABLISHING oracle
+            // (the establishing run's result revision) must match the
+            // CURRENT oracle (the current base revision). Non-command
+            // and non-discriminating criteria never block - they carry
+            // no attribution claim.
+            const blockingCriterion = (() => {
+              for (const property of ctx.specIr.properties) {
+                if (property.id !== s.propertyId) continue;
+                for (const criterion of property.acceptance) {
+                  const c = criterion as { id?: string; type?: string; discriminating?: boolean; command?: string };
+                  if (c.type !== "command" || c.discriminating !== true || typeof c.id !== "string" || typeof c.command !== "string") continue;
+                  const critId = c.id;
+                  const flip = inheritedFlips.get(critId);
+                  if (flip === undefined) {
+                    return { criterionId: critId, reason: "establishing evidence not admissible under current attribution rules (no gate-established flip)" };
+                  }
+                  // The transfer check: establishing (green-half) run's
+                  // result revision vs the current base revision.
+                  const establishingRunId = flip.includes("->") ? (flip.split("->")[1] ?? flip) : flip;
+                  const establishingState = path.join(ctx.paths.runsDir, establishingRunId, "state.json");
+                  let establishingRev: string | undefined;
+                  try {
+                    establishingRev = (JSON.parse(readFileSync(establishingState, "utf8")) as { resultRevision?: string }).resultRevision;
+                  } catch {
+                    establishingRev = undefined;
+                  }
+                  if (establishingRev === undefined) {
+                    return { criterionId: critId, reason: "establishing evidence not admissible under current attribution rules (establishing revision unavailable)" };
+                  }
+                  const dirs = workspacePackageDirs(ctx.paths.repoRoot);
+                  const establishingSnap = oracleSnapshotAt(ctx.paths.repoRoot, establishingRev, c.command, dirs);
+                  const currentSnap = oracleSnapshotAt(ctx.paths.repoRoot, ctx.meta.baseRevision ?? resultRevision, c.command, dirs);
+                  const comparison = compareOracleSnapshots(establishingSnap, currentSnap);
+                  if (comparison.status === "drifted") {
+                    return { criterionId: critId, reason: `establishing oracle drifted from current (${establishingRev.slice(0, 8)} vs ${(ctx.meta.baseRevision ?? resultRevision).slice(0, 8)})` };
+                  }
+                  if (comparison.status === "unresolved") {
+                    return { criterionId: critId, reason: "establishing oracle unresolved against current (fail closed)" };
+                  }
+                  // matched / unreferenced: the establishment transfers.
+                }
+              }
+              return undefined;
+            })();
+            if (blockingCriterion !== undefined) {
+              ctx.events.append("PROPERTY_INHERITANCE_REJECTED", {
+                propertyId: s.propertyId,
+                priorRunId: priorId,
+                criterionId: blockingCriterion.criterionId,
+                reason: blockingCriterion.reason,
+                detail: `inheritance refused: ${blockingCriterion.reason}; historical verdict retained (immutable, inspectable), the property remains indeterminate until fresh admissible evidence`,
+              });
+              ctx.log(`inheritance refused (${s.propertyId} from ${priorId}): ${blockingCriterion.reason}`);
+              return { ...s, status: "indeterminate" as const, reason: `inheritance refused: ${blockingCriterion.reason}` };
+            }
             ctx.events.append("PROPERTY_INHERITED", {
               propertyId: s.propertyId,
               priorRunId: priorId,
