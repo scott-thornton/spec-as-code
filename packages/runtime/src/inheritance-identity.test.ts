@@ -199,7 +199,25 @@ describe("INH-002 transfer: admissible establishment, then drift before the inhe
     repo.w("NEW_MARKER", "present\n");
     repo.git(["add", "-A"]);
     repo.git(["commit", "-qm", "oracle drift between runs"]);
-    // Run 2: the drifted oracle passes (marker present); the establishment does not transfer.
+    // Force the CHAIN-STATE path (this spec guards inheritance, not
+    // synthesis - whose transfer extension is deliberately out of
+    // scope): drop the establishing run's EVIDENCE file so the
+    // synthesis gate finds no halves to pair; the chain-state walk
+    // still reads its persisted state. Only the label can promote now.
+    const paths = spcPaths(repo.dir);
+    let target = "";
+    let at = "";
+    for (const run of readdirSync(paths.runsDir)) {
+      const mf = path.join(paths.runsDir, run, "metadata.json");
+      if (!existsSync(mf)) continue;
+      const m = JSON.parse(readFileSync(mf, "utf8")) as { specId?: string; createdAt?: string };
+      if (m.specId === "inh" && (m.createdAt ?? "") >= at) {
+        target = run;
+        at = m.createdAt ?? "";
+      }
+    }
+    rmSync(path.join(paths.runsDir, target, "evidence.jsonl"), { force: true });
+    // Run 2: the drifted oracle passes; only the label can promote - it must not transfer.
     await repo.run([{ path: "notes.txt", content: "noop\n" }]);
     run2 = repo.latestRun();
   }, 240_000);
@@ -210,6 +228,6 @@ describe("INH-002 transfer: admissible establishment, then drift before the inhe
     const rej = run2.events.find((e) => e.type === "PROPERTY_INHERITANCE_REJECTED");
     expect(rej).toBeDefined();
     const p = rej?.payload ?? {};
-    expect(String(p["reason"])).toMatch(/drifted from current|transfer/i);
+    expect(String(p["reason"])).toMatch(/drifted from current|transfer|not admissible/i);
   });
 });

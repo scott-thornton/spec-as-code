@@ -43,7 +43,8 @@ import { acquireExecutionLock, releaseExecutionLock, RUN_LOCK_HELD } from "./loc
 import { verifyProperties } from "./verify.js";
 import { isEligibleRed } from "@spc/verifier";
 import { referencedOracleDiff, runCounterfactualReplay } from "./oracle-replay.js";
-import { compareOracleSnapshots, oracleSnapshotAt, workspacePackageDirs } from "@spc/repo";
+import { oracleSnapshotAt, workspacePackageDirs } from "@spc/repo";
+import { compareOracleSnapshots } from "./oracle-identity.js";
 import { ancestorFlipSources, computeChainFlipMemory, criterionDigestOf } from "./chain-memory.js";
 import { runContaminationGuard } from "./guard.js";
 import { loadSuiteRegistry } from "@spc/repo";
