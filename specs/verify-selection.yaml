@@ -1,0 +1,74 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: verify-selection
+  title: spc verify takes one or more spec selectors
+goal: >
+  Verifying every spec to check one change is the cost that keeps
+  verify from being run at all. A caller names what it wants verified -
+  one spec or N - and gets exactly that set, in the order given, each
+  once, reported per spec with a worst-of exit. Naming something that
+  does not exist fails the whole invocation before any criterion runs: a
+  selection that silently dropped a misspelled name would verify less
+  than was asked and report success.
+requirements:
+  - id: VSEL-001
+    statement: >
+      spc verify accepts one or more selectors. Each resolves, in order,
+      to: an existing file at that path; a spec under specs/ whose file
+      stem equals the selector (.yaml or .yml); a spec under specs/ whose
+      metadata.id equals the selector. Exactly the resolved specs are
+      verified, in the order given, each once - a selector that resolves
+      to the same file as an earlier one verifies nothing twice. One
+      selector keeps the single-spec output; several use the multi-spec
+      report. The exit code is worst-of: 0 only when every selected spec
+      passes.
+    priority: must
+    category: behavioral
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: VSEL-001-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/verify-selection.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: VSEL-002
+    statement: >
+      A selector that resolves to nothing fails the invocation before any
+      criterion executes: exit code 2, error SPEC_FILE_NOT_FOUND naming
+      the selector and the specs directory, and no verification run
+      recorded for any selector in the invocation.
+    priority: must
+    category: behavioral
+    dependsOn: [VSEL-001]
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: VSEL-002-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/verify-selection.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: VSEL-003
+    statement: >
+      Controls, unchanged from specs/verify-all-specs.yaml: no selector
+      verifies every spec under specs/ (VAS-001); one file selector
+      verifies exactly that spec with the single-spec output (VAS-002).
+      With several selectors, --format json emits one report per selected
+      spec in selection order, followed by the failures array.
+    priority: must
+    category: behavioral
+    dependsOn: [VSEL-001]
+    scope:
+      include: [packages/cli/src/**]
+    acceptance:
+      - id: VSEL-003-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/verify-selection.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+outOfScope:
+  - Selection for status, diff or reconcile (separate specs if wanted).
+  - Spec globs or tag filters - the shell expands a glob into selectors.
+  - Freshness and command-cache semantics; --all keeps its meaning.
