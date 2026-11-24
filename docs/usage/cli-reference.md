@@ -137,7 +137,14 @@ Related: `spc run cancel <id>` marks an interrupted run cancelled;
 ## spc verify
 
 ```bash
-spc verify [specFile] [--format text|github]
+spc verify [selector...] [--format text|github]
+
+# one spec - by file path, file stem or spec id
+spc verify specs/chain-memory.yaml
+spc verify chain-memory
+
+# N specs - exactly those, in the order given, each once
+spc verify chain-memory oracle-identity inheritance-identity
 ```
 
 Runs all acceptance criteria against the current working tree, independent
@@ -151,6 +158,14 @@ property plus a Markdown summary table appended to
 [CI integration](../ci-integration.md).
 
 Exit `1` when any property is not satisfied or waived.
+
+Each selector resolves to an existing file at that path, a spec under
+`specs/` whose file stem matches, or a spec under `specs/` whose
+`metadata.id` matches. With no selector, every spec under `specs/` is
+verified. A selector that matches nothing fails the whole invocation with
+exit `2` (`SPEC_FILE_NOT_FOUND`) before any criterion runs. Several
+selectors report per spec; `--format json` emits one report per selected
+spec, in selection order.
 
 `spc verify --run <runId>` verifies a run's acceptance criteria against
 that run's RESULT revision in a temporary worktree - useful after the

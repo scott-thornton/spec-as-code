@@ -204,16 +204,16 @@ program
   });
 
 program
-  .command("verify [specFile]")
-  .description("run acceptance criteria against the current tree (every spec in specs/ when no file is given, exit worst-of)")
+  .command("verify [specs...]")
+  .description("run acceptance criteria against the current tree (every spec in specs/ when none is given; each argument is a spec file path, file stem or spec id - verified in order, each once; exit worst-of)")
   .option("--cwd <dir>", "repository directory", process.cwd())
   .option("--format <format>", "text | github | json", "text")
   .option("--bundle <dir>", "verify an exported run bundle (integrity + derivation, no repo)")
   .option("--run <runId>", "verify a run's acceptance criteria against its result revision (temporary worktree)")
   .option("--all", "force full verification (no cached skipping; CI always passes this)")
   .option("--scoped-to-diff <baseRev>", "(specs/diff-scoped-verify) partial verification by derived disjointness: skip criteria proven unaffected by baseRev..HEAD (file paths exact; command filter scopes declared; unscoped commands never skip). A REPORT, not evidence - no run records, no freshness anchor; the banner states the partial claim")
-  .action(async (specFile: string | undefined, opts: { cwd: string; format: string; bundle?: string; run?: string; all?: boolean; scopedToDiff?: string }) => {
-    const vfmt = opts.format === "github" ? "github" : opts.format === "json" ? "json" : "text";
+  .action(async (specs: string[] | undefined, opts: { cwd: string; format: string; bundle?: string; run?: string; all?: boolean; scopedToDiff?: string }) => {
+    process.exitCode = await runVerify(specs, opts.cwd, vfmt, opts.bundle, opts.run, opts.all === true, opts.scopedToDiff);
     process.exitCode = await runVerify(specFile, opts.cwd, vfmt, opts.bundle, opts.run, opts.all === true, opts.scopedToDiff);
   });
 

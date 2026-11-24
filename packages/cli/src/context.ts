@@ -64,6 +64,58 @@ export function resolveAllSpecs(specsDir: string, explicitFile?: string): { file
   });
 }
 
+/**
+ * An explicit selection for spc verify (specs/verify-selection): each
+ * selector resolves, in order, to an existing file at that path, a spec
+ * under specs/ whose file stem equals the selector, or a spec under
+ * specs/ whose metadata.id equals the selector. Paths resolve against
+ * baseDir. The result keeps the caller's order and names each resolved
+ * file once. A selector that resolves to nothing is an error naming it -
+ * never a silent drop.
+ */
+export function resolveSelectedSpecs(
+  specsDir: string,
+  selectors: readonly string[],
+  baseDir: string,
+): { file: string; ir: SpecIR }[] {
+  if (selectors.length === 0) return resolveAllSpecs(specsDir);
+  const selected: { file: string; ir: SpecIR }[] = [];
+  const seen = new Set<string>();
+  for (const selector of selectors) {
+    const resolved = resolveSpecSelector(specsDir, selector, baseDir);
+    const key = path.resolve(resolved.file);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    selected.push(resolved);
+  }
+  return selected;
+}
+
+function resolveSpecSelector(specsDir: string, selector: string, baseDir: string): { file: string; ir: SpecIR } {
+  const compile = (file: string): { file: string; ir: SpecIR } => {
+    const result = compileSpecFile(file);
+    if (!result.ok || !result.ir) {
+      throw new SpcError("SPEC_INVALID", `${file}: ${result.diagnostics.map((d) => d.message).join("\n")}`);
+    }
+    return { file, ir: result.ir };
+  };
+  const asPath = path.resolve(baseDir, selector);
+  if (existsSync(asPath)) return compile(asPath);
+  for (const ext of [".yaml", ".yml"]) {
+    const byStem = path.join(specsDir, `${selector}${ext}`);
+    if (existsSync(byStem)) return compile(byStem);
+  }
+  // By id last: a scan that skips files which fail to compile, so one
+  // broken spec cannot hide the id being looked for.
+  if (existsSync(specsDir)) {
+    for (const f of readdirSync(specsDir).filter((x) => x.endsWith(".yaml") || x.endsWith(".yml")).sort()) {
+      const result = compileSpecFile(path.join(specsDir, f));
+      if (result.ok && result.ir && result.ir.spec.metadata.id === selector) return { file: path.join(specsDir, f), ir: result.ir };
+    }
+  }
+  throw new SpcError("SPEC_FILE_NOT_FOUND", `no spec matches "${selector}": no file at that path, no ${selector}.yaml under ${specsDir}, and no spec there with that id`);
+}
+
 export function resolveSpec(specsDir: string, explicitFile?: string): { file: string; ir: SpecIR } {
   if (explicitFile) {
     const result = compileSpecFile(explicitFile);

@@ -7,7 +7,7 @@ import { createVerifyRun, freshnessCheck, inPlaceHandoffWarning, prepareDisposab
 import { CommandCache, parseFilterScope, resolveScopeDirs, trackedFiles, workspacePackageDirs, type SharedCommandRun } from "@spc/verifier";
 import { verifyProperties, EventStore, EvidenceStore, FollowupStore } from "@spc/runtime";
 import { git } from "@spc/repo";
-import { createProvider, loadRepoConfig, resolveAllSpecs, resolveRepoRoot } from "../context.js";
+import { createProvider, loadRepoConfig, resolveAllSpecs, resolveRepoRoot, resolveSelectedSpecs } from "../context.js";
 import { loadSuiteRegistry, type SuiteDefinition } from "@spc/repo";
 import type { DesiredProperty } from "@spc/schema";
 
@@ -40,13 +40,15 @@ function resolveSuitesOrFail(specs: { ir: { spec: { metadata: { id: string } }; 
 }
 
 /**
- * `spc verify [specFile]`: verify desired state against the current
- * tree. With no file, verifies EVERY spec under specs/ and exits
- * worst-of (0 only when every spec passes); an explicit file verifies
- * exactly that spec.
+ * `spc verify [specs...]`: verify desired state against the current
+ * tree. With no selector, verifies EVERY spec under specs/ and exits
+ * worst-of (0 only when every spec passes). Each selector - a spec file
+ * path, file stem or spec id - verifies exactly that spec, in the order
+ * given, each once (specs/verify-selection); a selector that resolves to
+ * nothing fails the invocation before any criterion runs.
  */
 export async function runVerify(
-  specFile: string | undefined,
+  selectors: string[] | undefined,
   cwd?: string,
   format: "text" | "github" | "json" = "text",
   bundleDir?: string,
@@ -171,7 +173,7 @@ export async function runVerify(
   const repoRoot = resolveRepoRoot(cwd);
   const config = loadRepoConfig(repoRoot);
   const provider = await createProvider(config, repoRoot);
-  const specs = resolveAllSpecs(path.join(repoRoot, "specs"), specFile ?? undefined);
+  const specs = resolveSelectedSpecs(path.join(repoRoot, "specs"), selectors ?? [], path.resolve(cwd ?? process.cwd()));
   const multi = specs.length > 1;
   // Frozen suite registry: loaded, validated and every reference
   // resolved ONCE per invocation, before the first criterion executes.
