@@ -89,6 +89,12 @@ requirements:
         assert:
           notContains: "--confirm"
         discriminating: true
+      - id: RCS-002-F
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "once no spc process is writing"
+        discriminating: true
   - id: RCS-003
     statement: >
       The skill gives one writer per path instead of advising ordering
@@ -193,6 +199,24 @@ requirements:
         assert:
           contains: "nothing in flight"
         discriminating: true
+      - id: RCS-005-G
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "earlier or later"
+        discriminating: true
+      - id: RCS-005-H
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "does not convict the answer"
+        discriminating: true
+      - id: RCS-005-I
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "A refused staging is a wrong"
+        discriminating: true
   - id: RCS-006
     statement: >
       The skill shows how to verify one spec or N - by path, file stem or
@@ -257,6 +281,12 @@ requirements:
         assert:
           contains: "exactly one shape"
         discriminating: true
+      - id: RCS-008-C
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "exactly one shape on rehearsal grounds"
+        discriminating: true
   - id: RCS-009
     statement: >
       The skill scopes its note about an indeterminate apply run to a
@@ -312,7 +342,20 @@ requirements:
         assert:
           notContains: "Answer with anything beyond the minimal valid value"
         discriminating: true
+      - id: RCS-010-D
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "whose write targets overlap an earlier task's is refused"
+        discriminating: true
+      - id: RCS-010-E
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          notContains: "later task that touches an earlier"
+        discriminating: true
 outOfScope:
   - Aligning the other skills and the CLI's own advice that still recommend a bare --gates (rehearse, pipeline, answer-queue, the harness prompt, the PREFLIGHT_ADVISABLE message), which runs the full test battery locally. Follow-up.
+  - The planner prompt still offers dependsOn ordering for overlapping writers (packages/planner/src/prompts.ts), and the answer-queue skill still says the response window is about 15 minutes. Follow-ups.
   - A failure view for captured output such as spc run show --failures (decided in the 2026-11-23 consensus, not implemented).
   - Making cancel complete on a busy or dead owner (the cancellation program in the same consensus). This spec only makes the skill tell the truth about today's behavior.

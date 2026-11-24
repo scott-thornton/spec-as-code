@@ -24,12 +24,15 @@ describe("the run-cycle skill as agents load it", () => {
     expect(skill).toContain("marked cancelled at once");
     expect(skill).not.toContain("--confirm");
     expect(skill).toContain("spc apply recover");
+    expect(skill).toContain("once no spc process is writing");
   });
 
   it("gives one writer per path instead of ordering overlapping writers", () => {
     expect(skill).not.toContain("overlapping writers need");
     expect(skill).toContain("one writer per path");
     expect(skill).toContain("touched or not");
+    expect(skill).toContain("whose write targets overlap an earlier task's is refused");
+    expect(skill).not.toContain("later task that touches an earlier");
   });
 
   it("diagnoses a failure from the tail of the captured output, skipping the red phase", () => {
@@ -45,13 +48,16 @@ describe("the run-cycle skill as agents load it", () => {
     expect(skill).not.toContain("--gates build");
     expect(skill).not.toContain("means the answer is wrong");
     expect(skill).toContain("nothing in flight");
+    expect(skill).toContain("earlier or later");
+    expect(skill).toContain("does not convict the answer");
+    expect(skill).toContain("A refused staging is a wrong");
     expect(skill).toContain("spc patch verify");
     expect(skill).not.toContain("is a legitimate escape");
   });
 
   it("states the one shape spc agent respond refuses", () => {
     expect(skill).toContain("PREFLIGHT_ADVISABLE");
-    expect(skill).toContain("exactly one shape");
+    expect(skill).toContain("exactly one shape on rehearsal grounds");
     expect(skill).toContain("--no-preflight");
   });
 
