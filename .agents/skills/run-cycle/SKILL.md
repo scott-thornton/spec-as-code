@@ -112,9 +112,10 @@ error; fix and resubmit the same request id):
 - **Every must-property addressed** via `satisfies` (modify) or
   `verifies` (verify) - else `SPC2005 ... not addressed`.
 - Task ids `T###`; write targets explicit; **one writer per path**.
-  Under the default configuration, a later task
-  whose write targets overlap an earlier task's is refused
-  `UNMEDIATED_CHANGES`, touched or not (reproduced 2026-11-24: eight
+  Under the default configuration, a later task is refused
+  `UNMEDIATED_CHANGES` when its
+  declared write targets overlap a path an earlier task changed -
+  even if it never touches that path (reproduced 2026-11-24: eight
   executor round-trips, then the task fails), so put both edits in
   one task. Minimum task set - a task only confirming existing
   state is a correct verify task.
@@ -162,9 +163,11 @@ it appears**. The executor answer shape:
   earlier or later. Another task's work is absent from the base
   checkout, so a red criterion does not convict the answer when this
   task's criteria need that work. A refused staging is a wrong
-  operation or an overlap the guard will refuse too. For composition
-  alone, `spc patch verify <ops.json>` runs the changes through the
-  applicator in memory against the live tree and runs no criteria.
+  operation, an overlap the guard will refuse too, or - in a
+  worktree-mode run - this task's own earlier applied work, which the
+  guard accepts. For composition alone, `spc patch verify <ops.json>`
+  runs the changes through the applicator in memory against the live
+  tree and runs no criteria.
 - `spc agent respond` refuses exactly one shape on rehearsal grounds:
   two or more patch operations on one path when no rehearsal matches
   the exact draft. It prints `PREFLIGHT_ADVISABLE` and exits 1. Rehearse
@@ -249,7 +252,7 @@ discipline); CI owns suites. Pop stashed staging specs after push.
 | executor answer refused: missing `commands` / `observations` / `evidenceCandidates` / `followups` | the four fields are required even when empty | add the empty arrays; validate, then respond |
 | `PREFLIGHT_ADVISABLE` from spc agent respond | two or more patch ops on one path, and no rehearsal matches this exact draft | rehearse that answer, or pass `--no-preflight` |
 | criterion red in `spc agent dry-run` | the rehearsal checks the base plus this one draft: another task's work, earlier or later, is absent | red does not convict the answer when this task's criteria need that work |
-| staging refused in `spc agent dry-run` | a wrong operation, or write targets that overlap another task's | fix the op; `spc patch verify <ops.json>` checks composition against the live tree |
+| staging refused in `spc agent dry-run` | a wrong operation; an overlap the guard will refuse too; or, in a worktree-mode run, this task's own earlier applied work | fix the op, or re-plan so one task owns the path; the last case needs nothing |
 | request found in `stale/`, queue empty | window expired or process stopped | re-run plan/apply; answer fast |
 | run `running` but nothing happens | abandoned run | `spc apply --resume <runId>`; to abandon it, `spc run cancel <runId>`, then `spc apply recover` if it prints `cancellation INCOMPLETE` |
 | `cancellation INCOMPLETE` from spc run cancel | owner dead or busy, not parked on a request (macOS) | `spc apply recover` once no spc process is writing |
