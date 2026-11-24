@@ -27,11 +27,16 @@ and harmless. Two rules follow:
    unanswerable, the run lost. This is the single most common way to
    burn a cycle. Do not go read documentation while your window ticks.
 2. **Never stop a backgrounded spc process.** Stopping the waiter
-   orphans its request instantly. The only sanctioned exit is
-   `spc run cancel <runId>`.
+   orphans its request instantly. To end a run, `spc run cancel <runId>`
+   - and know what it can do. It completes only when the owner is
+   parked waiting on a request and sees the retirement. An owner that
+   is already dead, or busy inside a command, is not stopped by it: on
+   macOS it reports `CANCEL_INCOMPLETE` after a 30s grace period. Then
+   the way out is `spc apply recover` - add `--confirm` only once you
+   have checked that no spc process is still running.
 
 ```
-tool timeout (300s)  <  response window (15-30m)
+tool timeout (300s)  <  response window (40-60m)
    plan/apply background -> you poll -> request appears -> answer NOW -> run continues
    drift past the window -> stale/ -> tombstone -> re-run plan, nothing else recovers it
 ```
@@ -62,7 +67,7 @@ Write the oracle test(s) the criteria execute, then prove red:
 pnpm --filter <pkg>... build > /dev/null && pnpm --filter <pkg> exec vitest run src/<oracle>.test.ts
 ```
 
-Two traps, both burned real cycles:
+Three traps, each burned a real cycle:
 - **The build prefix is part of the contract.** If the criterion
   command has one, run `pnpm --filter <pkg> build` once before
   trusting a local green - vitest does not typecheck; CI's tsc will
@@ -70,6 +75,10 @@ Two traps, both burned real cycles:
 - **Confirm red for the right reason** - read the assertion output,
   not just the exit code. Then commit spec + oracle together:
   `git commit -m "spec+red oracle: ..."`.
+- **An unmatched title filter is green.** vitest exits 0 when its `-t`
+  filter selects no test, and any exit 0 is a pass. Prefer whole-file
+  criteria; if you must filter, read the red output and confirm tests
+  ran.
 
 ## Stage 3: plan
 
@@ -100,9 +109,12 @@ Rules the deterministic validator enforces (refusals requeue with the
 error; fix and resubmit the same request id):
 - **Every must-property addressed** via `satisfies` (modify) or
   `verifies` (verify) - else `SPC2005 ... not addressed`.
-- Task ids `T###`; write targets explicit; overlapping writers need
-  dependsOn ordering; minimum task set - a task only confirming
-  existing state is a correct verify task.
+- Task ids `T###`; write targets explicit; **one writer per path** -
+  under the default configuration a later task that touches an earlier
+  task's file is refused `UNMEDIATED_CHANGES` (reproduced 2026-11-24:
+  eight executor round-trips, then the task fails), so put both edits
+  in one task; minimum task set - a task only confirming existing
+  state is a correct verify task.
 - Rejected answers: read the feedback in the requeued request, fix the
   JSON, respond again with the same id.
 
@@ -124,17 +136,27 @@ it appears**. The executor answer shape:
   "changes": [ {"op": "update", "path": "<rel>", "content": "<FULL new file content>"},
                {"op": "patch", "path": "<rel>", "baseDigest": "sha256:<hash>",
                 "anchor": "<exact byte-unique text>", "replacement": "<new text>"},
-               {"op": "create", "path": "<rel>", "content": "..."} ] }
+               {"op": "create", "path": "<rel>", "content": "..."} ],
+  "commands": [], "observations": [], "evidenceCandidates": [], "followups": [] }
 ```
 
-- `update` takes **no** baseDigest; `patch` requires it
-  (`shasum -a 256 <file>`). Compose patch ops with `spc patch build`
-  - never hand-type digests (follow: spc use-skill answer-queue).
+- `update` takes **no** baseDigest; `patch` requires it. Compose with
+  `spc patch build --batch <spec.json> --out <ops.json>` - never
+  hand-type a digest, and never retype an anchor: cut it out of the
+  tree (`sed -n '12,14p' <file> > anchor.txt`) and write the
+  replacement to match it line for line. A replacement one line longer
+  than its anchor cost a run (a stray closing brace).
+- The last four fields are REQUIRED even when empty.
+  `spc agent validate <id> --file <answer.json>` rejects an answer
+  without them - validate before every respond.
+- Rehearse before you respond: `spc agent dry-run <id> --file
+  <answer.json> --gates build` (about 30s: stages the ops in a
+  scratch worktree, builds, runs the spec's criteria). A criterion
+  still red there means the answer is wrong. Never bare `--gates` -
+  the root test script is the full battery.
 - The request's system prompt carries the full executor contract -
   read it once per session. `agent show <id> --part schema` for the
   exact JSON Schema.
-- If the CLI preflight gripes about a missing `commands` field the
-  runtime does not require, `--no-preflight` is a legitimate escape.
 - A requeued request with `lastError` = your answer failed validation:
   fix the shape, keep the substance.
 - Executor requests are bounded one-task work - delegable to a cheaper
@@ -147,16 +169,30 @@ from the background task's output file: the requirement table
 ## Stage 6: verify
 
 ```bash
-spc verify specs/<id>.yaml       # must end: all satisfied, exit 0
+spc verify specs/<id>.yaml       # one spec: must end all satisfied, exit 0
+spc verify <id> <id>             # N specs: exactly those, by path, file stem or spec id
 ```
 
+Bare `spc verify` runs every spec - do not type it by accident. A name
+that matches nothing fails with exit 2 instead of verifying less.
+Expect every property of a run that changed the evidence machinery
+itself (`packages/repo`, `packages/verifier`, `packages/runtime`) to
+read indeterminate in that run's own ledger: the applying process
+judged its sweep with the old code in memory. A fresh `spc verify` is
+the evidence.
+
 If the run ended red or partial: triage before retrying (follow: spc
-use-skill handle-partial). Diagnose from evidence, not the summary:
+use-skill handle-partial). Diagnose from evidence, not the summary -
+and from the END of it, because runners print failures last and
+captured output is cut to its first 64 KiB:
 
 ```bash
 python3 -c "import json
 for l in open('.spc/runs/<runId>/evidence.jsonl'):
-    e=json.loads(l); print(e.get('criterionId'), e.get('outcome'), str(e.get('payload',{}))[:200])"
+    e=json.loads(l)
+    if e.get('outcome')!='contradicts': continue
+    p=e.get('payload',{})
+    for k in ('stdout','stderr'): print(e.get('criterionId'), k, '...', str(p.get(k,''))[-2500:])"
 ```
 
 Fixes go **through the loop** - a fresh `plan`/`apply` whose executor
@@ -195,15 +231,21 @@ discipline); CI owns suites. Pop stashed staging specs after push.
 | `SPC2009` spec digest drift | spec edited after planning | re-plan against the new digest |
 | `PATCH_BASE_MISMATCH` | tree moved since digest | re-hash, rebuild op via patch build |
 | `OUT_OF_SCOPE_WRITE` | file not in targets.write | re-plan with the target; never widen silently |
+| executor answer refused: missing `commands` / `observations` / `evidenceCandidates` / `followups` | the four fields are required even when empty | add the empty arrays; validate, then respond |
+| criterion still red in `spc agent dry-run` | the answer is wrong, not the rehearsal | fix the ops; a rehearsal costs 30s, a refused attempt costs the task |
 | request found in `stale/`, queue empty | window expired or process stopped | re-run plan/apply; answer fast |
-| run `running` but nothing happens | abandoned run | `spc apply --resume <runId>` or `spc run cancel` |
+| run `running` but nothing happens | abandoned run | `spc apply --resume <runId>`; to abandon it, `spc run cancel <runId>`, then `spc apply recover` if cancel reports incomplete |
+| `CANCEL_INCOMPLETE` from spc run cancel | owner dead or busy, not parked on a request (macOS) | `spc apply recover` once no spc process is writing |
+| every property indeterminate in an apply run that changed the evidence machinery (repo, verifier or runtime packages) | the applying process judges its own sweep with the old code in memory | expected; `spc verify` in a fresh process |
+| `SPEC_FILE_NOT_FOUND: no spec matches` from spc verify | a path without its extension is not a file | use the id (`spc verify chain-memory`) or the full path |
 | `indeterminate` + `SYNTHESIS_REJECTED` events | oracle-identity gate refusing a drifted pairing | by design; fresh in-run flip re-establishes |
 | ghost run dirs (events, no metadata) | aborted apply attempts | exclude from history searches; never counted |
 | crash-wedged challenge worktrees | hard-interrupted run | the engines pre-clean; older trees: `git worktree prune` + rm |
 
 ## Never
 
-- Kill or stop an spc process (`spc run cancel` only).
+- Kill or stop an spc process by hand - `spc run cancel`, then
+  `spc apply recover` if it reports incomplete.
 - Run full test batteries locally - single-file oracles only; CI owns
   suites.
 - Let a minted request sit while you do other work.
@@ -213,8 +255,9 @@ discipline); CI owns suites. Pop stashed staging specs after push.
   plan output before diagnosing any file in there.
 - Commit during a run; hand-edit `.spc/runs/`, `.spc/plans/`, or
   `.spc/harness/answered/`.
-- Answer with more than the minimal valid value, or claim a
-  requirement satisfied yourself - evidence decides, not you.
+- Answer with anything beyond the minimal valid value - which includes
+  the four empty arrays - or claim a requirement satisfied yourself -
+  evidence decides, not you.
 
 ## The discipline
 
