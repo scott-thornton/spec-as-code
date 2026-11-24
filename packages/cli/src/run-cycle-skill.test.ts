@@ -30,8 +30,8 @@ describe("the run-cycle skill as agents load it", () => {
   it("gives one writer per path instead of ordering overlapping writers", () => {
     expect(skill).not.toContain("overlapping writers need");
     expect(skill).toContain("one writer per path");
-    expect(skill).toContain("touched or not");
-    expect(skill).toContain("whose write targets overlap an earlier task's is refused");
+    expect(skill).toContain("even if it never touches that path");
+    expect(skill).toContain("declared write targets overlap a path an earlier task changed");
     expect(skill).not.toContain("later task that touches an earlier");
   });
 
@@ -51,6 +51,8 @@ describe("the run-cycle skill as agents load it", () => {
     expect(skill).toContain("earlier or later");
     expect(skill).toContain("does not convict the answer");
     expect(skill).toContain("A refused staging is a wrong");
+    expect(skill).toContain("this task's own earlier applied work");
+    expect(skill).toContain("re-plan so one task owns the path");
     expect(skill).toContain("spc patch verify");
     expect(skill).not.toContain("is a legitimate escape");
   });

@@ -217,6 +217,18 @@ requirements:
         assert:
           contains: "A refused staging is a wrong"
         discriminating: true
+      - id: RCS-005-J
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "this task's own earlier applied work"
+        discriminating: true
+      - id: RCS-005-K
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "re-plan so one task owns the path"
+        discriminating: true
   - id: RCS-006
     statement: >
       The skill shows how to verify one spec or N - by path, file stem or
@@ -334,7 +346,7 @@ requirements:
         type: file
         path: .agents/skills/run-cycle/SKILL.md
         assert:
-          contains: "touched or not"
+          contains: "even if it never touches that path"
         discriminating: true
       - id: RCS-010-C
         type: file
@@ -346,7 +358,7 @@ requirements:
         type: file
         path: .agents/skills/run-cycle/SKILL.md
         assert:
-          contains: "whose write targets overlap an earlier task's is refused"
+          contains: "declared write targets overlap a path an earlier task changed"
         discriminating: true
       - id: RCS-010-E
         type: file
