@@ -19,6 +19,15 @@ goal: >
   criterion's payload, although runners print failures last. And it is
   silent on rehearsing an answer before submitting, on verifying one spec
   or N, and on a title filter that selects nothing passing green.
+  A first correction (2026-11-24) fixed those and introduced new
+  errors of its own, found by a read-only adversarial pass against the
+  code: it said a criterion still red in the rehearsal means the answer
+  is wrong, although the rehearsal checks out the run's base plus one
+  draft and so is unfaithful for a later task; it told every run that
+  touched the evidence packages to expect indeterminate; it named a
+  status string the CLI never prints; and it recommended --gates build,
+  which merely repeats the build the rehearsal already did. This
+  amendment corrects those and pins them.
 requirements:
   - id: RCS-001
     statement: >
@@ -40,9 +49,11 @@ requirements:
   - id: RCS-002
     statement: >
       The skill no longer calls spc run cancel the only sanctioned exit.
-      It says what cancel can do - complete when the owner is parked on a
-      request - and what happens otherwise on macOS: CANCEL_INCOMPLETE
-      after the grace period, with spc apply recover as the way out.
+      It says what cancel can do - mark a run cancelled at once when no
+      execution-intent record names it, or complete when the owner is
+      parked on a request - and what happens otherwise on macOS: the
+      command prints "cancellation INCOMPLETE" and exits 1 after the
+      grace period, with spc apply recover as the way out.
     priority: must
     category: behavioral
     scope:
@@ -58,13 +69,25 @@ requirements:
         type: file
         path: .agents/skills/run-cycle/SKILL.md
         assert:
-          contains: "CANCEL_INCOMPLETE"
+          contains: "cancellation INCOMPLETE"
         discriminating: true
       - id: RCS-002-C
         type: file
         path: .agents/skills/run-cycle/SKILL.md
         assert:
           contains: "spc apply recover"
+        discriminating: true
+      - id: RCS-002-D
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "marked cancelled at once"
+        discriminating: true
+      - id: RCS-002-E
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          notContains: "--confirm"
         discriminating: true
   - id: RCS-003
     statement: >
@@ -119,8 +142,15 @@ requirements:
   - id: RCS-005
     statement: >
       The skill tells the operator to rehearse an answer before
-      submitting it - spc agent dry-run with the build gate only - to
-      validate it against the schema first, and never to call
+      submitting it with spc agent dry-run, and to omit --gates: the
+      rehearsal already builds the staged tree and then runs the task's
+      file and command criteria, while a bare --gates runs every root
+      gate including the full test battery. It says how to read the
+      verdict: the rehearsal checks out the run's base plus this one
+      draft, so it is faithful only for a task that depends on nothing
+      in flight; for a later task a red criterion or a refused staging is
+      expected, and the answer is judged with spc patch verify. It
+      validates the answer against the schema first, and never calls
       --no-preflight a legitimate escape for a schema complaint.
     priority: must
     category: behavioral
@@ -137,13 +167,31 @@ requirements:
         type: file
         path: .agents/skills/run-cycle/SKILL.md
         assert:
-          contains: "--gates build"
+          contains: "Omit `--gates`"
         discriminating: true
       - id: RCS-005-C
         type: file
         path: .agents/skills/run-cycle/SKILL.md
         assert:
           notContains: "is a legitimate escape"
+        discriminating: true
+      - id: RCS-005-D
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          notContains: "means the answer is wrong"
+        discriminating: true
+      - id: RCS-005-E
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "spc patch verify"
+        discriminating: true
+      - id: RCS-005-F
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "nothing in flight"
         discriminating: true
   - id: RCS-006
     statement: >
@@ -185,6 +233,86 @@ requirements:
         command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/run-cycle-skill.test.ts
         expect: {exitCode: 0}
         discriminating: true
+  - id: RCS-008
+    statement: >
+      The skill states the one shape spc agent respond refuses: two or
+      more patch operations on one path when no rehearsal matches the
+      exact draft. It names what is printed (PREFLIGHT_ADVISABLE, exit
+      1) and the two ways on - rehearse that answer, or pass
+      --no-preflight.
+    priority: must
+    category: behavioral
+    scope:
+      include: [.agents/skills/run-cycle/**]
+    acceptance:
+      - id: RCS-008-A
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "PREFLIGHT_ADVISABLE"
+        discriminating: true
+      - id: RCS-008-B
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "exactly one shape"
+        discriminating: true
+  - id: RCS-009
+    statement: >
+      The skill scopes its note about an indeterminate apply run to a
+      run that changes the red-phase / oracle-identity gate, which
+      cannot validate its own repair, and says any other indeterminate is
+      a finding to triage. It does not tell the operator to expect every
+      property of a run that touched the evidence packages to be
+      indeterminate.
+    priority: must
+    category: behavioral
+    scope:
+      include: [.agents/skills/run-cycle/**]
+    acceptance:
+      - id: RCS-009-A
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "oracle-identity gate cannot validate its own repair"
+        discriminating: true
+      - id: RCS-009-B
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          notContains: "Expect every property of a run"
+        discriminating: true
+  - id: RCS-010
+    statement: >
+      The diagnostic recipe skips red-phase evidence, so it prints what
+      failed at the result revision and not the base revision's expected
+      red. It also says that overlapping write targets are refused
+      whether or not the later task touches the file, and separates
+      "never claim a requirement satisfied" from "never pad an answer".
+    priority: must
+    category: behavioral
+    scope:
+      include: [.agents/skills/run-cycle/**]
+    acceptance:
+      - id: RCS-010-A
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "e.get('phase')=='red'"
+        discriminating: true
+      - id: RCS-010-B
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "touched or not"
+        discriminating: true
+      - id: RCS-010-C
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          notContains: "Answer with anything beyond the minimal valid value"
+        discriminating: true
 outOfScope:
+  - Aligning the other skills and the CLI's own advice that still recommend a bare --gates (rehearse, pipeline, answer-queue, the harness prompt, the PREFLIGHT_ADVISABLE message), which runs the full test battery locally. Follow-up.
   - A failure view for captured output such as spc run show --failures (decided in the 2026-11-23 consensus, not implemented).
   - Making cancel complete on a busy or dead owner (the cancellation program in the same consensus). This spec only makes the skill tell the truth about today's behavior.
