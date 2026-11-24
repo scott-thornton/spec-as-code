@@ -1,0 +1,190 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: run-cycle-skill-accuracy
+  title: The run-cycle skill says what is true
+goal: >
+  The run-cycle skill is the operating procedure a model loads before
+  driving spc from inside a tool harness. Written on 2026-11-16 from one
+  repository's experience, it states four things that are not true and
+  omits what 2026-11-24 proved the hard way. Its executor answer omits
+  the four fields the ExecutorResult schema requires, and it calls
+  --no-preflight "a legitimate escape" for that complaint - an agent
+  following it has its first answer refused. It names spc run cancel "the
+  only sanctioned exit", although on macOS cancel completes only when the
+  owner is parked on a request. It advises ordering overlapping writers
+  with dependsOn, although under the default configuration the later task
+  is then refused as UNMEDIATED_CHANGES - reproduced; eight executor
+  round-trips burned. It prints the first 200 characters of a failed
+  criterion's payload, although runners print failures last. And it is
+  silent on rehearsing an answer before submitting, on verifying one spec
+  or N, and on a title filter that selects nothing passing green.
+requirements:
+  - id: RCS-001
+    statement: >
+      The documented executor answer carries commands, observations,
+      evidenceCandidates and followups - the four fields the
+      ExecutorResult schema requires even when empty - and says they are
+      required.
+    priority: must
+    category: behavioral
+    scope:
+      include: [.agents/skills/run-cycle/**]
+    acceptance:
+      - id: RCS-001-A
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: '"commands": [], "observations": [], "evidenceCandidates": [], "followups": []'
+        discriminating: true
+  - id: RCS-002
+    statement: >
+      The skill no longer calls spc run cancel the only sanctioned exit.
+      It says what cancel can do - complete when the owner is parked on a
+      request - and what happens otherwise on macOS: CANCEL_INCOMPLETE
+      after the grace period, with spc apply recover as the way out.
+    priority: must
+    category: behavioral
+    scope:
+      include: [.agents/skills/run-cycle/**]
+    acceptance:
+      - id: RCS-002-A
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          notContains: "The only sanctioned exit is"
+        discriminating: true
+      - id: RCS-002-B
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "CANCEL_INCOMPLETE"
+        discriminating: true
+      - id: RCS-002-C
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "spc apply recover"
+        discriminating: true
+  - id: RCS-003
+    statement: >
+      The skill gives one writer per path instead of advising ordering
+      overlapping writers with dependsOn, and says why: under the default
+      configuration the later task is refused as UNMEDIATED_CHANGES.
+    priority: must
+    category: behavioral
+    scope:
+      include: [.agents/skills/run-cycle/**]
+    acceptance:
+      - id: RCS-003-A
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          notContains: "overlapping writers need"
+        discriminating: true
+      - id: RCS-003-B
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "one writer per path"
+        discriminating: true
+  - id: RCS-004
+    statement: >
+      The diagnostic recipe prints the tail of a failed criterion's
+      captured output, not its first 200 characters, and says that
+      captured output is cut to its first 64 KiB.
+    priority: must
+    category: behavioral
+    scope:
+      include: [.agents/skills/run-cycle/**]
+    acceptance:
+      - id: RCS-004-A
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          notContains: "[:200]"
+        discriminating: true
+      - id: RCS-004-B
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "[-2500:]"
+        discriminating: true
+      - id: RCS-004-C
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "64 KiB"
+        discriminating: true
+  - id: RCS-005
+    statement: >
+      The skill tells the operator to rehearse an answer before
+      submitting it - spc agent dry-run with the build gate only - to
+      validate it against the schema first, and never to call
+      --no-preflight a legitimate escape for a schema complaint.
+    priority: must
+    category: behavioral
+    scope:
+      include: [.agents/skills/run-cycle/**]
+    acceptance:
+      - id: RCS-005-A
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "spc agent dry-run"
+        discriminating: true
+      - id: RCS-005-B
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "--gates build"
+        discriminating: true
+      - id: RCS-005-C
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          notContains: "is a legitimate escape"
+        discriminating: true
+  - id: RCS-006
+    statement: >
+      The skill shows how to verify one spec or N - by path, file stem or
+      spec id - and says a bare spc verify runs every spec. It warns that
+      vitest exits 0 when a title filter selects no test, so a filtered
+      criterion can be green without running.
+    priority: must
+    category: behavioral
+    scope:
+      include: [.agents/skills/run-cycle/**]
+    acceptance:
+      - id: RCS-006-A
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "spc verify <id> <id>"
+        discriminating: true
+      - id: RCS-006-B
+        type: file
+        path: .agents/skills/run-cycle/SKILL.md
+        assert:
+          contains: "exits 0 when"
+        discriminating: true
+  - id: RCS-007
+    statement: >
+      The same skill text is read by a command criterion on the shape
+      this repository's criteria use - a build prefix, then vitest run
+      with one named file - so that an apply run establishes its flip on
+      the command shape the oracle-identity gate judged unresolved until
+      2026-11-24, with the oracle file untouched between the halves.
+    priority: must
+    category: behavioral
+    scope:
+      include: [.agents/skills/run-cycle/**, packages/cli/src/run-cycle-skill.test.ts]
+    acceptance:
+      - id: RCS-007-A
+        type: command
+        command: pnpm --filter @spc/cli build > /dev/null && pnpm --filter @spc/cli exec vitest run src/run-cycle-skill.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+outOfScope:
+  - A failure view for captured output such as spc run show --failures (decided in the 2026-11-23 consensus, not implemented).
+  - Making cancel complete on a busy or dead owner (the cancellation program in the same consensus). This spec only makes the skill tell the truth about today's behavior.
