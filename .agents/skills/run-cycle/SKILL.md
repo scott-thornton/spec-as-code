@@ -28,12 +28,12 @@ and harmless. Two rules follow:
    burn a cycle. Do not go read documentation while your window ticks.
 2. **Never stop a backgrounded spc process.** Stopping the waiter
    orphans its request instantly. To end a run, `spc run cancel <runId>`
-   - and know what it can do. It completes only when the owner is
-   parked waiting on a request and sees the retirement. An owner that
-   is already dead, or busy inside a command, is not stopped by it: on
-   macOS it reports `CANCEL_INCOMPLETE` after a 30s grace period. Then
-   the way out is `spc apply recover` - add `--confirm` only once you
-   have checked that no spc process is still running.
+   - and know what it can do. A run with no execution-intent record is
+   marked cancelled at once. Otherwise cancel completes when the owner
+   is parked waiting on a request and sees the retirement. An owner
+   that is already dead, or busy inside a command, is not stopped by
+   it: on macOS the command prints `cancellation INCOMPLETE` and exits
+   1 after a 30s grace period. Then the way out is `spc apply recover`.
 
 ```
 tool timeout (300s)  <  response window (40-60m)
@@ -111,9 +111,10 @@ error; fix and resubmit the same request id):
   `verifies` (verify) - else `SPC2005 ... not addressed`.
 - Task ids `T###`; write targets explicit; **one writer per path** -
   under the default configuration a later task that touches an earlier
-  task's file is refused `UNMEDIATED_CHANGES` (reproduced 2026-11-24:
-  eight executor round-trips, then the task fails), so put both edits
-  in one task; minimum task set - a task only confirming existing
+  write targets overlap an earlier task's is refused
+  `UNMEDIATED_CHANGES`, touched or not (reproduced 2026-11-24: eight
+  executor round-trips, then the task fails), so put both edits in one
+  task; minimum task set - a task only confirming existing
   state is a correct verify task.
 - Rejected answers: read the feedback in the requeued request, fix the
   JSON, respond again with the same id.
@@ -146,14 +147,23 @@ it appears**. The executor answer shape:
   tree (`sed -n '12,14p' <file> > anchor.txt`) and write the
   replacement to match it line for line. A replacement one line longer
   than its anchor cost a run (a stray closing brace).
-- The last four fields are REQUIRED even when empty.
-  `spc agent validate <id> --file <answer.json>` rejects an answer
-  without them - validate before every respond.
+- The last four fields are REQUIRED by the request's schema even
+  when empty. `spc agent validate <id> --file <answer.json>` rejects
+  an answer without them - validate before every respond.
 - Rehearse before you respond: `spc agent dry-run <id> --file
-  <answer.json> --gates build` (about 30s: stages the ops in a
-  scratch worktree, builds, runs the spec's criteria). A criterion
-  still red there means the answer is wrong. Never bare `--gates` -
-  the root test script is the full battery.
+  <answer.json>` (about 30s). It checks out the run's base, applies
+  this one draft there, builds, and runs the task's file and command
+  criteria. Omit `--gates`: the rehearsal already builds, and a bare
+  `--gates` runs every root gate including the full test battery. Read
+  its verdict with care. It is faithful only for a task that depends
+  on nothing in flight. A later task is rehearsed without earlier
+  tasks' uncommitted work, so a red criterion or a refused staging is
+  expected there - judge that answer with `spc patch verify`.
+- `spc agent respond` refuses exactly one shape: two or more patch
+  operations on one path when no rehearsal matches the exact draft. It
+  prints `PREFLIGHT_ADVISABLE` and exits 1. Rehearse that answer, or
+  pass `--no-preflight`. (`spc agent submit` is respond with the
+  rehearsal built in.)
 - The request's system prompt carries the full executor contract -
   read it once per session. `agent show <id> --part schema` for the
   exact JSON Schema.
@@ -175,22 +185,21 @@ spc verify <id> <id>             # N specs: exactly those, by path, file stem or
 
 Bare `spc verify` runs every spec - do not type it by accident. A name
 that matches nothing fails with exit 2 instead of verifying less.
-Expect every property of a run that changed the evidence machinery
-itself (`packages/repo`, `packages/verifier`, `packages/runtime`) to
-read indeterminate in that run's own ledger: the applying process
-judged its sweep with the old code in memory. A fresh `spc verify` is
-the evidence.
+A run that changes the red-phase / oracle-identity gate cannot validate its own repair:
+its properties read indeterminate, and a fresh `spc verify` is the evidence.
+Any other indeterminate is a finding - triage it.
 
 If the run ended red or partial: triage before retrying (follow: spc
 use-skill handle-partial). Diagnose from evidence, not the summary -
 and from the END of it, because runners print failures last and
-captured output is cut to its first 64 KiB:
+captured output is cut to its first 64 KiB. The recipe skips the
+red-phase records: their red is the expected one.
 
 ```bash
 python3 -c "import json
 for l in open('.spc/runs/<runId>/evidence.jsonl'):
     e=json.loads(l)
-    if e.get('outcome')!='contradicts': continue
+    if e.get('outcome')!='contradicts' or e.get('phase')=='red': continue
     p=e.get('payload',{})
     for k in ('stdout','stderr'): print(e.get('criterionId'), k, '...', str(p.get(k,''))[-2500:])"
 ```
@@ -232,11 +241,12 @@ discipline); CI owns suites. Pop stashed staging specs after push.
 | `PATCH_BASE_MISMATCH` | tree moved since digest | re-hash, rebuild op via patch build |
 | `OUT_OF_SCOPE_WRITE` | file not in targets.write | re-plan with the target; never widen silently |
 | executor answer refused: missing `commands` / `observations` / `evidenceCandidates` / `followups` | the four fields are required even when empty | add the empty arrays; validate, then respond |
-| criterion still red in `spc agent dry-run` | the answer is wrong, not the rehearsal | fix the ops; a rehearsal costs 30s, a refused attempt costs the task |
+| `PREFLIGHT_ADVISABLE` from spc agent respond | two or more patch ops on one path, and no rehearsal matches this exact draft | rehearse that answer, or pass `--no-preflight` |
+| criterion red or staging refused in `spc agent dry-run` | the rehearsal checks the base plus this one draft; a later task lacks earlier tasks' uncommitted work | expected for a task that depends on another; judge with `spc patch verify` |
 | request found in `stale/`, queue empty | window expired or process stopped | re-run plan/apply; answer fast |
-| run `running` but nothing happens | abandoned run | `spc apply --resume <runId>`; to abandon it, `spc run cancel <runId>`, then `spc apply recover` if cancel reports incomplete |
-| `CANCEL_INCOMPLETE` from spc run cancel | owner dead or busy, not parked on a request (macOS) | `spc apply recover` once no spc process is writing |
-| every property indeterminate in an apply run that changed the evidence machinery (repo, verifier or runtime packages) | the applying process judges its own sweep with the old code in memory | expected; `spc verify` in a fresh process |
+| run `running` but nothing happens | abandoned run | `spc apply --resume <runId>`; to abandon it, `spc run cancel <runId>`, then `spc apply recover` if it prints `cancellation INCOMPLETE` |
+| `cancellation INCOMPLETE` from spc run cancel | owner dead or busy, not parked on a request (macOS) | `spc apply recover` once no spc process is writing |
+| every property indeterminate in an apply run that changed the red-phase / oracle-identity gate | the applying process judges its own sweep with the old code in memory | expected once; `spc verify` in a fresh process |
 | `SPEC_FILE_NOT_FOUND: no spec matches` from spc verify | a path without its extension is not a file | use the id (`spc verify chain-memory`) or the full path |
 | `indeterminate` + `SYNTHESIS_REJECTED` events | oracle-identity gate refusing a drifted pairing | by design; fresh in-run flip re-establishes |
 | ghost run dirs (events, no metadata) | aborted apply attempts | exclude from history searches; never counted |
@@ -255,9 +265,9 @@ discipline); CI owns suites. Pop stashed staging specs after push.
   plan output before diagnosing any file in there.
 - Commit during a run; hand-edit `.spc/runs/`, `.spc/plans/`, or
   `.spc/harness/answered/`.
-- Answer with anything beyond the minimal valid value - which includes
-  the four empty arrays - or claim a requirement satisfied yourself -
-  evidence decides, not you.
+- Claim a requirement satisfied yourself - evidence decides, not you.
+- Pad an answer with anything beyond the minimal valid value. That
+  value still includes the four empty arrays.
 
 ## The discipline
 
