@@ -1,0 +1,104 @@
+apiVersion: spc.dev/v1alpha1
+kind: Spec
+metadata:
+  id: oracle-relative-paths
+  title: The oracle-identity gate reads real oracles, and replay measures in a prepared worktree
+goal: >
+  The oracle-identity gate (specs/oracle-identity.yaml and its two
+  companions, shipped 2026-11-14) reads each criterion's oracle files out
+  of git at a revision. It classifies a pnpm --filter criterion by joining
+  the package directory with the file the command names, and the package-
+  directory resolver returns directories joined to an absolute root - so
+  every such oracle path is absolute. git cannot read an absolute path at
+  a revision. The drift check therefore answers held-fail-closed for every
+  pnpm --filter criterion, the flip is sent to counterfactual replay, and
+  the replay fails on the same absolute path: the property renders
+  indeterminate. Found 2026-11-24: across every apply run on disk there
+  is not one evidence record with a resolved oracle snapshot, although
+  383 criteria in this repository use that shape. The gate has never
+  admitted a real oracle. Two repairs. Oracle paths are repository-
+  relative at the source and made relative again at every read, so no
+  caller can reintroduce the defect. And the replay worktree is prepared
+  like any other disposable worktree before the criterion runs, because
+  an unprepared worktree turns a missing dependency into a red that
+  establishes nothing.
+requirements:
+  - id: ORP-001
+    statement: >
+      For every grammar that resolves a file against a package directory
+      (pnpm --filter <pkg> followed by vitest run <file> or exec node
+      <script>), the classifier returns repository-relative paths - valid
+      as `git show <revision>:<path>` from the repository root - in a
+      workspace repository and in a single-package repository alike.
+      oracleSnapshotAt resolves a snapshot when the file exists at the
+      revision and still fails closed when it does not. A package-
+      directory map that carries absolute directories (the shape the
+      verifier's scope resolver returns) yields the same repository-
+      relative files.
+    priority: must
+    category: behavioral
+    scope:
+      include: [packages/repo/src/**]
+    acceptance:
+      - id: ORP-001-A
+        type: command
+        command: pnpm --filter @spc/repo... build > /dev/null && pnpm --filter @spc/repo exec vitest run src/oracle-relative-paths.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: ORP-002
+    statement: >
+      With a pnpm --filter criterion whose oracle file is identical at the
+      base and result revisions, referencedOracleDiff answers untouched -
+      not held-fail-closed - so an in-run flip establishes on its own
+      evidence without a replay. When the run changed the oracle file it
+      answers drifted and names the file by its repository-relative path.
+      The counterfactual replay of such a criterion, broken at the base
+      revision and fixed at the result revision, answers red.
+    priority: must
+    category: behavioral
+    dependsOn: [ORP-001]
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: ORP-002-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/oracle-replay-prepared.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: ORP-003
+    statement: >
+      The replay worktree is prepared through the shared preparation
+      helper before the criterion runs, exactly as spc verify --run
+      prepares its worktree. A preparation that fails makes the replay
+      unavailable, with a detail that names the preparation - never red:
+      an environment that could not be built discriminates nothing.
+    priority: must
+    category: behavioral
+    dependsOn: [ORP-002]
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: ORP-003-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/oracle-replay-prepared.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+  - id: ORP-004
+    statement: >
+      The chain gate is silent: the flip-establishment path in
+      packages/runtime/src/chain-memory.ts writes no console output (a
+      leftover debug line shipped with the gate).
+    priority: must
+    category: behavioral
+    dependsOn: [ORP-002]
+    scope:
+      include: [packages/runtime/src/**]
+    acceptance:
+      - id: ORP-004-A
+        type: command
+        command: pnpm --filter @spc/runtime... build > /dev/null && pnpm --filter @spc/runtime exec vitest run src/oracle-replay-prepared.test.ts
+        expect: {exitCode: 0}
+        discriminating: true
+outOfScope:
+  - Guardrails for linked preparation and relocation of disposable worktrees (recorded, operator choice, in the 2026-11-23 consensus).
+  - Rewriting historical records. Earlier indeterminate verdicts stand as recorded; later runs derive what they may rely on.
