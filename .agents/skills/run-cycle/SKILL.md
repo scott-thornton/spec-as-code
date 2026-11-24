@@ -28,12 +28,14 @@ and harmless. Two rules follow:
    burn a cycle. Do not go read documentation while your window ticks.
 2. **Never stop a backgrounded spc process.** Stopping the waiter
    orphans its request instantly. To end a run, `spc run cancel <runId>`
-   - and know what it can do. A run with no execution-intent record is
-   marked cancelled at once. Otherwise cancel completes when the owner
-   is parked waiting on a request and sees the retirement. An owner
-   that is already dead, or busy inside a command, is not stopped by
-   it: on macOS the command prints `cancellation INCOMPLETE` and exits
-   1 after a 30s grace period. Then the way out is `spc apply recover`.
+   - and know what it can do. A run that no execution-intent record
+   names is marked cancelled at once. Otherwise cancel completes when
+   the owner is parked waiting on a request and sees the retirement. An
+   owner that is already dead, or busy inside a command, is not stopped
+   by it: on macOS the command prints `cancellation INCOMPLETE` and
+   exits 1 after a 30s grace period. Then the way out is
+   `spc apply recover`, once no spc process is writing - recover
+   refuses while an owner is live.
 
 ```
 tool timeout (300s)  <  response window (40-60m)
@@ -109,12 +111,12 @@ Rules the deterministic validator enforces (refusals requeue with the
 error; fix and resubmit the same request id):
 - **Every must-property addressed** via `satisfies` (modify) or
   `verifies` (verify) - else `SPC2005 ... not addressed`.
-- Task ids `T###`; write targets explicit; **one writer per path** -
-  under the default configuration a later task that touches an earlier
-  write targets overlap an earlier task's is refused
+- Task ids `T###`; write targets explicit; **one writer per path**.
+  Under the default configuration, a later task
+  whose write targets overlap an earlier task's is refused
   `UNMEDIATED_CHANGES`, touched or not (reproduced 2026-11-24: eight
-  executor round-trips, then the task fails), so put both edits in one
-  task; minimum task set - a task only confirming existing
+  executor round-trips, then the task fails), so put both edits in
+  one task. Minimum task set - a task only confirming existing
   state is a correct verify task.
 - Rejected answers: read the feedback in the requeued request, fix the
   JSON, respond again with the same id.
@@ -154,16 +156,20 @@ it appears**. The executor answer shape:
   <answer.json>` (about 30s). It checks out the run's base, applies
   this one draft there, builds, and runs the task's file and command
   criteria. Omit `--gates`: the rehearsal already builds, and a bare
-  `--gates` runs every root gate including the full test battery. Read
-  its verdict with care. It is faithful only for a task that depends
-  on nothing in flight. A later task is rehearsed without earlier
-  tasks' uncommitted work, so a red criterion or a refused staging is
-  expected there - judge that answer with `spc patch verify`.
-- `spc agent respond` refuses exactly one shape: two or more patch
-  operations on one path when no rehearsal matches the exact draft. It
-  prints `PREFLIGHT_ADVISABLE` and exits 1. Rehearse that answer, or
-  pass `--no-preflight`. (`spc agent submit` is respond with the
-  rehearsal built in.)
+  `--gates` runs every root gate including the full test battery.
+- Read the rehearsal's verdict for what it can vouch for. It is
+  faithful only for a task that depends on nothing in flight,
+  earlier or later. Another task's work is absent from the base
+  checkout, so a red criterion does not convict the answer when this
+  task's criteria need that work. A refused staging is a wrong
+  operation or an overlap the guard will refuse too. For composition
+  alone, `spc patch verify <ops.json>` runs the changes through the
+  applicator in memory against the live tree and runs no criteria.
+- `spc agent respond` refuses exactly one shape on rehearsal grounds:
+  two or more patch operations on one path when no rehearsal matches
+  the exact draft. It prints `PREFLIGHT_ADVISABLE` and exits 1. Rehearse
+  that answer, or pass `--no-preflight`. (`spc agent submit` is
+  respond with the rehearsal built in.)
 - The request's system prompt carries the full executor contract -
   read it once per session. `agent show <id> --part schema` for the
   exact JSON Schema.
@@ -242,7 +248,8 @@ discipline); CI owns suites. Pop stashed staging specs after push.
 | `OUT_OF_SCOPE_WRITE` | file not in targets.write | re-plan with the target; never widen silently |
 | executor answer refused: missing `commands` / `observations` / `evidenceCandidates` / `followups` | the four fields are required even when empty | add the empty arrays; validate, then respond |
 | `PREFLIGHT_ADVISABLE` from spc agent respond | two or more patch ops on one path, and no rehearsal matches this exact draft | rehearse that answer, or pass `--no-preflight` |
-| criterion red or staging refused in `spc agent dry-run` | the rehearsal checks the base plus this one draft; a later task lacks earlier tasks' uncommitted work | expected for a task that depends on another; judge with `spc patch verify` |
+| criterion red in `spc agent dry-run` | the rehearsal checks the base plus this one draft: another task's work, earlier or later, is absent | red does not convict the answer when this task's criteria need that work |
+| staging refused in `spc agent dry-run` | a wrong operation, or write targets that overlap another task's | fix the op; `spc patch verify <ops.json>` checks composition against the live tree |
 | request found in `stale/`, queue empty | window expired or process stopped | re-run plan/apply; answer fast |
 | run `running` but nothing happens | abandoned run | `spc apply --resume <runId>`; to abandon it, `spc run cancel <runId>`, then `spc apply recover` if it prints `cancellation INCOMPLETE` |
 | `cancellation INCOMPLETE` from spc run cancel | owner dead or busy, not parked on a request (macOS) | `spc apply recover` once no spc process is writing |
