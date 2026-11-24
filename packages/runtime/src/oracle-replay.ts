@@ -1,8 +1,9 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { compileSpecFile, createWorktree, git, removeWorktree } from "@spc/repo";
+import { compileSpecFile, createWorktree, git, removeWorktree, oracleFilesRelativeTo } from "@spc/repo";
 import { verifyProperties } from "./verify.js";
+import { prepareDisposableWorktree } from "./prepare.js";
 import { EventStore } from "./events.js";
 import { EvidenceStore, FollowupStore } from "./stores.js";
 import { loadConfig } from "./run.js";
@@ -46,10 +47,11 @@ export async function referencedOracleDiff(
   // Globs resolve against each revision's tree; a changed membership
   // IS drift (the instrument set changed).
   const { expandOracleFiles } = await import("@spc/repo");
-  const baseFiles = expandOracleFiles(repoRoot, baseRevision, classification.files);
-  const resultFiles = expandOracleFiles(repoRoot, resultRevision, classification.files);
+  const oracleFiles = oracleFilesRelativeTo(repoRoot, classification.files);
+  const baseFiles = expandOracleFiles(repoRoot, baseRevision, oracleFiles);
+  const resultFiles = expandOracleFiles(repoRoot, resultRevision, oracleFiles);
   if (baseFiles === undefined || resultFiles === undefined) {
-    return { status: "held-fail-closed", files: classification.files };
+    return { status: "held-fail-closed", files: oracleFiles };
   }
   if (JSON.stringify(baseFiles) !== JSON.stringify(resultFiles)) {
     return { status: "drifted", files: [...new Set([...baseFiles, ...resultFiles])] };
@@ -95,8 +97,20 @@ export async function runCounterfactualReplay(
   let worktree: string | null = null;
   try {
     worktree = createWorktree(repoRoot, specId, name, worktreesDir, { startPoint: baseRevision }).path;
+    // Prepared like every other disposable worktree (specs/
+    // oracle-relative-paths, ORP-003): an unprepared worktree turns a
+    // missing dependency into a red that establishes nothing.
+    const prepared = prepareDisposableWorktree(repoRoot, worktree);
+    if (prepared.mode === "failed") {
+      return {
+        outcome: "unavailable",
+        overlaid: [],
+        detail: `replay worktree preparation failed (${prepared.detail ?? `exit ${prepared.exitCode}`}) - the environment could not be built, so nothing was measured`,
+      };
+    }
     // Overlay the FINAL oracle contents onto the base worktree.
-    for (const file of classification.files) {
+    const files = oracleFilesRelativeTo(repoRoot, classification.files);
+    for (const file of files) {
       const result = git(repoRoot, ["show", `${resultRevision}:${file}`]);
       if (!result.ok) {
         return { outcome: "unavailable", overlaid: [], detail: `oracle file ${file} unreadable at ${resultRevision.slice(0, 8)}` };
@@ -134,11 +148,11 @@ export async function runCounterfactualReplay(
       writeFileSync(specFile, specYaml, "utf8");
       const compiled = compileSpecFile(specFile);
       if (!compiled.ok || !compiled.ir) {
-        return { outcome: "unavailable", overlaid: classification.files, detail: "replay spec does not compile" };
+        return { outcome: "unavailable", overlaid: files, detail: "replay spec does not compile" };
       }
       const property = compiled.ir.properties.find((p) => p.acceptance.some((c) => c.id === criterionId));
       if (!property) {
-        return { outcome: "unavailable", overlaid: classification.files, detail: "criterion not found in replay spec" };
+        return { outcome: "unavailable", overlaid: files, detail: "criterion not found in replay spec" };
       }
       const acceptance = property.acceptance.filter((c) => c.id === criterionId);
       const now = () => new Date().toISOString();
@@ -160,9 +174,9 @@ export async function runCounterfactualReplay(
         followups,
       });
       const state = sweep.states[0];
-      if (state?.status === "unsatisfied") return { outcome: "red", overlaid: classification.files, detail: "the final oracle, against the base implementation, is contradicted" };
-      if (state?.status === "satisfied") return { outcome: "green", overlaid: classification.files, detail: "green -> green: the oracle change produced the flip" };
-      return { outcome: "unavailable", overlaid: classification.files, detail: `replay inconclusive: ${state?.reason ?? state?.status ?? "unknown"}` };
+      if (state?.status === "unsatisfied") return { outcome: "red", overlaid: files, detail: "the final oracle, against the base implementation, is contradicted" };
+      if (state?.status === "satisfied") return { outcome: "green", overlaid: files, detail: "green -> green: the oracle change produced the flip" };
+      return { outcome: "unavailable", overlaid: files, detail: `replay inconclusive: ${state?.reason ?? state?.status ?? "unknown"}` };
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }

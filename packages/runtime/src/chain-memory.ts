@@ -104,8 +104,6 @@ export function computeChainFlipMemory(
           // onRejected, never established.
           const command = oracleGate.commands.get(c);
           const redRev = oracleGate.revisions.get(red)?.base;
-          // eslint-disable-next-line no-console
-          console.log("GATE", c, "redKeys:", JSON.stringify(oracleGate.revisions.get(red)), "greenKeys:", JSON.stringify(oracleGate.revisions.get(source.runId)), "mapSize:", oracleGate.revisions.size);
           const greenRev = oracleGate.revisions.get(source.runId)?.result ?? oracleGate.revisions.get(source.runId)?.base;
           if (command === undefined || redRev === undefined || greenRev === undefined) {
             // No command (file criteria and friends are unreferenced

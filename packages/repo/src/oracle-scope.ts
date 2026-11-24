@@ -13,6 +13,9 @@ import { git } from "./git.js";
  * adapter - never the working tree.
  */
 
+/** Package directories by name, RELATIVE to the root given - an oracle
+ *  path is a git pathspec, and an absolute one can never be read at a
+ *  revision (specs/oracle-relative-paths). The root itself is ".". */
 export function workspacePackageDirs(root: string): Map<string, string> {
   const byName = new Map<string, string>();
   const wsFile = path.join(root, "pnpm-workspace.yaml");
@@ -21,7 +24,7 @@ export function workspacePackageDirs(root: string): Map<string, string> {
     const pj = path.join(root, "package.json");
     if (existsSync(pj)) {
       const name = (JSON.parse(readFileSync(pj, "utf8")) as { name?: string }).name;
-      if (name) byName.set(name, root);
+      if (name) byName.set(name, ".");
     }
     return byName;
   }
@@ -53,7 +56,7 @@ export function workspacePackageDirs(root: string): Map<string, string> {
       const pj = path.join(dir, "package.json");
       if (!existsSync(pj)) continue;
       const name = (JSON.parse(readFileSync(pj, "utf8")) as { name?: string }).name;
-      if (name) byName.set(name, dir);
+      if (name) byName.set(name, path.relative(root, dir) || ".");
     }
   }
   return byName;
@@ -195,6 +198,15 @@ export function classifyCommandOracle(command: string, packageDirs: Map<string, 
   return worst;
 }
 
+/** Oracle file paths as git pathspecs: repository-relative. A relative
+ *  path passes through; an absolute one is made relative to the
+ *  repository root, so a caller handing in a map of absolute
+ *  directories cannot reintroduce an unreadable oracle path. One that
+ *  lies outside the root becomes ../.. and fails closed at the read. */
+export function oracleFilesRelativeTo(repoRoot: string, files: readonly string[]): string[] {
+  return files.map((file) => (path.isAbsolute(file) ? path.relative(repoRoot, file) : file));
+}
+
 export interface OracleFileSnapshot {
   path: string;
   digest: string;
@@ -244,7 +256,7 @@ export function oracleSnapshotAt(
   const classification = classifyCommandOracle(command, packageDirs);
   if (classification.kind === "unreferenced") return null;
   if (classification.kind === "unsupported") return undefined;
-  const resolved = expandOracleFiles(repoRoot, revision, classification.files);
+  const resolved = expandOracleFiles(repoRoot, revision, oracleFilesRelativeTo(repoRoot, classification.files));
   if (resolved === undefined) return undefined;
   const files: OracleFileSnapshot[] = [];
   for (const file of resolved) {
