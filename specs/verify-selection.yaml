@@ -15,14 +15,16 @@ requirements:
   - id: VSEL-001
     statement: >
       spc verify accepts one or more selectors. Each resolves, in order,
-      to: an existing file at that path; a spec under specs/ whose file
-      stem equals the selector (.yaml or .yml); a spec under specs/ whose
-      metadata.id equals the selector. Exactly the resolved specs are
-      verified, in the order given, each once - a selector that resolves
-      to the same file as an earlier one verifies nothing twice. One
-      selector keeps the single-spec output; several use the multi-spec
-      report. The exit code is worst-of: 0 only when every selected spec
-      passes.
+      to: an existing regular file at that path (a directory is not a
+      file; the lookup continues); a spec under specs/ whose file stem
+      equals the selector (.yaml or .yml); a spec under specs/ whose
+      metadata.id equals the selector - and when two spec files share
+      that id, the selector is an error naming both files. Exactly the
+      resolved specs are verified, in the order given, each once - a
+      selector that resolves to the same file as an earlier one, by any
+      spelling, verifies nothing twice. One selector keeps the
+      single-spec output; several use the multi-spec report. The exit
+      code is worst-of: 0 only when every selected spec passes.
     priority: must
     category: behavioral
     scope:
@@ -35,10 +37,14 @@ requirements:
         discriminating: true
   - id: VSEL-002
     statement: >
-      A selector that resolves to nothing fails the invocation before any
-      criterion executes: exit code 2, error SPEC_FILE_NOT_FOUND naming
-      the selector and the specs directory, and no verification run
-      recorded for any selector in the invocation.
+      A selector that resolves to nothing - including an empty one -
+      fails the invocation before any criterion executes: exit code 2,
+      error SPEC_FILE_NOT_FOUND naming the selector and the specs
+      directory, and no verification run recorded for any selector in the
+      invocation. Selectors cannot be combined with --run or --bundle:
+      each of those modes verifies a single recorded subject, so the
+      combination is refused with exit code 2 and
+      VERIFY_SELECTOR_CONFLICT before anything verifies.
     priority: must
     category: behavioral
     dependsOn: [VSEL-001]

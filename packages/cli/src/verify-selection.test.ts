@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -63,6 +63,16 @@ function setupRepo(name: string, specs: FixtureSpec[]): string {
 function spc(cwd: string, args: string[]): { status: number; out: string } {
   const r = spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: "utf8" });
   return { status: r.status ?? -1, out: (r.stdout ?? "") + (r.stderr ?? "") };
+}
+
+/** The spec id of the most recently written run: which spec a
+ *  single-spec invocation actually verified (its output names no id). */
+function latestVerifiedSpecId(repo: string): string {
+  const runs = path.join(repo, ".spc", "runs");
+  const latest = readdirSync(runs)
+    .map((d) => ({ d, at: statSync(path.join(runs, d)).mtimeMs }))
+    .sort((a, b) => b.at - a.at)[0]!;
+  return (JSON.parse(readFileSync(path.join(runs, latest.d, "metadata.json"), "utf8")) as { specId: string }).specId;
 }
 
 const THREE: FixtureSpec[] = [
@@ -139,6 +149,58 @@ describe("spc verify with an explicit selection", () => {
     expect(Array.isArray(parsed)).toBe(true);
     expect(parsed.map((p) => p.spec)).toEqual(["charlie", "alpha", undefined]);
     expect(parsed[parsed.length - 1]).toHaveProperty("failures");
+  });
+  it("a directory is not a spec file: the selector falls through to the stem and id lookups", T, () => {
+    const repo = setupRepo("directory", [{ file: "guide", id: "docs" }]);
+    mkdirSync(path.join(repo, "docs"), { recursive: true });
+    const r = spc(repo, ["verify", "docs"]);
+    expect(r.status).toBe(0);
+    expect(r.out).not.toContain("SPEC_INVALID");
+    expect(latestVerifiedSpecId(repo)).toBe("docs");
+  });
+
+  it("an empty selector resolves to nothing: it never means every spec", T, () => {
+    const repo = setupRepo("empty", THREE);
+    const r = spc(repo, ["verify", ""]);
+    expect(r.status).toBe(2);
+    expect(r.out).toContain("SPEC_FILE_NOT_FOUND");
+    expect(r.out).not.toContain("Verification run:");
+  });
+
+  it("two spec files sharing one id are an error naming both", T, () => {
+    const repo = setupRepo("dup", [
+      { file: "one", id: "same" },
+      { file: "two", id: "same" },
+    ]);
+    const r = spc(repo, ["verify", "same"]);
+    expect(r.status).toBe(2);
+    expect(r.out).toContain("SPEC_INVALID");
+    expect(r.out).toContain("one.yaml");
+    expect(r.out).toContain("two.yaml");
+  });
+
+  it("the same spec spelled two ways verifies once, single-spec output", T, () => {
+    const repo = setupRepo("spellings", THREE);
+    const absolute = path.join(repo, "specs", "alpha.yaml");
+    const r = spc(repo, ["verify", absolute, "alpha"]);
+    expect(r.status).toBe(0);
+    expect(r.out.match(/Verification run:/g) ?? []).toHaveLength(1);
+    expect(r.out).not.toContain("Spec: ");
+  });
+
+  it("selectors with --run are refused, never silently dropped", T, () => {
+    const repo = setupRepo("run-mode", THREE);
+    const r = spc(repo, ["verify", "specs/alpha.yaml", "--run", "v-nothing"]);
+    expect(r.status).toBe(2);
+    expect(r.out).toContain("VERIFY_SELECTOR_CONFLICT");
+    expect(r.out).not.toContain("Verification run:");
+  });
+
+  it("selectors with --bundle are refused, never silently dropped", T, () => {
+    const repo = setupRepo("bundle-mode", THREE);
+    const r = spc(repo, ["verify", "nope", "--bundle", path.join(repo, "no-bundle")]);
+    expect(r.status).toBe(2);
+    expect(r.out).toContain("VERIFY_SELECTOR_CONFLICT");
   });
 });
 
