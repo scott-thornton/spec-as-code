@@ -213,8 +213,8 @@ program
   .option("--all", "force full verification (no cached skipping; CI always passes this)")
   .option("--scoped-to-diff <baseRev>", "(specs/diff-scoped-verify) partial verification by derived disjointness: skip criteria proven unaffected by baseRev..HEAD (file paths exact; command filter scopes declared; unscoped commands never skip). A REPORT, not evidence - no run records, no freshness anchor; the banner states the partial claim")
   .action(async (specs: string[] | undefined, opts: { cwd: string; format: string; bundle?: string; run?: string; all?: boolean; scopedToDiff?: string }) => {
+    const vfmt = opts.format === "github" ? "github" : opts.format === "json" ? "json" : "text";
     process.exitCode = await runVerify(specs, opts.cwd, vfmt, opts.bundle, opts.run, opts.all === true, opts.scopedToDiff);
-    process.exitCode = await runVerify(specFile, opts.cwd, vfmt, opts.bundle, opts.run, opts.all === true, opts.scopedToDiff);
   });
 
 program
