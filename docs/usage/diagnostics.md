@@ -222,6 +222,7 @@ Not errors, but you will see them in logs and summaries:
 | `COMMAND_FAILED` | A declared command exited nonzero or timed out; the task failed with the exit code. |
 | `SPC_RUN_NOT_FOUND` | `spc verify --run` was given an id with no run directory. |
 | `VERIFY_RUN_NO_RESULT` | `spc verify --run` found the run but it has no result revision to verify. |
+| `VERIFY_SELECTOR_CONFLICT` | `spc verify` was given selectors together with `--run` or `--bundle`; each of those modes verifies one recorded subject. |
 | `HARNESS_PROMPT_PAYLOAD` | A prompt carried no parseable JSON object (`agent show --part payload` / `agent dry-run`). |
 
 ## Evidence outcomes

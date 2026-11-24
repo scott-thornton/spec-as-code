@@ -56,6 +56,13 @@ export async function runVerify(
   forceAll?: boolean,
   scopedDiffBase?: string,
 ): Promise<number> {
+  // specs/verify-selection: selectors name what to verify here. The
+  // bundle and --run modes each verify a single recorded subject, so a
+  // selection combined with either is refused - never silently dropped.
+  if (selectors !== undefined && selectors.length > 0 && (bundleDir !== undefined || runId !== undefined)) {
+    console.error(`error VERIFY_SELECTOR_CONFLICT: selectors cannot be combined with ${bundleDir !== undefined ? "--bundle" : "--run"}; that mode verifies one recorded subject - pass no selector with it`);
+    return 2;
+  }
   // Bundle mode: verify an exported run's integrity and derivation
   // WITHOUT the repository. Cannot re-execute commands (threat model).
   if (bundleDir) {

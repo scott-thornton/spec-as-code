@@ -137,7 +137,7 @@ Related: `spc run cancel <id>` marks an interrupted run cancelled;
 ## spc verify
 
 ```bash
-spc verify [selector...] [--format text|github]
+spc verify [selector...] [--format text|github|json]
 
 # one spec - by file path, file stem or spec id
 spc verify specs/chain-memory.yaml
@@ -165,7 +165,8 @@ Each selector resolves to an existing file at that path, a spec under
 verified. A selector that matches nothing fails the whole invocation with
 exit `2` (`SPEC_FILE_NOT_FOUND`) before any criterion runs. Several
 selectors report per spec; `--format json` emits one report per selected
-spec, in selection order.
+spec, in selection order. Selectors cannot be combined with `--run` or
+`--bundle`: each of those modes verifies one recorded subject.
 
 `spc verify --run <runId>` verifies a run's acceptance criteria against
 that run's RESULT revision in a temporary worktree - useful after the

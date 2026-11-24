@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { SpcError, type SpecCompileResult } from "@spc/core";
 import { compileSpecFile as compileSpecGraphFs } from "@spc/repo";
@@ -83,12 +83,30 @@ export function resolveSelectedSpecs(
   const seen = new Set<string>();
   for (const selector of selectors) {
     const resolved = resolveSpecSelector(specsDir, selector, baseDir);
-    const key = path.resolve(resolved.file);
+    // Key on the real path: the same file reached by an absolute path, a
+    // relative path and a symlink is one spec, verified once.
+    const key = realPathOf(resolved.file);
     if (seen.has(key)) continue;
     seen.add(key);
     selected.push(resolved);
   }
   return selected;
+}
+
+/** An existing regular file - a directory is not a file, and the lookup
+ *  continues to the next step. */
+function isRegularFile(p: string): boolean {
+  return statSync(p, { throwIfNoEntry: false })?.isFile() === true;
+}
+
+/** The canonical path when the file can be resolved, else the absolute
+ *  spelling - deduplication must never throw on a file it just read. */
+function realPathOf(p: string): string {
+  try {
+    return realpathSync(p);
+  } catch {
+    return path.resolve(p);
+  }
 }
 
 function resolveSpecSelector(specsDir: string, selector: string, baseDir: string): { file: string; ir: SpecIR } {
@@ -100,18 +118,25 @@ function resolveSpecSelector(specsDir: string, selector: string, baseDir: string
     return { file, ir: result.ir };
   };
   const asPath = path.resolve(baseDir, selector);
-  if (existsSync(asPath)) return compile(asPath);
+  if (isRegularFile(asPath)) return compile(asPath);
   for (const ext of [".yaml", ".yml"]) {
     const byStem = path.join(specsDir, `${selector}${ext}`);
-    if (existsSync(byStem)) return compile(byStem);
+    if (isRegularFile(byStem)) return compile(byStem);
   }
   // By id last: a scan that skips files which fail to compile, so one
   // broken spec cannot hide the id being looked for.
   if (existsSync(specsDir)) {
+    const matches: { file: string; ir: SpecIR }[] = [];
     for (const f of readdirSync(specsDir).filter((x) => x.endsWith(".yaml") || x.endsWith(".yml")).sort()) {
       const result = compileSpecFile(path.join(specsDir, f));
-      if (result.ok && result.ir && result.ir.spec.metadata.id === selector) return { file: path.join(specsDir, f), ir: result.ir };
+      if (result.ok && result.ir && result.ir.spec.metadata.id === selector) matches.push({ file: path.join(specsDir, f), ir: result.ir });
     }
+    // One id, one spec: two files claiming it is a repository defect the
+    // caller must see, not a choice made silently by sort order.
+    if (matches.length > 1) {
+      throw new SpcError("SPEC_INVALID", `spec id "${selector}" is claimed by more than one file: ${matches.map((m) => m.file).join(", ")}`);
+    }
+    if (matches.length === 1) return matches[0]!;
   }
   throw new SpcError("SPEC_FILE_NOT_FOUND", `no spec matches "${selector}": no file at that path, no ${selector}.yaml under ${specsDir}, and no spec there with that id`);
 }
