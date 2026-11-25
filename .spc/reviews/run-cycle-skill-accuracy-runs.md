@@ -110,3 +110,42 @@ one wrote. Write to the code, not from memory: every F1 and F2 was a
 sentence composed from recollection. Check sentences, not strings - a
 garbled sentence passed a substring check. Pin a phrase on one line or
 the criterion is vacuous.
+
+## CI, and what a sweep costs (recorded 2026-11-25)
+
+- 087d634 (N-spec verify) and bd008c7 (oracle-relative-paths): green on
+  both jobs. Their verify sweeps took 113 and 115 minutes.
+- 65bcb9e (this spec): ci failed once and passed on re-run. The failure
+  was packages/runtime/src/apply-cancellation.test.ts, "cancel retry
+  after a first cancellation attempt is safe": the first spc run cancel
+  returned non-zero with neither "cancelled" nor "INCOMPLETE" in its
+  output. The test prints neither, so the cause is not recoverable from
+  the log. No runtime code differed from the previous push, whose ci
+  passed. Intermittent, not fixed. Its fixed three-second waits belong
+  to the first increment of the cancellation program.
+- 65bcb9e, spc-verify: attempt 1 was cancelled at the 150-minute job
+  limit after 105 of 112 specs, none unsatisfied. The seven it never
+  reached (verify-cache, verify-dedup, verify-failure-visibility,
+  verify-selection, version-skew-guard, window-recalibration,
+  window-rendering) were verified locally in between: all satisfied, 20
+  minutes. Attempt 2 was green: 112 specs, 126 criteria executed, 307
+  reused, 99 minutes.
+
+Where a cold sweep's time goes (measured, 2026-11-25):
+
+| What a sweep runs | Count | Each | Cold total |
+|---|---|---|---|
+| Criteria that run one test file | 347 | 1-7 s | about 12 min |
+| Build prefixes (pnpm --filter X... build) | 276 | 4-5.5 s | about 20 min |
+| Criteria that run a whole package suite | 43 | 174-280 s | about 158 min |
+
+The 43 whole-suite criteria, across 41 specs, are the sweep. Each runs
+every test file of a package, which the single-file criteria already
+cover one by one. The ci job proves the same suites green once in about
+six minutes; spc-verify re-proves them 43 times, serially.
+
+PROPOSED, NOT STARTED (operator authorization required): a whitelisted
+segment memo, so each suite and each build runs once per sweep instead
+of once per criterion; sharding spc-verify by subset; a lint rule
+against whole-suite criteria; condition polls in the process-level
+tests.
